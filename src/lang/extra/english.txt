@@ -2651,4 +2651,3 @@ CM_STR_LAND_TOOLTIPS_STATION_CARGO                              :{WHITE}{STRING}
 # Rail blueprint tool (cmclient port)
 CM_STR_RAIL_TOOLBAR_TOOLTIP_BLUEPRINT                           :{BLACK}Rail blueprint tool (copy-paste)
 CM_STR_NO_BLUEPRINT_IN_SLOT                                     :{WHITE}No blueprint in slot {NUM}
-
