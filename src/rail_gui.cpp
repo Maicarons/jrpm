@@ -23,7 +23,6 @@
 #include "newgrf_badge_gui.h"
 #include "newgrf_station.h"
 #include "company_base.h"
-#include "construction_cost_tip.h"
 #include "strings_func.h"
 #include "window_func.h"
 #include "date_func.h"
@@ -559,22 +558,11 @@ struct BuildRailToolbarWindow : Window {
 
 	void Close([[maybe_unused]] int data = 0) override
 	{
-		HideConstructionCostTip();
 		if (this->IsWidgetLowered(WID_RAT_BUILD_STATION)) SetViewportCatchmentStation(nullptr, true);
 		if (this->IsWidgetLowered(WID_RAT_BUILD_WAYPOINT)) SetViewportCatchmentWaypoint(nullptr, true);
 		if (_settings_client.gui.link_terraform_toolbar) CloseWindowById(WindowClass::ScenarioGenerateLandscape, 0, false);
 		CloseWindowById(WindowClass::JoinStation, 0);
 		this->Window::Close();
-	}
-
-	void OnMouseLoop() override
-	{
-		ConstructionCostTipContext ctx;
-		ctx.window_class = this->window_class;
-		ctx.window_number = this->window_number;
-		ctx.selected_tool = this->last_user_action;
-		ctx.railtype = this->railtype;
-		UpdateConstructionCostTip(ctx, (_thd.GetCallbackWnd() == this) ? GetTileUnderCursor() : INVALID_TILE);
 	}
 
 	/** List of widgets to be disabled if infrastructure limit prevents building. */

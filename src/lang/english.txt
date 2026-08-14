@@ -4298,7 +4298,6 @@ STR_GROUP_DELETE_TOOLTIP                                        :{BLACK}Delete t
 STR_GROUP_RENAME_TOOLTIP                                        :{BLACK}Rename the selected group
 STR_GROUP_LIVERY_TOOLTIP                                        :{BLACK}Change livery of the selected group
 STR_GROUP_AUTOGROUP_SHARED_TOOLTIP                              :{BLACK}Auto-group vehicles by their shared orders
-STR_CONSTRUCTION_COST_TOOLTIP                                   :{BLACK}Estimated cost: {CURRENCY_LONG}
 STR_GROUP_REPLACE_PROTECTION_TOOLTIP                            :{BLACK}Click to protect this group from global autoreplace. Ctrl+Click to also protect sub-groups
 
 STR_QUERY_GROUP_DELETE_CAPTION                                  :{WHITE}Delete Group

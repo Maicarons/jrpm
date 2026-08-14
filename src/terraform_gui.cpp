@@ -18,7 +18,6 @@
 #include "window_func.h"
 #include "viewport_func.h"
 #include "command_func.h"
-#include "construction_cost_tip.h"
 #include "signs_func.h"
 #include "sound_func.h"
 #include "base_station_base.h"
@@ -232,21 +231,6 @@ struct TerraformToolbarWindow : Window {
 		/* This is needed as we like to have the tree available on OnInit. */
 		this->CreateNestedTree();
 		this->FinishInitNested(window_number);
-	}
-
-	void Close([[maybe_unused]] int data = 0) override
-	{
-		HideConstructionCostTip();
-		this->Window::Close();
-	}
-
-	void OnMouseLoop() override
-	{
-		ConstructionCostTipContext ctx;
-		ctx.window_class = this->window_class;
-		ctx.window_number = this->window_number;
-		ctx.selected_tool = this->last_user_action;
-		UpdateConstructionCostTip(ctx, (_thd.GetCallbackWnd() == this) ? GetTileUnderCursor() : INVALID_TILE);
 	}
 
 	void OnInit() override
