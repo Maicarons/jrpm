@@ -47,6 +47,7 @@
 #include "console_func.h"
 #include "jrpm_locations.h"
 #include "jrpm_console_commands.h"
+#include "cm_blueprint.hpp"
 #include "engine_base.h"
 #include "engine_override.h"
 #include "road.h"
@@ -4473,6 +4474,7 @@ void IConsoleStdLibRegister()
 {
 	RegisterJRPMConsoleCommands();
 	RegisterJRPMBatch0Commands();
+	citymania::RegisterJRPMBlueprintCommands();
 
 	IConsole::CmdRegister("debug_level",             ConDebugLevel);
 	IConsole::CmdRegister("echo",                    ConEcho);

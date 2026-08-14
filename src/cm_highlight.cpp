@@ -2146,23 +2146,6 @@ void CalcCBTownLimitBorder(TileHighlight &th, TileIndex tile, SpriteID border_pa
 
 Zoning _zoning = {EvaluationMode::CHECKNOTHING, EvaluationMode::CHECKNOTHING};
 
-/* Blueprint support is ported with batch 3; provide a stub so the
- * highlight framework links. */
-void Blueprint::Add(TileIndex source_tile, Blueprint::Item item)
-{
-    this->items.push_back(item);
-    this->source_tiles.insert(source_tile);
-}
-
-std::multimap<TileIndex, ObjectTileHighlight> Blueprint::GetTiles(TileIndex tile)
-{
-    return {};
-}
-
-sp<Blueprint> Blueprint::Rotate()
-{
-    return nullptr;
-}
 
 
 ObjectHighlight _cm_active_object;
