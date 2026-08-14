@@ -73,6 +73,7 @@
 #include "core/math_func.hpp"
 #include "landscape.h"
 #include "viewport_func.h"
+#include "cm_highlight.hpp"
 #include "station_base.h"
 #include "waypoint_base.h"
 #include "town.h"
@@ -1646,14 +1647,6 @@ void DrawAutorailSelection(const TileInfo *ti, HighLightStyle highlight_style, P
 	}
 }
 
-enum TileHighlightType : uint8_t {
-	THT_NONE,
-	THT_WHITE,
-	THT_BLUE,
-	THT_RED,
-	THT_LIGHT_BLUE,
-};
-
 const Station *_viewport_highlight_station;        ///< Currently selected station for coverage area highlight
 const Station *_viewport_highlight_station_rect;   ///< Currently selected station for rectangle highlight
 const Waypoint *_viewport_highlight_waypoint;      ///< Currently selected waypoint for coverage area highlight
@@ -1723,6 +1716,10 @@ static TileHighlightType GetTileHighlightType(TileIndex t)
  */
 static void DrawTileHighlightType(const TileInfo *ti, TileHighlightType tht)
 {
+	/* Object-level highlight (cmclient port): stations, tracks, depots,
+	 * airports etc. render their own preview here. */
+	if (citymania::DrawTileSelection(ti, tht)) return;
+
 	switch (tht) {
 		default:
 		case THT_NONE: break;

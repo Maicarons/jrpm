@@ -89,4 +89,14 @@ struct TileHighlightData {
 	Window *GetCallbackWnd();
 };
 
+/** Tile highlight types drawn by the viewport. */
+enum TileHighlightType {
+	THT_NONE,
+	THT_WHITE,
+	THT_BLUE,
+	THT_RED,
+	THT_LIGHT_BLUE,
+};
+
+
 #endif /* TILEHIGHLIGHT_TYPE_H */

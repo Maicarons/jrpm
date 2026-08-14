@@ -15,13 +15,6 @@
 
 #include "table/sprites.h"
 
-enum TileHighlightType {
-    THT_NONE,
-    THT_WHITE,
-    THT_BLUE,
-    THT_RED,
-};
-
 namespace citymania {
 
 // enum class AdvertisementZone: uint8_t {
