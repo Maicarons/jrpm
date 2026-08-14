@@ -21,6 +21,7 @@
 #include "../../station_base.h"
 #include "../../string_func.h"
 #include "../../strings_func.h"
+#include "table/strings.h"
 
 #include "../../safeguards.h"
 
@@ -73,13 +74,13 @@ static ::CompanyID ResolveCompany(ScriptCompany::CompanyID company)
 /* static */ SQInteger ScriptGlobal::GetMapSizeX()
 {
 	if (!::IsGlobalAccessAllowed()) return 0;
-	return (SQInteger)MapSizeX();
+	return (SQInteger)::Map::SizeX();
 }
 
 /* static */ SQInteger ScriptGlobal::GetMapSizeY()
 {
 	if (!::IsGlobalAccessAllowed()) return 0;
-	return (SQInteger)MapSizeY();
+	return (SQInteger)::Map::SizeY();
 }
 
 /* static */ SQInteger ScriptGlobal::GetDate()
@@ -91,7 +92,7 @@ static ::CompanyID ResolveCompany(ScriptCompany::CompanyID company)
 /* static */ SQInteger ScriptGlobal::GetYear()
 {
 	if (!::IsGlobalAccessAllowed()) return 0;
-	return (SQInteger)CalTime::CurYear();
+	return (SQInteger)CalTime::CurYear().base();
 }
 
 /* static */ std::optional<std::string> ScriptGlobal::GetCompanyName(ScriptCompany::CompanyID company)

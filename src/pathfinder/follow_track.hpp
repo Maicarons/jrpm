@@ -36,6 +36,7 @@ struct CFollowTrackT {
 		RailRoadType, ///< Incompatible rail or road type.
 		SharpTurn, ///< 90 degree turn.
 		NoWay, ///< Tile cannot be entered.
+		EC_NO_WAY = NoWay, ///< Deprecated alias for #NoWay.
 		Reserved, ///< Path reserved track.
 	};
 
@@ -284,11 +285,11 @@ protected:
 			if (IsHangarTile(this->old_tile)) {
 				DiagDirection exitdir = GetHangarDirection(this->old_tile);
 				if (exitdir != this->exitdir) {
-					this->err = EC_NO_WAY;
+					this->err = ErrorCode::EC_NO_WAY;
 					return false;
 				}
 			} else if (IsHeliportTile(this->old_tile)) {
-					this->err = EC_NO_WAY;
+					this->err = ErrorCode::EC_NO_WAY;
 					return false;
 			}
 		}

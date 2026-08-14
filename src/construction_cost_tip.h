@@ -20,7 +20,7 @@
  * construction toolbar windows (rail / road / terraform).
  */
 struct ConstructionCostTipContext {
-	WindowClass window_class = WC_INVALID;         ///< Toolbar window class.
+	WindowClass window_class = WindowClass::Invalid;         ///< Toolbar window class.
 	WindowNumber window_number = 0;                ///< Toolbar window number (e.g. TRANSPORT_RAIL / TRANSPORT_ROAD).
 	WidgetID selected_tool = INVALID_WIDGET;       ///< Widget of the currently selected build tool.
 	RailType railtype = INVALID_RAILTYPE;          ///< Rail type of the rail toolbar.
@@ -41,5 +41,12 @@ void UpdateConstructionCostTip(const ConstructionCostTipContext &ctx, TileIndex 
 
 /** Remove and hide the construction cost tooltip, if any. */
 void HideConstructionCostTip();
+
+/**
+ * Get the tile under the mouse cursor, or INVALID_TILE when the cursor is
+ * not over the map.
+ * @return The tile under the cursor.
+ */
+TileIndex GetTileUnderCursor();
 
 #endif /* CONSTRUCTION_COST_TIP_H */

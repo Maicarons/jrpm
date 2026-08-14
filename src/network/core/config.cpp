@@ -13,6 +13,7 @@
 #include <ranges>
 #include <string>
 #include <vector>
+#include "config.h"
 #include "../../settings_type.h"
 #include "../../string_func.h"
 
@@ -78,7 +79,8 @@ std::vector<std::string> NetworkContentMirrorUris()
 	}
 
 	std::vector<std::string> mirrors;
-	for (const auto part : StrMakeValidView(list) | std::views::split(',')) {
+	std::string clean = StrMakeValid(list, {});
+	for (const auto part : clean | std::views::split(',')) {
 		std::string_view sv(part.data(), part.size());
 		size_t begin = sv.find_first_not_of(" \t\r\n");
 		if (begin == std::string_view::npos) continue;

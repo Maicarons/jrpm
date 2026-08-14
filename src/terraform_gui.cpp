@@ -246,7 +246,7 @@ struct TerraformToolbarWindow : Window {
 		ctx.window_class = this->window_class;
 		ctx.window_number = this->window_number;
 		ctx.selected_tool = this->last_user_action;
-		UpdateConstructionCostTip(ctx, (_thd.GetCallbackWnd() == this) ? GetTileBelowCursor() : INVALID_TILE);
+		UpdateConstructionCostTip(ctx, (_thd.GetCallbackWnd() == this) ? GetTileUnderCursor() : INVALID_TILE);
 	}
 
 	void OnInit() override

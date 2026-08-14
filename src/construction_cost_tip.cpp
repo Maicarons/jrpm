@@ -13,12 +13,14 @@
 
 #include "command_func.h"
 #include "landscape.h"
+#include "map_func.h"
 #include "rail_cmd.h"
 #include "road_cmd.h"
 #include "road_type.h"
 #include "settings_type.h"
 #include "slope_func.h"
 #include "strings_func.h"
+#include "table/strings.h"
 #include "terraform_cmd.h"
 #include "texteff.hpp"
 #include "tile_map.h"
@@ -40,13 +42,25 @@ static TileIndex _cost_tip_last_tile = INVALID_TILE;
 /** Tool the tooltip was last shown for (throttling). */
 static WidgetID _cost_tip_last_tool = INVALID_WIDGET;
 /** Window class of the tool that currently owns the tooltip. */
-static WindowClass _cost_tip_owner_class = WC_INVALID;
+static WindowClass _cost_tip_owner_class = WindowClass::Invalid;
 /** Window number of the tool that currently owns the tooltip. */
 static WindowNumber _cost_tip_owner_number = 0;
 
 /**
  * Hide and remove the construction cost tooltip, if any.
  */
+/**
+ * Get the tile under the mouse cursor, or INVALID_TILE when the cursor is
+ * not over the map.
+ * @return The tile under the cursor.
+ */
+TileIndex GetTileUnderCursor()
+{
+	Point pt = GetTileBelowCursor();
+	if (pt.x == -1) return INVALID_TILE;
+	return TileVirtXY(pt.x, pt.y);
+}
+
 void HideConstructionCostTip()
 {
 	if (_cost_tip_effect != INVALID_TE_ID) {
@@ -55,7 +69,7 @@ void HideConstructionCostTip()
 	}
 	_cost_tip_last_tile = INVALID_TILE;
 	_cost_tip_last_tool = INVALID_WIDGET;
-	_cost_tip_owner_class = WC_INVALID;
+	_cost_tip_owner_class = WindowClass::Invalid;
 	_cost_tip_owner_number = 0;
 }
 
@@ -69,7 +83,7 @@ void HideConstructionCostTip()
 static CommandCost EstimateBuildCost(const ConstructionCostTipContext &ctx, TileIndex tile)
 {
 	if (ctx.window_class == WindowClass::BuildToolbar) {
-		if (ctx.window_number == TRANSPORT_RAIL) {
+		if (ctx.window_number == static_cast<WindowNumber>(TRANSPORT_RAIL)) {
 			/* Rail toolbar: support the single track pieces, auto-rail and depot. */
 			Track track = INVALID_TRACK;
 			switch (ctx.selected_tool) {
@@ -83,17 +97,17 @@ static CommandCost EstimateBuildCost(const ConstructionCostTipContext &ctx, Tile
 			if (track == INVALID_TRACK) return CMD_ERROR;
 
 			BuildRailTrackFlags rflags = _settings_client.gui.auto_remove_signals ? BuildRailTrackFlags::AutoRemoveSignals : BuildRailTrackFlags::None;
-			return Command<Commands::BuildRail>::Do(DC_QUERY_COST, tile, ctx.railtype, track, rflags);
+			return Command<Commands::BuildRail>::Do(DoCommandFlag::QueryCost, tile, ctx.railtype, track, rflags);
 		}
-		if (ctx.window_number == TRANSPORT_ROAD) {
+		if (ctx.window_number == static_cast<WindowNumber>(TRANSPORT_ROAD)) {
 			/* Road toolbar: estimate a single road piece. */
 			RoadBits piece;
 			switch (ctx.selected_tool) {
-				case WID_ROT_ROAD_X: piece = RoadBits::ROAD_X; break;
-				case WID_ROT_ROAD_Y: piece = RoadBits::ROAD_Y; break;
+				case WID_ROT_ROAD_X: piece = RoadBits{RoadBit::NW, RoadBit::SE}; break;
+				case WID_ROT_ROAD_Y: piece = RoadBits{RoadBit::NE, RoadBit::SW}; break;
 				default: return CMD_ERROR;
 			}
-			return Command<Commands::BuildRoad>::Do(DC_QUERY_COST, tile, piece, ctx.roadtype, DisallowedRoadDirections::DRD_NONE, INVALID_TOWN, BuildRoadFlags::None);
+			return Command<Commands::BuildRoad>::Do(DoCommandFlag::QueryCost, tile, piece, ctx.roadtype, DRD_NONE, TownID::Invalid(), BuildRoadFlags::None);
 		}
 		return CMD_ERROR;
 	}
@@ -101,7 +115,7 @@ static CommandCost EstimateBuildCost(const ConstructionCostTipContext &ctx, Tile
 	if (ctx.window_class == WindowClass::ScenarioGenerateLandscape) {
 		if (ctx.selected_tool != WID_TT_RAISE_LAND && ctx.selected_tool != WID_TT_LOWER_LAND) return CMD_ERROR;
 		bool dir_up = (ctx.selected_tool == WID_TT_RAISE_LAND);
-		return Command<Commands::TerraformLand>::Do(DC_QUERY_COST, tile, GetTileSlope(tile), dir_up);
+		return Command<Commands::TerraformLand>::Do(DoCommandFlag::QueryCost, tile, GetTileSlope(tile), dir_up);
 	}
 
 	return CMD_ERROR;

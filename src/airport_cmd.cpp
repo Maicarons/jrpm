@@ -664,7 +664,7 @@ bool HasReservationsOnNeighbourTiles(TileIndex tile)
 
 	StationID station_id = GetStationIndex(tile);
 
-	for (Direction dir = Direction::Begin; dir < Direction::End; dir++) {
+	for (Direction dir : EnumRange(Direction::End)) {
 		TileIndex neighbour =  TileAddByDir(tile, dir);
 		if (!IsValidTile(neighbour)) continue;
 		if (!IsAirportTileOfStation(neighbour, station_id)) continue;
@@ -1393,7 +1393,7 @@ CommandCost ClearAirportTile(TileIndex tile, DoCommandFlags flags)
 				end_tile = GetRunwayExtreme(tile, dir);
 				start_tile = GetRunwayExtreme(tile, ReverseDiagDir(dir));
 				cost.AddCost(RemoveRunway(flags, start_tile, end_tile));
-				direction++;
+				direction = static_cast<Direction>(to_underlying(direction) + 1);
 			}
 			assert(IsDiagonalDirection(direction));
 			dir = DirToDiagDir(direction);

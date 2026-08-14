@@ -777,7 +777,7 @@ static const NamedSaveLoad _station_desc[] = {
 	NSL("airport.type",                           SLE_VAR(Station, airport.type,                  SLE_UINT8)),
 	NSL("airport.layout",                     SLE_CONDVAR(Station, airport.layout,                SLE_UINT8,                   SLV_145,               SL_MAX_VERSION)),
 	NSL("",                                SLE_CONDNULL_X(1,                                                                   SL_MIN_VERSION,        SL_MAX_VERSION,      SlXvFeatureTest(XSLFTO_AND, XSLFI_SPRINGPP, 1, 6))),
-	NSL("airport.flags",                          SLE_VAR(Station, airport.flags,                SLE_UINT64)),
+	NSL("airport.flags",                          SLE_CONDVAR(Station, airport.flags,                SLE_UINT64,                 SLV_MULTITILE_AIRPORTS, SL_MAX_VERSION)),
 	NSL("",                                SLE_CONDNULL_X(8,                                                                   SL_MIN_VERSION,        SL_MAX_VERSION,      SlXvFeatureTest(XSLFTO_AND, XSLFI_SPRINGPP, 1, 6))),
 	NSL("airport.rotation",                   SLE_CONDVAR(Station, airport.rotation,              SLE_UINT8,                   SLV_145,               SL_MAX_VERSION)),
 	NSL("",                                  SLEG_CONDARR(_old_st_persistent_storage.storage,     SLE_UINT32, 16,              SLV_145,               SLV_161)),

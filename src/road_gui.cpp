@@ -391,7 +391,7 @@ struct BuildRoadToolbarWindow : Window {
 		ctx.window_number = this->window_number;
 		ctx.selected_tool = this->last_started_action;
 		ctx.roadtype = this->roadtype;
-		UpdateConstructionCostTip(ctx, (_thd.GetCallbackWnd() == this) ? GetTileBelowCursor() : INVALID_TILE);
+		UpdateConstructionCostTip(ctx, (_thd.GetCallbackWnd() == this) ? GetTileUnderCursor() : INVALID_TILE);
 	}
 
 	/**

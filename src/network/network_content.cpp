@@ -378,18 +378,6 @@ void ClientNetworkContentSocketHandler::DownloadSelectedContentFallback(const Co
 }
 
 /**
- * Determine the full filename of a piece of content information
- * @param ci         the information to get the filename from
- * @param compressed should the filename end with .gz?
- * @return a statically allocated buffer with the filename or
- *         nullptr when no filename could be made.
- */
-static std::string GetFullFilename(const ContentInfo &ci, bool compressed)
-{
-	return GetFullFilename(ci.type, ci.filename, compressed);
-}
-
-/**
  * Determine the full filename of a piece of content
  * @param type       the type of content
  * @param filename   the filename of the content, without extension
@@ -407,6 +395,18 @@ static std::string GetFullFilename(ContentType type, std::string_view filename, 
 	buf += compressed ? ".tar.gz" : ".tar";
 
 	return buf;
+}
+
+/**
+ * Determine the full filename of a piece of content information
+ * @param ci         the information to get the filename from
+ * @param compressed should the filename end with .gz?
+ * @return a statically allocated buffer with the filename or
+ *         nullptr when no filename could be made.
+ */
+static std::string GetFullFilename(const ContentInfo &ci, bool compressed)
+{
+	return GetFullFilename(ci.type, ci.filename, compressed);
 }
 
 /**

@@ -13,6 +13,7 @@
 #include "script_object.hpp"
 #include "script_company.hpp"
 #include "script_list.hpp"
+#include "../../core/enum_type.hpp"
 #include "../../economy_type.h"
 #include "../../vehicle_type.h"
 
@@ -33,10 +34,10 @@ class ScriptGlobal : public ScriptObject {
 public:
 	/** Vehicle types, matching ScriptVehicle::VehicleType values. */
 	enum VehicleType {
-		VT_TRAIN    = ::VehicleType::Train,    ///< Trains.
-		VT_ROAD     = ::VehicleType::Road,     ///< Road vehicles.
-		VT_SHIP     = ::VehicleType::Ship,     ///< Ships.
-		VT_AIRCRAFT = ::VehicleType::Aircraft, ///< Aircraft.
+		VT_TRAIN    = ::to_underlying(::VehicleType::Train),    ///< Trains.
+		VT_ROAD     = ::to_underlying(::VehicleType::Road),     ///< Road vehicles.
+		VT_SHIP     = ::to_underlying(::VehicleType::Ship),     ///< Ships.
+		VT_AIRCRAFT = ::to_underlying(::VehicleType::Aircraft), ///< Aircraft.
 	};
 
 	/**

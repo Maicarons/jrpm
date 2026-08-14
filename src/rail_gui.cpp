@@ -574,7 +574,7 @@ struct BuildRailToolbarWindow : Window {
 		ctx.window_number = this->window_number;
 		ctx.selected_tool = this->last_user_action;
 		ctx.railtype = this->railtype;
-		UpdateConstructionCostTip(ctx, (_thd.GetCallbackWnd() == this) ? GetTileBelowCursor() : INVALID_TILE);
+		UpdateConstructionCostTip(ctx, (_thd.GetCallbackWnd() == this) ? GetTileUnderCursor() : INVALID_TILE);
 	}
 
 	/** List of widgets to be disabled if infrastructure limit prevents building. */

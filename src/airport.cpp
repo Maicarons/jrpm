@@ -617,7 +617,7 @@ TrackBits GetAllowedTracks(TileIndex tile)
 				~(TRACK_BIT_UPPER | TRACK_BIT_LEFT),
 			};
 
-			for (Direction dir = Direction::Begin; dir < Direction::End; dir++) {
+			for (Direction dir : EnumRange(Direction::End)) {
 				TileIndex t = TileAddByDir(tile, dir);
 				if (!IsValidTile(t) || !IsAirportTile(t) ||
 					GetStationIndex(t) != GetStationIndex(tile) || !MayHaveAirTracks(t)) {
