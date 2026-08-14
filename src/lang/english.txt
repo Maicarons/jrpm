@@ -4728,6 +4728,14 @@ STR_TRIP_HISTORY_TBT                                             :{BLACK}{NUM} d
 STR_TRIP_HISTORY_TBTCHANGEPOS                                    :{RED}+{NUM}
 STR_TRIP_HISTORY_TBTCHANGENEG                                    :{GREEN}{NUM}
 STR_TRIP_HISTORY_OCCUPANCY                                       :{BLACK}{NUM}%
+STR_JRPM_CARGOS_CAPTION                                          :{WHITE}{COMPANY} Cargo Details
+STR_JRPM_CARGOS_HEADER_CARGO                                     :{BLACK}Cargo
+STR_JRPM_CARGOS_HEADER_CARGO_TIP                                 :{BLACK}Click to switch between total and last month
+STR_JRPM_CARGOS_HEADER_TOTAL                                     :{BLACK}Total
+STR_JRPM_CARGOS_HEADER_MONTH                                     :{BLACK}Last month
+STR_JRPM_CARGOS_NAME                                             :{BLACK}{STRING}
+STR_JRPM_CARGOS_UNITS                                            :{BLACK}{NUM} units
+STR_JRPM_CARGOS_UNITS_TOTAL                                      :{BLACK}Total: {NUM} units
 
 ###length VEHICLE_TYPES
 STR_VEHICLE_DETAILS_TRAIN_RENAME                                :{BLACK}Name train

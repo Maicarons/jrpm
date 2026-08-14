@@ -663,6 +663,10 @@ add_files(
     triphistory.h
     triphistory_cmd.cpp
     triphistory_gui.cpp
+    jrpm_locations.cpp
+    jrpm_locations.h
+    jrpm_cargo_table.cpp
+    jrpm_cargo_table.h
     viewport.cpp
     viewport_cmd.h
     viewport_func.h

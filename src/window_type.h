@@ -678,6 +678,12 @@ enum class WindowClass : uint16_t {
 	 */
 	CompanyInfrastructure,
 
+	/**
+	 * Company cargo details; %Window numbers:
+	 *   - #CompanyID
+	 */
+	CompanyCargos,
+
 
 	/**
 	 * Buyout company (merger); %Window numbers:
