@@ -15,6 +15,7 @@
 #include "../../vehicle_type.h"
 #include "../../ship.h"
 #include "../../roadveh.h"
+#include "../../vehicle_func.h"
 #include "../pathfinder_type.h"
 
 /**
@@ -60,6 +61,9 @@ Trackdir YapfRoadVehicleChooseTrack(const RoadVehicle *v, TileIndex tile, DiagDi
  * @return         the best track for next turn
  */
 Track YapfTrainChooseTrack(const Train *v, TileIndex tile, DiagDirection enterdir, TrackBits tracks, bool &path_found, bool reserve_track, struct PBSTileInfo *target, TileIndex *dest);
+Track YapfTrainCoupleTrack(const Train *v, bool dont_reserve);
+
+Track YapfTrainCoupleTrack(const Train *v, bool dont_reserve);
 
 /**
  * Used when user sends road vehicle to the nearest depot or if road vehicle needs servicing using YAPF.
@@ -102,3 +106,9 @@ bool YapfTrainCheckDepotReverse(const Train *v, TileIndex forward_depot, TileInd
 bool YapfTrainFindNearestSafeTile(const Train *v, TileIndex tile, Trackdir td, bool override_railtype);
 
 #endif /* YAPF_H */
+
+struct Aircraft;
+struct PBSTileInfo;
+struct AircraftPathChoice;
+enum AircraftState : uint8_t;
+Trackdir YapfAircraftFindPath(const Aircraft *v, PBSTileInfo &best_dest, bool &path_found, AircraftState dest_state, AircraftPathChoice &path_cache);

@@ -234,6 +234,12 @@ enum class WindowClass : uint16_t {
 	VehicleRefit,
 
 	/**
+	 * Vehicle cargo types; %Window numbers:
+	 *   - #VehicleID = #VehicleCargoTypesWidgets
+	 */
+	VehicleCargoTypes,
+
+	/**
 	 * Vehicle orders; %Window numbers:
 	 *   - #VehicleID = #OrderWidgets
 	 */
@@ -453,6 +459,9 @@ enum class WindowClass : uint16_t {
 	 *   - #TRANSPORT_RAIL = #BuildRailStationWidgets
 	 */
 	BuildStation,
+	BuildHeliport,                 ///< Build heliport window.
+	BuildAirportInfrastructure,    ///< Build airport infrastructure window.
+	SelectTrackGfx,                ///< Select gfx for airport track tiles.
 
 	/**
 	 * Build bus station; %Window numbers:

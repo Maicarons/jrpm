@@ -1,6 +1,7 @@
 /.vs
 /.vscode
 /build*
+/ai
 CMakeSettings.json
 docs/aidocs/*
 docs/gamedocs/*
@@ -8,3 +9,8 @@ docs/source/*
 /out
 /vcpkg_installed
 *.tmp
+
+# Local build tooling
+.deps/
+grfcodec/
+openttd.new
