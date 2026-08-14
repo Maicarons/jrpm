@@ -644,8 +644,8 @@ void ObjectHighlight::UpdateTiles() {
             if (tile == INVALID_TILE) break;
             if (IsTileType(tile, TileType::Railway) && IsCompatibleRail(GetRailType(tile), _cur_railtype)) {
                 this->PlaceExtraDepotRail(tile, _place_depot_extra_dir[dir], _place_depot_extra_track[dir]);
-                this->PlaceExtraDepotRail(tile, _place_depot_extra_dir[dir + 4], _place_depot_extra_track[dir + 4]);
-                this->PlaceExtraDepotRail(tile, _place_depot_extra_dir[dir + 8], _place_depot_extra_track[dir + 8]);
+                this->PlaceExtraDepotRail(tile, _place_depot_extra_dir[static_cast<uint8_t>(dir) + 4 & 3], _place_depot_extra_track[static_cast<uint8_t>(dir) + 4 & 3]);
+                this->PlaceExtraDepotRail(tile, _place_depot_extra_dir[static_cast<uint8_t>(dir) + 8 & 3], _place_depot_extra_track[static_cast<uint8_t>(dir) + 8 & 3]);
             }
             break;
         }
@@ -698,17 +698,20 @@ void ObjectHighlight::UpdateTiles() {
             this->cost = CMD_ERROR;
             auto palette = (this->cost.Succeeded() ? PALETTE_TO_WHITE : PALETTE_TO_RED);
 
-            const AirportSpec *as = AirportSpec::Get(this->airport_type);
+                        const AirportSpec *as = AirportSpec::Get(this->airport_type);
             if (!as->IsAvailable() || this->airport_layout >= as->layouts.size()) break;
-            Direction rotation = as->layouts[this->airport_layout].rotation;
-            if (rotation == INVALID_DIR) break;
-            uint16_t w = as->size_x;
-            uint16_t h = as->size_y;
-            if (rotation == DIR_E || rotation == DIR_W) std::swap(w, h);
+            const AirportTileLayout &layout = as->layouts[this->airport_layout];
+            uint16_t w = layout.size_x;
+            uint16_t h = layout.size_y;
             auto ta = ClampToVisibleMap(TileArea{this->tile, w, h});
-            for (AirportTileTableIterator iter(as->layouts[this->airport_layout].tiles, tile); iter != INVALID_TILE; ++iter) {
-                if (!ta.Contains(iter)) continue;
-                this->AddTile(iter, ObjectTileHighlight::make_airport_tile(palette, iter.GetStationGfx()));
+            for (uint16_t ly = 0; ly < h; ly++) {
+                for (uint16_t lx = 0; lx < w; lx++) {
+                    uint pos = ly * w + lx;
+                    if (pos >= layout.tiles.size() || layout.tiles[pos].type == ATT_INVALID) continue;
+                    TileIndex iter = this->tile + TileDiffXY(lx, ly);
+                    if (!ta.Contains(iter)) continue;
+                    this->AddTile(iter, ObjectTileHighlight::make_airport_tile(palette, static_cast<StationGfx>(layout.tiles[pos].gfx[0])));
+                }
             }
             break;
         }
@@ -762,7 +765,7 @@ void ObjectHighlight::UpdateTiles() {
                 while(tile <= Map::Size()) {
                     this->sprites.emplace_back(
                         RemapCoords(TileX(tile) * TILE_SIZE, TileY(tile) * TILE_SIZE, z * TILE_HEIGHT + 7 /* z_offset */),
-                        SPR_AUTORAIL_BASE + _AutorailTilehSprite[0][TrackdirToTrack(trackdir)],
+                        SPR_AUTORAIL_BASE + _autorail_slope_sprite_offsets[0][TrackdirToTrack(trackdir)],
                         palette
                     );
                     // this->AddTile(tile, std::move(ObjectTileHighlight::make_rail_track(palette, TrackdirToTrack(trackdir)).set_z(z)));
@@ -796,9 +799,9 @@ void ObjectHighlight::UpdateTiles() {
             if (this->cost.Succeeded()) {
                 const IndustrySpec *indspec = GetIndustrySpec(this->ind_type);
                 if (indspec == nullptr) break;
-                if (cost.cm.industry_layout >= indspec->layouts.size()) break;
+                if (this->ind_layout >= indspec->layouts.size()) break;
 
-                const IndustryTileLayout &layout = indspec->layouts[cost.cm.industry_layout];
+                const IndustryTileLayout &layout = indspec->layouts[this->ind_layout];
                 for (const IndustryTileLayoutTile &it : layout) {
                     if (it.gfx == GFX_WATERTILE_SPECIALCHECK) continue;
                     auto tile_diff = ToTileIndexDiff(it.ti);
@@ -809,7 +812,7 @@ void ObjectHighlight::UpdateTiles() {
                         ObjectTileHighlight::make_industry_tile(
                             PALETTE_TO_WHITE,
                             this->ind_type,
-                            cost.cm.industry_layout,
+                            this->ind_layout,
                             tile_diff,
                             it.gfx
                         )
@@ -840,7 +843,7 @@ void ObjectHighlight::MarkDirty() {
         MarkTileDirtyByTile(kv.first);
     }
     for (const auto &s: this->sprites) {
-        auto sprite = GetSprite(GB(s.sprite_id, 0, SPRITE_WIDTH), SpriteType::Normal);
+        auto sprite = GetSprite(GB(s.sprite_id, 0, SPRITE_WIDTH), SpriteType::Normal, ZOOM_LVL_NORMAL);
         auto left = s.pt.x + sprite->x_offs;
         auto top = s.pt.y + sprite->y_offs;
         MarkAllViewportsDirty(
@@ -981,35 +984,11 @@ void HighlightMap::AddTilesBorder(const std::set<TileIndex> &tiles, SpriteID pal
 }
 
 SpriteID MixTints(SpriteID bottom, SpriteID top) {
+    /* jrpm does not ship the custom tint sprite table cmclient used;
+     * stacking falls back to the bottom tint. */
     if (top == PAL_NONE) return bottom;
     if (bottom == PAL_NONE) return top;
-    assert (bottom >= CM_PALETTE_TINT_BASE && bottom < CM_PALETTE_TINT_END);
-    assert (top >= CM_PALETTE_TINT_BASE && top < CM_PALETTE_TINT_MIXES);
-    if (bottom < CM_PALETTE_TINT_MIXES) {
-        // Single tint -> use mixed
-        return (
-            CM_PALETTE_TINT_MIXES +
-            (bottom - CM_PALETTE_TINT_BASE) * CM_PALETTE_TINT_BASE_COUNT +
-            (top - CM_PALETTE_TINT_BASE)
-        );
-    }
-    // White mix can't be mixed again
-    if (bottom >= CM_PALETTE_TINT_MIXES_WHITE) {
-        Debug(misc, 0, "White highlights can't be stacked on white mixes");
-        return bottom;
-    }
-    if (top == PALETTE_TO_WHITE) {
-        // Use same mix but in the white range
-        return bottom - CM_PALETTE_TINT_MIXES + CM_PALETTE_TINT_MIXES_WHITE;
-    }
-
-    // Mix two last tints
-    auto last_mixed = (bottom - CM_PALETTE_TINT_MIXES) % CM_PALETTE_TINT_BASE_COUNT;
-    return (
-        CM_PALETTE_TINT_MIXES +
-        last_mixed * CM_PALETTE_TINT_BASE_COUNT +
-        (top - CM_PALETTE_TINT_BASE)
-    );
+    return bottom;
 }
 
 SpriteID GetTintBySelectionColour(SpriteID colour, bool deep=false) {
@@ -2044,7 +2023,7 @@ void ObjectHighlight::DrawSelectionOverlay([[maybe_unused]] DrawPixelInfo *dpi) 
     //                 auto tl = RemapCoords(tx + TILE_SIZE / 2, ty - TILE_SIZE / 2, h);
     //                 auto br = RemapCoords(tx + TILE_SIZE / 2, ty + 3 * TILE_SIZE / 2, h);
     //                 if (Intersects(tl, br, dpi.left, dpi.top, dpi.left + dpi.width, dpi.top + dpi.height)) {
-    //                     auto sprite = SPR_AUTORAIL_BASE + _AutorailTilehSprite[0][oth.u.rail.track];
+    //                     auto sprite = SPR_AUTORAIL_BASE + _autorail_slope_sprite_offsets[0][oth.u.rail.track];
     //                     auto p = RemapCoords(tx, ty, h);
     //                     DrawSpriteViewport(sprite, oth.palette, p.x, p.y);
     //                 }
