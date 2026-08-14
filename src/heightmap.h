@@ -11,6 +11,7 @@
 #define HEIGHTMAP_H
 
 #include "fileio_type.h"
+#include <vector>
 
 /**
  * Order of these enums has to be the same as in lang/english.txt
@@ -21,6 +22,7 @@ enum HeightmapRotation : uint8_t {
 	HM_CLOCKWISE,         ///< Rotate the map clockwise 45 degrees
 };
 
+bool ReadHeightMap(DetailedFileType dft, std::string_view filename, uint *x, uint *y, std::vector<uint8_t> *map);
 bool GetHeightmapDimensions(DetailedFileType dft, std::string_view filename, uint *x, uint *y);
 bool LoadHeightmap(DetailedFileType dft, std::string_view filename);
 void FlatEmptyWorld(uint8_t tile_height);

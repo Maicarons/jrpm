@@ -46,6 +46,7 @@
 #include "newgrf_profiling.h"
 #include "console_func.h"
 #include "jrpm_locations.h"
+#include "jrpm_console_commands.h"
 #include "engine_base.h"
 #include "engine_override.h"
 #include "road.h"
@@ -4471,6 +4472,7 @@ static bool ConAutoGroup(std::span<std::string_view> argv)
 void IConsoleStdLibRegister()
 {
 	RegisterJRPMConsoleCommands();
+	RegisterJRPMBatch0Commands();
 
 	IConsole::CmdRegister("debug_level",             ConDebugLevel);
 	IConsole::CmdRegister("echo",                    ConEcho);
