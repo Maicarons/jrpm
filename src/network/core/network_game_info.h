@@ -135,6 +135,8 @@ extern NetworkServerGameInfo _network_game_info;
 
 std::string_view GetNetworkRevisionString();
 bool IsNetworkCompatibleVersion(std::string_view other, bool extended = false);
+bool IsJgrppNativeNetworkRevision(std::string_view other);
+bool IsPxpNetworkRevision(std::string_view other);
 void CheckGameCompatibility(NetworkGameInfo &ngi, bool extended = false);
 
 void FillStaticNetworkServerGameInfo();

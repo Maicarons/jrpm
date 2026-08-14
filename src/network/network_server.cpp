@@ -1036,8 +1036,13 @@ NetworkRecvStatus ServerNetworkGameSocketHandler::ReceiveClientJoin(Packet &p)
 	std::string client_revision = p.Recv_string(NETWORK_REVISION_LENGTH);
 	uint32_t newgrf_version = p.Recv_uint32();
 
-	/* Check if the client has revision control enabled */
-	if (!IsNetworkCompatibleVersion(client_revision) || _openttd_newgrf_version != newgrf_version) {
+	/* Check if the client has revision control enabled.
+	 * Also accept upstream JGRPP and pulsexlb (px-patch) clients so that they
+	 * can join a jrpm server. */
+	bool revision_ok = IsNetworkCompatibleVersion(client_revision)
+			|| IsJgrppNativeNetworkRevision(client_revision)
+			|| IsPxpNetworkRevision(client_revision);
+	if (!revision_ok || _openttd_newgrf_version != newgrf_version) {
 		/* Different revisions!! */
 		return this->SendError(NetworkErrorCode::WrongRevision);
 	}

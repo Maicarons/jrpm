@@ -1,4 +1,10 @@
-## JGR's Patchpack version 0.73.1
+## OpenTTD-JRPM version 0.1.0 (based on JGR's Patchpack 0.73.1 + pulsexlb px-patch)
+
+OpenTTD-JRPM (jrpm) is a fork of [JGR's Patchpack](http://github.com/JGRennison/OpenTTD-patches),
+additionally merging the pulsexlb px-patch features (train coupling/decoupling "loco swap" and
+multi-tile modular airports) and jrpm-specific additions (parallel content download with multiple
+mirrors, automatic vehicle grouping by shared orders, a construction cost tooltip, a whole-game
+perception AI API, and server-side multi-version client compatibility).
 
 This is a collection of features and other modifications applied to [OpenTTD](http://www.openttd.org/).  
 It's a separate version of the game which can be installed and played alongside the standard game, not a loadable mod (NewGRF, script, or so on).

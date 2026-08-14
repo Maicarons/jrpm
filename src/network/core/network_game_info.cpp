@@ -119,6 +119,28 @@ bool IsNetworkCompatibleVersion(std::string_view other, bool extended)
 }
 
 /**
+ * Check whether the given revision string is from an upstream JGRPP build.
+ * Used by the server to allow upstream JGRPP clients to join a jrpm server.
+ * @param other The revision string to check.
+ * @return True when the string is a JGRPP revision.
+ */
+bool IsJgrppNativeNetworkRevision(std::string_view other)
+{
+	return other.starts_with("jgrpp-");
+}
+
+/**
+ * Check whether the given revision string is from a pulsexlb (px-patch) build.
+ * Used by the server to allow px-patch clients to join a jrpm server.
+ * @param other The revision string to check.
+ * @return True when the string is a px-patch revision.
+ */
+bool IsPxpNetworkRevision(std::string_view other)
+{
+	return other.starts_with("pxp");
+}
+
+/**
  * Check if an game entry is compatible with our client.
  * @param ngi The game information to process and update the compatible field of.
  */
