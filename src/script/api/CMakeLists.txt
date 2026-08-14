@@ -245,6 +245,7 @@ add_files(
     script_execmode.cpp
     script_game.cpp
     script_gamesettings.cpp
+    script_global.cpp
     script_goal.cpp
     script_group.cpp
     script_grouplist.cpp

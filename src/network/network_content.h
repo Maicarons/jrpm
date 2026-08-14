@@ -58,6 +58,34 @@ struct ContentCallback {
 	virtual ~ContentCallback() = default;
 };
 
+class ClientNetworkContentSocketHandler;
+
+/** A single file to download, as parsed from the mirror's response. */
+struct ContentFileDownload {
+	ContentID id = INVALID_CONTENT_ID;   ///< Content ID of the file.
+	ContentType type = ContentType::Invalid; ///< Content type of the file.
+	uint32_t filesize = 0;               ///< Size of the file to download.
+	std::string url;                     ///< URL to fetch the file from.
+	std::string filename;                ///< Local filename, without extension.
+};
+
+/**
+ * Per-file download state; also acts as the HTTP callback for the file's
+ * connection. Multiple sessions may run concurrently.
+ */
+class ContentDownloadSession : public HTTPCallback {
+public:
+	ClientNetworkContentSocketHandler &handler; ///< The content client.
+	ContentFileDownload file;                   ///< The file being downloaded.
+	std::optional<FileHandle> cur_file;         ///< Currently open output file.
+
+	ContentDownloadSession(ClientNetworkContentSocketHandler &handler, ContentFileDownload &&file) : handler(handler), file(std::move(file)) {}
+
+	void OnFailure() override;
+	void OnReceiveData(UniqueBuffer<char> data) override;
+	bool IsCancelled() const override;
+};
+
 /**
  * Socket handler for the content server connection
  */
@@ -69,16 +97,22 @@ protected:
 	ContentIDList queued;                         ///< ContentID queue to be requested.
 	ContentVector infos;                          ///< All content info we received
 	btree::btree_multimap<ContentID, ContentID> reverse_dependency_map; ///< Content reverse dependency map
-	std::vector<char> http_response;              ///< The HTTP response to the requests we've been doing
+	std::vector<char> http_response;              ///< The HTTP response (file header list) of the mirror request
 	int http_response_index = -2;                 ///< Where we are, in the response, with handling it
 
-	std::optional<FileHandle> cur_file;           ///< Currently downloaded file
-	std::unique_ptr<ContentInfo> cur_info;        ///< Information about the currently downloaded file
+	std::optional<FileHandle> cur_file;           ///< Currently downloaded file (fallback protocol)
+	std::unique_ptr<ContentInfo> cur_info;        ///< Information about the currently downloaded file (fallback protocol)
+	std::vector<ContentFileDownload> pending_files;         ///< Files parsed from the mirror response, waiting to be downloaded.
+	size_t next_file_index = 0;                   ///< Index of the next pending file to start downloading.
+	std::vector<std::unique_ptr<ContentDownloadSession>> download_sessions; ///< Active parallel file downloads.
+	size_t mirror_index = 0;                      ///< Index of the mirror currently used.
+	bool download_cancelled = false;              ///< Whether the parallel downloads should wind down (retry pending)
 	bool is_connecting = false;                   ///< Whether we're connecting
 	bool is_cancelled = false;                    ///< Whether the download has been cancelled
 	std::chrono::steady_clock::time_point last_activity = std::chrono::steady_clock::now(); ///< The last time there was network activity
 
 	friend class NetworkContentConnecter;
+	friend class ContentDownloadSession;
 
 	bool ReceiveServerInfo(Packet &p) override;
 	bool ReceiveServerContent(Packet &p) override;
@@ -102,6 +136,12 @@ protected:
 
 	void DownloadSelectedContentHTTP(const ContentIDList &content);
 	void DownloadSelectedContentFallback(const ContentIDList &content);
+	bool ParseResponseHeaders();
+	void StartDownloadSessions();
+	void OnSessionProgress(ContentDownloadSession &session, int bytes);
+	void OnSessionFileDone(ContentDownloadSession &session);
+	void OnSessionFailure(ContentDownloadSession &session);
+	void OnAllSessionsDone();
 public:
 	/** The idle timeout; when to close the connection because it's idle. */
 	static constexpr std::chrono::seconds IDLE_TIMEOUT = std::chrono::seconds(60);
@@ -116,6 +156,8 @@ public:
 	void RequestContentList(ContentVector *cv, bool send_md5sum = true);
 
 	void DownloadSelectedContent(uint &files, uint &bytes, bool fallback = false);
+	/** Reset the mirror index so a fresh download starts with the first mirror. */
+	void ResetMirrorIndex() { this->mirror_index = 0; }
 	void RequestQueuedContentInfo();
 
 	void Select(ContentID cid);

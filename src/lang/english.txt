@@ -1883,6 +1883,9 @@ STR_CONFIG_SETTING_AI_BUILDS_SHIPS_HELPTEXT                     :Enabling this s
 STR_CONFIG_SETTING_AI_IN_MULTIPLAYER                            :Allow AIs in multiplayer: {STRING2}
 STR_CONFIG_SETTING_AI_IN_MULTIPLAYER_HELPTEXT                   :Allow AI computer players to participate in multiplayer games
 
+STR_CONFIG_SETTING_ALLOW_GLOBAL_AI_ACCESS                       :Allow AIs to access whole-game data: {STRING2}
+STR_CONFIG_SETTING_ALLOW_GLOBAL_AI_ACCESS_HELPTEXT              :Allow AIs to use the Global API to access data of all companies and the whole map. GameScripts always have this access
+
 STR_CONFIG_SETTING_SCRIPT_MAX_OPCODES                           :#opcodes before scripts are suspended: {STRING2}
 STR_CONFIG_SETTING_SCRIPT_MAX_OPCODES_HELPTEXT                  :Maximum number of computation steps that a script can take in one turn
 STR_CONFIG_SETTING_SCRIPT_MAX_MEMORY                            :Max memory usage per script: {STRING2}
@@ -4189,6 +4192,8 @@ STR_GROUP_CREATE_TOOLTIP                                        :{BLACK}Click to
 STR_GROUP_DELETE_TOOLTIP                                        :{BLACK}Delete the selected group
 STR_GROUP_RENAME_TOOLTIP                                        :{BLACK}Rename the selected group
 STR_GROUP_LIVERY_TOOLTIP                                        :{BLACK}Change livery of the selected group
+STR_GROUP_AUTOGROUP_SHARED_TOOLTIP                              :{BLACK}Auto-group vehicles by their shared orders
+STR_CONSTRUCTION_COST_TOOLTIP                                   :{BLACK}Estimated cost: {CURRENCY_LONG}
 STR_GROUP_REPLACE_PROTECTION_TOOLTIP                            :{BLACK}Click to protect this group from global autoreplace. Ctrl+Click to also protect sub-groups
 
 STR_QUERY_GROUP_DELETE_CAPTION                                  :{WHITE}Delete Group

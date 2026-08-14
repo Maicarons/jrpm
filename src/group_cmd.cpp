@@ -940,6 +940,56 @@ CommandCost CmdAddSharedVehicleGroup(DoCommandFlags flags, GroupID id_g, Vehicle
 	return CommandCost();
 }
 
+/**
+ * Auto-group all vehicles of a company by their shared order lists.
+ *
+ * Vehicles that already belong to a non-default group are left untouched.
+ * A group is created for every distinct order list which is shared by at
+ * least two vehicles; all vehicles sharing that order list are moved into
+ * the newly created group. Group names are auto-generated from the route
+ * served by the shared orders.
+ *
+ * @param flags type of operation
+ * @param type type of vehicles
+ * @return the cost of this operation or an error
+ */
+CommandCost CmdAutoGroupSharedOrders(DoCommandFlags flags, VehicleType type)
+{
+	if (!IsCompanyBuildableVehicleType(type)) return CMD_ERROR;
+
+	GroupChangeDeferredUpdateScope updater(type);
+
+	CommandCost total_cost;
+
+	/* Front vehicles of the requested type; already-grouped vehicles are skipped,
+	 * so every distinct shared order list yields exactly one new group. */
+	for (const Vehicle *v : Vehicle::IterateTypeFrontOnly(type)) {
+		if (!v->IsPrimaryVehicle()) continue;
+		if (v->owner != _current_company) continue;
+		if (v->orders == nullptr || v->orders->GetNumOrders() == 0) continue;
+
+		/* Skip vehicles which are already in a custom group. */
+		if (!IsDefaultGroupID(v->group_id)) continue;
+
+		/* Count the vehicles sharing this order list. */
+		uint shared_count = 0;
+		for (const Vehicle *v2 = v->FirstShared(); v2 != nullptr; v2 = v2->NextShared()) {
+			if (v2->owner == _current_company && v2->IsPrimaryVehicle()) shared_count++;
+		}
+		if (shared_count < 2) continue;
+
+		/* Create a group from this vehicle's shared order list and move all
+		 * shared vehicles into it. */
+		std::string name = GenerateAutoNameForVehicleGroup(v);
+		VehicleListIdentifier vli(VL_SHARED_ORDERS, v->type, v->owner, v->index);
+		CommandCost ret = Command<Commands::CreateGroupFromList>::Do(flags, vli, CargoFilterCriteria::CF_ANY, name);
+		if (ret.Failed()) return ret;
+		total_cost.AddCost(ret.GetCost());
+	}
+
+	return total_cost;
+}
+
 
 /**
  * Remove all vehicles from a group

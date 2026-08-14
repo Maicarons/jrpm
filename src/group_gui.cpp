@@ -68,6 +68,8 @@ static constexpr std::initializer_list<NWidgetPart> _nested_group_widgets = {
 						SetToolTip(STR_GROUP_RENAME_TOOLTIP),
 				NWidget(WWT_PUSHIMGBTN, Colours::Grey, WID_GL_LIVERY_GROUP),
 						SetToolTip(STR_GROUP_LIVERY_TOOLTIP),
+				NWidget(WWT_PUSHIMGBTN, Colours::Grey, WID_GL_AUTOGROUP_SHARED),
+						SetToolTip(STR_GROUP_AUTOGROUP_SHARED_TOOLTIP),
 				NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_GL_COLLAPSE_ALL_GROUPS),
 						SetStringTip(STR_GROUP_COLLAPSE_ALL, STR_GROUP_COLLAPSE_ALL),
 				NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_GL_EXPAND_ALL_GROUPS),
@@ -522,6 +524,7 @@ public:
 		this->GetWidget<NWidgetCore>(WID_GL_RENAME_GROUP)->SetSprite(SPR_GROUP_RENAME_TRAIN + to_underlying(this->vli.vtype));
 		this->GetWidget<NWidgetCore>(WID_GL_DELETE_GROUP)->SetSprite(SPR_GROUP_DELETE_TRAIN + to_underlying(this->vli.vtype));
 		this->GetWidget<NWidgetCore>(WID_GL_LIVERY_GROUP)->SetSprite(SPR_GROUP_LIVERY_TRAIN + to_underlying(this->vli.vtype));
+		this->GetWidget<NWidgetCore>(WID_GL_AUTOGROUP_SHARED)->SetSprite(SPR_GROUP_CREATE_TRAIN + to_underlying(this->vli.vtype));
 		this->GetWidget<NWidgetCore>(WID_GL_REPLACE_PROTECTION)->SetSprite(SPR_GROUP_REPLACE_OFF_TRAIN + to_underlying(this->vli.vtype));
 
 		this->FinishInitNested(window_number);
@@ -942,6 +945,11 @@ public:
 
 			case WID_GL_CREATE_GROUP: { // Create a new group
 				Command<Commands::CreateGroup>::Post(STR_ERROR_GROUP_CAN_T_CREATE, CommandCallback::CreateGroup, this->vli.vtype, this->vli.ToGroupID());
+				break;
+			}
+
+			case WID_GL_AUTOGROUP_SHARED: { // Auto-group vehicles by their shared orders
+				Command<Commands::AutoGroupSharedOrders>::Post(STR_ERROR_GROUP_CAN_T_CREATE, this->vli.vtype);
 				break;
 			}
 

@@ -24,6 +24,8 @@
 #include "network/network_server.h"
 #include "command_func.h"
 #include "command_log.h"
+#include "group_cmd.h"
+#include "vehicle_type.h"
 #include "settings_func.h"
 #include "fios.h"
 #include "fileio_func.h"
@@ -4440,6 +4442,32 @@ static bool ConDumpInfo(std::span<std::string_view> argv)
 	return false;
 }
 
+/**
+ * Auto-group all vehicles of the current company by their shared orders.
+ * Usage: 'autogroup' or 'autogroup <train|road|ship|aircraft>'.
+ */
+static bool ConAutoGroup(std::span<std::string_view> argv)
+{
+	auto do_type = [](VehicleType vt) {
+		Command<Commands::AutoGroupSharedOrders>::Post(STR_ERROR_GROUP_CAN_T_CREATE, vt);
+	};
+
+	if (argv.size() >= 2) {
+		std::string_view arg = argv[1];
+		if (arg == "train") { do_type(VehicleType::Train); return true; }
+		if (arg == "road" || arg == "roadveh" || arg == "truck") { do_type(VehicleType::Road); return true; }
+		if (arg == "ship") { do_type(VehicleType::Ship); return true; }
+		if (arg == "aircraft" || arg == "plane") { do_type(VehicleType::Aircraft); return true; }
+		IConsolePrint(CC_ERROR, "Unknown vehicle type. Use: train, road, ship or aircraft.");
+		return false;
+	}
+
+	for (VehicleType vt : { VehicleType::Train, VehicleType::Road, VehicleType::Ship, VehicleType::Aircraft }) {
+		do_type(vt);
+	}
+	return true;
+}
+
 /** Console command registration. */
 void IConsoleStdLibRegister()
 {
@@ -4517,6 +4545,7 @@ void IConsoleStdLibRegister()
 
 	IConsole::CmdRegister("companies",               ConCompanies);
 	IConsole::AliasRegister("players",               "companies");
+	IConsole::CmdRegister("autogroup",               ConAutoGroup);
 
 	/* networking functions */
 

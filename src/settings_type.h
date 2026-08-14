@@ -617,6 +617,8 @@ struct NetworkSettings {
 	uint8_t       autoclean_novehicles;                   ///< remove companies with no vehicles after this many months
 	uint8_t       max_companies;                          ///< maximum amount of companies
 	uint8_t       max_clients;                            ///< maximum amount of clients
+	std::string content_server;                           ///< content server hostname for the metadata protocol
+	std::string content_mirrors;                          ///< comma-separated list of content mirror URIs used for downloads
 	CalTime::Year restart_game_year;                      ///< year the server restarts
 	uint16_t      restart_hours;                          ///< number of hours to run the server before automatic restart
 	uint8_t       min_active_clients;                     ///< minimum amount of active clients to unpause the game
@@ -744,6 +746,7 @@ struct AISettings {
 struct ScriptSettings {
 	uint32_t script_max_opcode_till_suspend;   ///< max opcode calls till scripts will suspend
 	uint32_t script_max_memory_megabytes;      ///< limit on memory a single script instance may have allocated
+	bool allow_global_ai_access;               ///< allow AIs to use the whole-game Global API
 };
 
 /** Settings related to the yet another pathfinder. */

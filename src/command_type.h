@@ -696,6 +696,7 @@ enum class Commands : uint8_t {
 	CreateGroupFromList,                    ///< create and rename a new group from a vehicle list
 	AddVehicleToGroup,                      ///< add a vehicle to a group
 	AddSharedVehiclesToGroup,               ///< add all other shared vehicles to a group which are missing
+	AutoGroupSharedOrders,                  ///< auto-group all vehicles by their shared order lists
 	RemoveAllVehiclesGroup,                 ///< remove all vehicles from a group
 	SetGroupFlag,                           ///< set/clear a flag for a group
 	SetGroupLivery,                         ///< set the livery for a group

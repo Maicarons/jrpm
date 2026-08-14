@@ -24,6 +24,7 @@
 #include "../timer/timer.h"
 #include "../timer/timer_window.h"
 #include "../core/string_consumer.hpp"
+#include "core/config.h"
 #include "network_content.h"
 
 #include "table/strings.h"
@@ -319,6 +320,12 @@ void ClientNetworkContentSocketHandler::DownloadSelectedContent(uint &files, uin
 
 /**
  * Initiate downloading the content over HTTP.
+ *
+ * The first configured mirror is asked for the file list, after which the
+ * files are downloaded in parallel (see #StartDownloadSessions). When the
+ * request or a download fails, the next mirror is tried, before falling back
+ * to the legacy TCP protocol.
+ *
  * @param content The content to download.
  */
 void ClientNetworkContentSocketHandler::DownloadSelectedContentHTTP(const ContentIDList &content)
@@ -328,9 +335,16 @@ void ClientNetworkContentSocketHandler::DownloadSelectedContentHTTP(const Conten
 		content_request.format("{}\n", id);
 	}
 
+	this->pending_files.clear();
+	this->next_file_index = 0;
+	this->download_sessions.clear();
+	this->http_response.clear();
 	this->http_response_index = -1;
 
-	NetworkHTTPSocketHandler::Connect(NetworkContentMirrorUriString(), this, content_request.to_string());
+	auto mirrors = NetworkContentMirrorUris();
+	if (this->mirror_index >= mirrors.size()) this->mirror_index = 0;
+
+	NetworkHTTPSocketHandler::Connect(mirrors[this->mirror_index], this, content_request.to_string());
 }
 
 /**
@@ -372,11 +386,24 @@ void ClientNetworkContentSocketHandler::DownloadSelectedContentFallback(const Co
  */
 static std::string GetFullFilename(const ContentInfo &ci, bool compressed)
 {
-	Subdirectory dir = GetContentInfoSubDir(ci.type);
+	return GetFullFilename(ci.type, ci.filename, compressed);
+}
+
+/**
+ * Determine the full filename of a piece of content
+ * @param type       the type of content
+ * @param filename   the filename of the content, without extension
+ * @param compressed should the filename end with .gz?
+ * @return a statically allocated buffer with the filename or
+ *         nullptr when no filename could be made.
+ */
+static std::string GetFullFilename(ContentType type, std::string_view filename, bool compressed)
+{
+	Subdirectory dir = GetContentInfoSubDir(type);
 	if (dir == Subdirectory::None) return {};
 
 	std::string buf = FioGetDirectory(Searchpath::AutodownloadDir, dir);
-	buf += ci.filename;
+	buf += filename;
 	buf += compressed ? ".tar.gz" : ".tar";
 
 	return buf;
@@ -557,24 +584,21 @@ bool ClientNetworkContentSocketHandler::IsCancelled() const
 	return this->is_cancelled;
 }
 
-/* Also called to just clean up the mess. */
+/* Also called to just clean up the mess (the mirror request failed). */
 void ClientNetworkContentSocketHandler::OnFailure()
 {
 	this->http_response.clear();
 	this->http_response.shrink_to_fit();
 	this->http_response_index = -2;
 
-	if (this->cur_file.has_value()) {
-		this->OnDownloadProgress(*this->cur_info, -1);
+	/* Cancel the parallel downloads so they wind down gracefully. */
+	this->download_cancelled = true;
+	for (auto &session : this->download_sessions) session->cur_file.reset();
 
-		this->cur_file.reset();
-	}
-
-	/* If we fail, download the rest via the 'old' system. */
-	if (!this->is_cancelled) {
-		uint files, bytes;
-
-		this->DownloadSelectedContent(files, bytes, true);
+	/* If we fail, try the next mirror, and if there is none download the
+	 * rest via the 'old' system. */
+	if (!this->is_cancelled && this->download_sessions.empty()) {
+		this->OnAllSessionsDone();
 	}
 }
 
@@ -587,82 +611,70 @@ void ClientNetworkContentSocketHandler::OnReceiveData(UniqueBuffer<char> data)
 		return;
 	}
 
+	/* Buffer the mirror's response: a list of file entries. */
 	if (this->http_response_index == -1) {
 		if (data != nullptr) {
 			/* Append the rest of the response. */
 			this->http_response.insert(this->http_response.end(), data.get(), data.get() + data.size());
 			return;
-		} else {
-			/* Make sure the response is properly terminated. */
-			this->http_response.push_back('\0');
-
-			/* And prepare for receiving the rest of the data. */
-			this->http_response_index = 0;
 		}
-	}
 
-	if (data != nullptr) {
-		/* We have data, so write it to the file. */
-		if (fwrite(data.get(), 1, data.size(), *this->cur_file) != data.size()) {
-			/* Writing failed somehow, let try via the old method. */
+		/* Make sure the response is properly terminated. */
+		this->http_response.push_back('\0');
+		this->http_response_index = 0;
+
+		/* Parse the response and start the parallel downloads. */
+		if (this->ParseResponseHeaders()) {
+			this->StartDownloadSessions();
+		} else {
 			this->OnFailure();
-		} else {
-			/* Just received the data. */
-			this->OnDownloadProgress(*this->cur_info, (int)data.size());
 		}
-
-		/* Nothing more to do now. */
 		return;
 	}
 
-	if (this->cur_file.has_value()) {
-		/* We've finished downloading a file. */
-		this->AfterDownload();
-	}
+	/* Any further data on this connection is unexpected; ignore it. */
+}
 
-	if ((uint)this->http_response_index >= this->http_response.size()) {
-		/* It's not a real failure, but if there's
-		 * nothing more to download it helps with
-		 * cleaning up the stuff we allocated. */
-		this->OnFailure();
-		return;
-	}
-
-	/* When we haven't opened a file this must be our first packet with metadata. */
-	this->cur_info = std::make_unique<ContentInfo>();
+/**
+ * Parse the mirror's response into a list of files to download.
+ * @return True when at least one file was parsed.
+ */
+bool ClientNetworkContentSocketHandler::ParseResponseHeaders()
+{
+	this->pending_files.clear();
+	this->next_file_index = 0;
 
 	try {
 		for (;;) {
 			std::string_view buffer{this->http_response.data(), this->http_response.size()};
 			buffer.remove_prefix(this->http_response_index);
 			auto len = buffer.find('\n');
-			if (len == std::string_view::npos) throw std::exception{};
+			if (len == std::string_view::npos) break;
+
 			/* Update the index for the next one */
 			this->http_response_index += static_cast<int>(len + 1);
 
 			StringConsumer consumer{buffer.substr(0, len)};
 
+			ContentFileDownload file;
+
 			/* Read the ID */
-			this->cur_info->id = static_cast<ContentID>(consumer.ReadIntegerBase<uint>(10));
+			file.id = static_cast<ContentID>(consumer.ReadIntegerBase<uint>(10));
 			if (!consumer.ReadIf(",")) throw std::exception{};
 
 			/* Read the type */
-			this->cur_info->type = static_cast<ContentType>(consumer.ReadIntegerBase<uint>(10));
+			file.type = static_cast<ContentType>(consumer.ReadIntegerBase<uint>(10));
 			if (!consumer.ReadIf(",")) throw std::exception{};
 
 			/* Read the file size */
-			this->cur_info->filesize = consumer.ReadIntegerBase<uint32_t>(10);
+			file.filesize = consumer.ReadIntegerBase<uint32_t>(10);
 			if (!consumer.ReadIf(",")) throw std::exception{};
 
 			/* Read the URL */
 			auto url = consumer.GetLeftData();
 
 			/* Is it a fallback URL? If so, just continue with the next one. */
-			if (consumer.ReadIf("ottd")) {
-				/* Have we gone through all lines? */
-				if (static_cast<size_t>(this->http_response_index) >= this->http_response.size()) throw std::exception{};
-				continue;
-			}
+			if (consumer.ReadIf("ottd")) continue;
 
 			consumer.SkipUntilChar('/', StringConsumer::KEEP_SEPARATOR);
 			std::string_view filename;
@@ -675,21 +687,186 @@ void ClientNetworkContentSocketHandler::OnReceiveData(UniqueBuffer<char> data)
 			/* Remove the extension from the string. */
 			for (uint i = 0; i < 2; i++) {
 				auto pos = filename.find_last_of('.');
-				if (pos == std::string::npos) throw std::exception{};
+				if (pos == std::string_view::npos) throw std::exception{};
 				filename = filename.substr(0, pos);
 			}
 
-			/* Copy the string, without extension, to the filename. */
-			this->cur_info->filename = filename;
-
-			/* Request the next file. */
-			if (!this->BeforeDownload()) throw std::exception{};
-
-			NetworkHTTPSocketHandler::Connect(url, this);
-			break;
+			file.url = std::string(url);
+			file.filename = std::string(filename);
+			this->pending_files.push_back(std::move(file));
 		}
 	} catch (const std::exception&) {
-		this->OnFailure();
+		return false;
+	}
+
+	/* Nothing to download (e.g. a fallback-only response). */
+	return !this->pending_files.empty();
+}
+
+/** How many files to download concurrently from a mirror. */
+static const size_t CONTENT_DOWNLOAD_PARALLEL = 4;
+
+/**
+ * Start downloading the pending files in parallel.
+ *
+ * Up to #CONTENT_DOWNLOAD_PARALLEL files are downloaded concurrently; every
+ * finished session immediately picks up the next pending file.
+ */
+void ClientNetworkContentSocketHandler::StartDownloadSessions()
+{
+	if (this->next_file_index >= this->pending_files.size()) {
+		/* All pending files have been started. */
+		this->http_response_index = -2;
+		return;
+	}
+
+	while (this->download_sessions.size() < CONTENT_DOWNLOAD_PARALLEL && this->next_file_index < this->pending_files.size()) {
+		ContentFileDownload file = std::move(this->pending_files[this->next_file_index++]);
+
+		/* Open the output file before starting the connection. */
+		std::string filename = GetFullFilename(file.type, file.filename, true);
+		auto session = std::make_unique<ContentDownloadSession>(*this, std::move(file));
+		if (filename.empty() || !(session->cur_file = FileHandle::Open(filename, "wb")).has_value()) {
+			CloseWindowById(WindowClass::NetworkStatus, NetworkStatusWindowNumber::ContentDownload);
+			ShowErrorMessage(
+				GetEncodedString(STR_CONTENT_ERROR_COULD_NOT_DOWNLOAD),
+				GetEncodedString(STR_CONTENT_ERROR_COULD_NOT_DOWNLOAD_FILE_NOT_WRITABLE),
+				WarningLevel::Error);
+			this->OnFailure();
+			return;
+		}
+
+		NetworkHTTPSocketHandler::Connect(session->file.url, session.get());
+		this->download_sessions.push_back(std::move(session));
+	}
+}
+
+/* ContentDownloadSession */
+
+void ContentDownloadSession::OnReceiveData(UniqueBuffer<char> data)
+{
+	assert(data.get() == nullptr || data.size() != 0);
+
+	if (data != nullptr) {
+		/* After a cancellation the output file may already have been closed;
+		 * ignore any data still arriving on the connection. */
+		if (!this->cur_file.has_value()) return;
+
+		/* Write the received data to the file. */
+		if (fwrite(data.get(), 1, data.size(), *this->cur_file) != data.size()) {
+			this->handler.OnSessionFailure(*this);
+		} else {
+			this->handler.OnSessionProgress(*this, (int)data.size());
+		}
+		return;
+	}
+
+	/* End of the file: extract it and download the next one. */
+	this->handler.OnSessionFileDone(*this);
+}
+
+void ContentDownloadSession::OnFailure()
+{
+	this->handler.OnSessionFailure(*this);
+}
+
+bool ContentDownloadSession::IsCancelled() const
+{
+	return this->handler.IsCancelled() || this->handler.download_cancelled;
+}
+
+/* ClientNetworkContentSocketHandler::OnSession* */
+
+void ClientNetworkContentSocketHandler::OnSessionProgress(ContentDownloadSession &session, int bytes)
+{
+	ContentInfo ci;
+	ci.id = session.file.id;
+	ci.type = session.file.type;
+	ci.filesize = session.file.filesize;
+	ci.filename = session.file.filename;
+	this->OnDownloadProgress(ci, bytes);
+}
+
+void ClientNetworkContentSocketHandler::OnSessionFileDone(ContentDownloadSession &session)
+{
+	session.cur_file.reset();
+
+	if (!this->download_cancelled && !this->is_cancelled) {
+		/* Gunzip and unpack the downloaded file. */
+		ContentInfo ci;
+		ci.id = session.file.id;
+		ci.type = session.file.type;
+		ci.filesize = session.file.filesize;
+		ci.filename = session.file.filename;
+
+		if (GunzipFile(ci)) {
+			FioRemove(GetFullFilename(ci.type, ci.filename, true));
+
+			Subdirectory sd = GetContentInfoSubDir(ci.type);
+			if (sd == Subdirectory::None) NOT_REACHED();
+
+			TarScanner ts;
+			std::string fname = GetFullFilename(ci.type, ci.filename, false);
+			ts.AddFile(sd, fname);
+
+			if (ci.type == ContentType::BaseMusic) {
+				/* Music can't be in a tar. So extract the tar! */
+				ExtractTar(fname, Subdirectory::Baseset);
+				FioRemove(fname);
+			}
+
+			this->OnDownloadComplete(session.file.id);
+		} else {
+			ShowErrorMessage(GetEncodedString(STR_CONTENT_ERROR_COULD_NOT_EXTRACT), {}, WarningLevel::Error);
+		}
+	} else {
+		/* The download was cancelled; remove the partial file. */
+		FioRemove(GetFullFilename(session.file.type, session.file.filename, true));
+	}
+
+	/* Remove the finished session and start the next download. */
+	for (auto it = this->download_sessions.begin(); it != this->download_sessions.end(); ++it) {
+		if (it->get() == &session) {
+			this->download_sessions.erase(it);
+			break;
+		}
+	}
+	this->StartDownloadSessions();
+	if (this->download_cancelled && this->download_sessions.empty()) this->OnAllSessionsDone();
+}
+
+void ClientNetworkContentSocketHandler::OnSessionFailure(ContentDownloadSession &session)
+{
+	session.cur_file.reset();
+	FioRemove(GetFullFilename(session.file.type, session.file.filename, true));
+
+	/* Remove the failed session (its connection is already closed). */
+	for (auto it = this->download_sessions.begin(); it != this->download_sessions.end(); ++it) {
+		if (it->get() == &session) {
+			this->download_sessions.erase(it);
+			break;
+		}
+	}
+
+	if (this->download_cancelled && this->download_sessions.empty()) this->OnAllSessionsDone();
+}
+
+/**
+ * All parallel downloads have wound down; either retry with the next mirror
+ * or fall back to the legacy protocol.
+ */
+void ClientNetworkContentSocketHandler::OnAllSessionsDone()
+{
+	this->download_cancelled = false;
+	if (this->is_cancelled) return;
+
+	uint files, bytes;
+	auto mirrors = NetworkContentMirrorUris();
+	if (this->mirror_index + 1 < mirrors.size()) {
+		this->mirror_index++;
+		this->DownloadSelectedContent(files, bytes, false);
+	} else {
+		this->DownloadSelectedContent(files, bytes, true);
 	}
 }
 

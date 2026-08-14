@@ -126,6 +126,7 @@ static WindowDesc _network_content_download_status_window_desc(__FILE__, __LINE_
 BaseNetworkContentDownloadStatusWindow::BaseNetworkContentDownloadStatusWindow(WindowDesc &desc) : Window(desc)
 {
 	_network_content_client.AddCallback(this);
+	_network_content_client.ResetMirrorIndex();
 	_network_content_client.DownloadSelectedContent(this->total_files, this->total_bytes);
 
 	this->InitNested(NetworkStatusWindowNumber::ContentDownload);

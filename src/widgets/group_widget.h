@@ -36,6 +36,7 @@ enum GroupListWidgets : WidgetID {
 	WID_GL_COLLAPSE_ALL_GROUPS,      ///< Collapse all groups button.
 	WID_GL_EXPAND_ALL_GROUPS,        ///< Expand all groups button.
 	WID_GL_REPLACE_PROTECTION,       ///< Replace protection button.
+	WID_GL_AUTOGROUP_SHARED,         ///< Auto-group vehicles by shared orders button.
 	WID_GL_INFO,                     ///< Group info.
 };
 

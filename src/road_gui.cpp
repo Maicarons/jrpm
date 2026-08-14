@@ -15,6 +15,7 @@
 #include "terraform_gui.h"
 #include "viewport_func.h"
 #include "command_func.h"
+#include "construction_cost_tip.h"
 #include "road_cmd.h"
 #include "station_func.h"
 #include "window_func.h"
@@ -375,11 +376,22 @@ struct BuildRoadToolbarWindow : Window {
 
 	void Close([[maybe_unused]] int data = 0) override
 	{
+		HideConstructionCostTip();
 		if (_game_mode == GameMode::Normal && (this->IsWidgetLowered(WID_ROT_BUS_STATION) || this->IsWidgetLowered(WID_ROT_TRUCK_STATION))) SetViewportCatchmentStation(nullptr, true);
 		if (_game_mode == GameMode::Normal && this->IsWidgetLowered(WID_ROT_BUILD_WAYPOINT)) SetViewportCatchmentWaypoint(nullptr, true);
 		if (_settings_client.gui.link_terraform_toolbar) CloseWindowById(WindowClass::ScenarioGenerateLandscape, 0, false);
 		CloseWindowById(WindowClass::JoinStation, 0);
 		this->Window::Close();
+	}
+
+	void OnMouseLoop() override
+	{
+		ConstructionCostTipContext ctx;
+		ctx.window_class = this->window_class;
+		ctx.window_number = this->window_number;
+		ctx.selected_tool = this->last_started_action;
+		ctx.roadtype = this->roadtype;
+		UpdateConstructionCostTip(ctx, (_thd.GetCallbackWnd() == this) ? GetTileBelowCursor() : INVALID_TILE);
 	}
 
 	/**

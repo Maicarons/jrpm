@@ -10,10 +10,14 @@
 #ifndef NETWORK_CORE_CONFIG_H
 #define NETWORK_CORE_CONFIG_H
 
+#include <string>
+#include <vector>
+
 std::string_view NetworkCoordinatorConnectionString();
 std::string_view NetworkStunConnectionString();
 std::string_view NetworkContentServerConnectionString();
 std::string_view NetworkContentMirrorUriString();
+std::vector<std::string> NetworkContentMirrorUris();
 std::string_view NetworkSurveyUriString();
 
 static const uint16_t NETWORK_COORDINATOR_SERVER_PORT = 3976;           ///< The default port of the Game Coordinator server (TCP)

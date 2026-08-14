@@ -29,6 +29,7 @@ DEF_CMD_TUPLE_NT(Commands::DeleteGroup,              CmdDeleteGroup,            
 DEF_CMD_TUPLE_NT(Commands::AlterGroup,               CmdAlterGroup,              {}, CommandType::OtherManagement, CmdDataT<AlterGroupMode, GroupID, GroupID, std::string>)
 DEF_CMD_TUPLE_NT(Commands::AddVehicleToGroup,        CmdAddVehicleGroup,         {}, CommandType::RouteManagement, CmdDataT<GroupID, VehicleID, bool>)
 DEF_CMD_TUPLE_NT(Commands::AddSharedVehiclesToGroup, CmdAddSharedVehicleGroup,   {}, CommandType::RouteManagement, CmdDataT<GroupID, VehicleType>)
+DEF_CMD_TUPLE_NT(Commands::AutoGroupSharedOrders,    CmdAutoGroupSharedOrders,   {}, CommandType::RouteManagement, CmdDataT<VehicleType>)
 DEF_CMD_TUPLE_NT(Commands::RemoveAllVehiclesGroup,   CmdRemoveAllVehiclesGroup,  {}, CommandType::RouteManagement, CmdDataT<GroupID>)
 DEF_CMD_TUPLE_NT(Commands::SetGroupFlag,             CmdSetGroupFlag,            {}, CommandType::RouteManagement, CmdDataT<GroupID, GroupFlag, bool, bool>)
 DEF_CMD_TUPLE_NT(Commands::SetGroupLivery,           CmdSetGroupLivery,          {}, CommandType::RouteManagement, CmdDataT<GroupID, bool, Colours>)
