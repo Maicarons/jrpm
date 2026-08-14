@@ -44,6 +44,7 @@ export default defineConfig({
             { text: '飞机滑行速度可调', link: '/features/plane-taxi-speed' },
             { text: '联机 UI 增强（位置/货运/观战）', link: '/features/ui-enhancements' },
             { text: '第三批规划：高亮 + 蓝图', link: '/features/highlight-blueprint-plan' },
+            { text: '四/五批与 CM 命令难度调研', link: '/features/batch4-5-difficulty-research' },
             { text: '机车换挂（decouple）', link: '/features/decouple' },
             { text: '模块化机场（multitile-airport）', link: '/features/multitile-airport' },
           ],
