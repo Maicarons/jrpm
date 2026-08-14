@@ -703,14 +703,11 @@ bool ClientNetworkContentSocketHandler::ParseResponseHeaders()
 	return !this->pending_files.empty();
 }
 
-/** How many files to download concurrently from a mirror. */
-static const size_t CONTENT_DOWNLOAD_PARALLEL = 4;
-
 /**
  * Start downloading the pending files in parallel.
  *
- * Up to #CONTENT_DOWNLOAD_PARALLEL files are downloaded concurrently; every
- * finished session immediately picks up the next pending file.
+ * Up to network.content_download_parallel files are downloaded concurrently;
+ * every finished session immediately picks up the next pending file.
  */
 void ClientNetworkContentSocketHandler::StartDownloadSessions()
 {
@@ -720,7 +717,8 @@ void ClientNetworkContentSocketHandler::StartDownloadSessions()
 		return;
 	}
 
-	while (this->download_sessions.size() < CONTENT_DOWNLOAD_PARALLEL && this->next_file_index < this->pending_files.size()) {
+	size_t parallel = std::max<size_t>(1, _settings_client.network.content_download_parallel);
+	while (this->download_sessions.size() < parallel && this->next_file_index < this->pending_files.size()) {
 		ContentFileDownload file = std::move(this->pending_files[this->next_file_index++]);
 
 		/* Open the output file before starting the connection. */

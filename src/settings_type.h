@@ -620,6 +620,7 @@ struct NetworkSettings {
 	uint8_t       max_clients;                            ///< maximum amount of clients
 	std::string content_server;                           ///< content server hostname for the metadata protocol
 	std::string content_mirrors;                          ///< comma-separated list of content mirror URIs used for downloads
+	uint8_t content_download_parallel = 4;                ///< number of content files to download concurrently
 	CalTime::Year restart_game_year;                      ///< year the server restarts
 	uint16_t      restart_hours;                          ///< number of hours to run the server before automatic restart
 	uint8_t       min_active_clients;                     ///< minimum amount of active clients to unpause the game
