@@ -24,12 +24,17 @@ jrpm = jgrpp 全特性 + pulsexlb（机车换挂 + 模块化机场）+ modded（
 | 车辆行程历史 | [行程历史](./triphistory) | ✅ 已实现 |
 | 飞机滑行速度可调 | [滑行速度](./plane-taxi-speed) | ✅ 已实现 |
 
-## cmclient 借鉴（第二批）
+## cmclient 借鉴（第二~五批）
 
 | 功能 | 文档 | 状态 |
 |---|---|---|
-| 位置书签 / 货运明细 / 观战 | [联机 UI 增强](./ui-enhancements) | ✅ 已实现 |
-| 高亮系统 + 蓝图系统 | [第三批规划](./highlight-blueprint-plan) | 📋 规划中（见路线图） |
+| 位置书签 / 货运明细 / 观战 | [联机 UI 增强](./ui-enhancements) | ✅ 已实现（第二批） |
+| 对象级高亮系统 | [高亮 + 蓝图](./highlight-blueprint-plan) | ✅ 已实现（第三批，6 提交） |
+| 蓝图系统（复制/旋转/槽位/重建） | [高亮 + 蓝图](./highlight-blueprint-plan) | ✅ 已实现（第三批） |
+| 城镇分区 + growth_tiles 存档 | [城镇分区](./town-zoning) | ✅ 已实现（第四批） |
+| 命令记录与重放 | [命令重放](./command-replay) | ✅ 已实现（第五批） |
+
+> **② 命令对象层**（cmclient 的 2251 行生成代码）：经移植实证**可整体绕过**——高亮用 `CMD_ERROR` 替换成本估算、蓝图用命令闭包、重放用 jrpm 原生命令序列化，因此未移植。
 
 ## 合并特性（来自 pulsexlb）
 
@@ -64,4 +69,7 @@ jrpm = jgrpp 全特性 + pulsexlb（机车换挂 + 模块化机场）+ modded（
 | 位置书签 | `savelocation <1-9>` / `gotolocation <1-9>` |
 | 公司货运明细 | `company_cargo <company_id>` |
 | 观战公司 | `watch <company_id>` |
+| 蓝图复制/旋转/保存/加载/重建 | `blueprint_copy` / `blueprint_rotate` / `blueprint_save <0-15>` / `blueprint_load <0-15>` / `blueprint_build` |
+| 命令记录/重放 | `cmdrecord [start [file]]` / `cmdrecord stop` / `cmdreplay <file>` |
+| 游戏速度/统计/导出/种树 | `cmgamespeed [n]` / `cmgamestats` / `cmexport` / `cmtreemap <file>` |
 

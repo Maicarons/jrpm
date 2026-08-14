@@ -4,6 +4,30 @@ title: 版本历史
 
 # 版本历史
 
+## jrpm-0.1.0（2026-08-14）cmclient 移植完成
+
+在首个 0.1.0 的基础上完成 cmclient 五批功能移植（modded + cmclient 全系）：
+
+### 新增功能（cmclient / modded 移植）
+
+- **modded 第一批**：车辆行程历史（`b89f93f9`）+ 飞机滑行速度可调（`b89f93f9`）；
+- **cmclient 第二批**：位置书签 / 货运明细 / 观战（`089480b3`）；
+- **cmclient 零批**：`cmgamespeed` / `cmgamestats` / `cmexport` / `cmtreemap` 控制台命令（`1fd94d12`）；
+- **cmclient 第三批 ① 高亮**：对象级建造预览（车站/轨道/仓库/机场），挂接 viewport 绘制管线与建造工具（6 提交，`d97aa38a` → `1957bf45`）；
+- **cmclient 第三批 ③ 蓝图**：圈选复制/旋转/16 槽位/重建（`8e08ca6b`）；
+- **cmclient 第四批 ④ 城镇分区**：Tz 分区 + growth_tiles 着色 + GRWT 存档块（`9e3f95a2`）；
+- **cmclient 第五批 ⑤ 命令重放**：`cmdrecord` / `cmdreplay`（`f113acce28`）；
+- **控制台参数约定修复**：全部 jrpm 命令改用 argv[1] 起始参数（argv[0] 为命令名）。
+
+### 架构结论
+
+- **② 命令对象层未移植**：高亮/蓝图/重放分别用 `CMD_ERROR`、命令闭包、jrpm 原生命令序列化绕过，无需 cmclient 的 2251 行生成代码。
+
+### 存档兼容
+
+- growth_tiles 数据存于独立 `GRWT` chunk，旧存档（不含该块）加载完全兼容；
+- 命令记录文件（`.jrcm`）为 jrpm 私有格式，跨版本不保证兼容。
+
 ## jrpm-0.1.0（2026-08-14）
 
 首个 jrpm 版本，基于 jgrpp 0.73.1 + pulsexlb px-patch 合并，并移植 modded / cmclient 特性。
