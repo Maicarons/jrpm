@@ -1,0 +1,15 @@
+{
+  "name": "openttd-jrpm-docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenTTD-JRPM documentation site (VitePress)",
+  "scripts": {
+    "dev": "vitepress dev .",
+    "build": "vitepress build .",
+    "preview": "vitepress preview ."
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.3"
+  }
+}
