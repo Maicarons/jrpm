@@ -6,6 +6,8 @@
 // Format: spritenum imagefile depth xpos ypos xsize ysize xrel yrel zoom flags
     0        misc_gui.png       8bpp   10   10    9    9    1    0 normal
 
+    2        misc_gui.png       8bpp  200  10   10   10    0    0 normal
+
     1 * 257	 00
 	 8D 07 07 08 14 09 0A 0A 0B 0B 0C 0D 67 67 45 45 14 09 15 86 16 0C 87 67 07 1D 1D 3A 1E 1F 1F 1F
 	 24 1D 3A 1E 3B 1F 27 27 7E 7E 7E 7F 7F 30 30 31 31 27 44 44 34 24 24 3A 1E 3B 1F 1F 24 24 3A 25

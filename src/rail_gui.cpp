@@ -1163,7 +1163,7 @@ static constexpr std::initializer_list<NWidgetPart> _nested_build_rail_widgets =
 		NWidget(WWT_IMGBTN, Colours::DarkGreen, WID_RAT_BUILD_TUNNEL),
 						SetFill(0, 1), SetToolbarMinimalSize(1), SetSpriteTip(SPR_IMG_TUNNEL_RAIL, STR_RAIL_TOOLBAR_TOOLTIP_BUILD_RAILROAD_TUNNEL),
 		NWidget(WWT_IMGBTN, Colours::DarkGreen, WID_RAT_BLUEPRINT),
-						SetFill(0, 1), SetToolbarMinimalSize(1), SetSpriteTip(SPR_IMG_RAIL_STATION, CM_STR_RAIL_TOOLBAR_TOOLTIP_BLUEPRINT),
+						SetFill(0, 1), SetToolbarMinimalSize(1), SetSpriteTip(SPR_CM_RAIL_COPY_PASTE, CM_STR_RAIL_TOOLBAR_TOOLTIP_BLUEPRINT),
 		NWidget(WWT_IMGBTN, Colours::DarkGreen, WID_RAT_REMOVE),
 						SetFill(0, 1), SetToolbarMinimalSize(1), SetSpriteTip(SPR_IMG_REMOVE, STR_RAIL_TOOLBAR_TOOLTIP_TOGGLE_BUILD_REMOVE_FOR),
 		NWidget(WWT_IMGBTN, Colours::DarkGreen, WID_RAT_CONVERT_RAIL),

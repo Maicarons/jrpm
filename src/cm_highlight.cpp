@@ -830,10 +830,15 @@ void ObjectHighlight::UpdateTiles() {
 
 void ObjectHighlight::MarkDirty() {
     for (const auto &kv: this->tiles) {
-        MarkTileDirtyByTile(kv.first);
+        /* Defensive: tiles may reference tile indices left over from a
+         * previous map (e.g. on return to the menu screen the previous
+         * game's high-light tiles would otherwise index _m beyond the new
+         * 64x64 menu map and crash). */
+        if (kv.first < Map::Size()) MarkTileDirtyByTile(kv.first);
     }
     for (const auto &s: this->sprites) {
         auto sprite = GetSprite(GB(s.sprite_id, 0, SPRITE_WIDTH), SpriteType::Normal, LowZoomMask(ZoomLevel::Normal));
+        if (sprite == nullptr) continue;
         auto left = s.pt.x + sprite->x_offs;
         auto top = s.pt.y + sprite->y_offs;
         MarkAllViewportsDirty(
@@ -845,11 +850,9 @@ void ObjectHighlight::MarkDirty() {
     }
     if (this->type == ObjectHighlight::Type::BLUEPRINT && this->blueprint) {  // TODO why && blueprint check is needed?
         for (auto tile : this->blueprint->source_tiles) {
-            // fprintf(stderr, "D %d\n", (int)tile);
-            MarkTileDirtyByTile(tile);
+            if (tile < Map::Size()) MarkTileDirtyByTile(tile);
         }
     }
-    // fprintf(stderr, "E\n");
 }
 
 

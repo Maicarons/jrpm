@@ -366,7 +366,9 @@ static const uint16_t TRACERESTRICT_SPRITE_COUNT = 3;
 
 /* Misc GUI sprites */
 static const SpriteID SPR_MISC_GUI_BASE = SPR_TRACERESTRICT_BASE + TRACERESTRICT_SPRITE_COUNT;
-static const uint16_t MISC_GUI_SPRITE_COUNT = 2;
+static const uint16_t MISC_GUI_SPRITE_COUNT = 3;
+/* Sprite 2: copy/paste icon used by the CityMania blueprint toolbar button. */
+static const SpriteID SPR_CM_RAIL_COPY_PASTE = SPR_MISC_GUI_BASE + 2;
 
 /* Duplicated signal sprites */
 static const SpriteID SPR_DUP_ORIGINAL_SIGNALS_BASE = SPR_MISC_GUI_BASE + MISC_GUI_SPRITE_COUNT;
