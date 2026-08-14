@@ -27,9 +27,11 @@
 #include "newgrf_railtype.h"
 #include "newgrf_roadtype.h"
 #include "newgrf_station.h"
+#include "date_type.h"
 #include "newgrf_industrytiles.h"
 #include "sound_func.h"
 #include "newgrf_station.h"
+#include "date_type.h"
 #include "spritecache.h"
 #include "strings_func.h"
 #include "town.h"
@@ -595,32 +597,13 @@ std::vector<uint8_t> &GetPreviewStationLayout(const StationSpec *statspec, Axis 
     uint8_t plat_len = area.h;
     if (axis == Axis::X) std::swap(numtracks, plat_len);
 
-
-    // std::vector<byte> res_layout(numtracks * plat_len);
     it = _station_layout_cache.insert(it, {key, std::vector<uint8_t>(area.w * area.h)});
     auto &res_layout = it->second;
 
-    RailStationTileLayout stl{statspec, numtracks, plat_len};
-    auto sit = stl.begin();
-    IterateStation(area.tile, axis, numtracks, plat_len,
-        [&](TileIndex tile, int platform, int position) {
-            auto gfx = *sit++ + axis;
-
-            if (statspec != nullptr) {
-                /* Use a fixed axis for GetPlatformInfo as our platforms / numtracks are always the right way around */
-                uint32_t platinfo = GetPlatformInfo(Axis::X, gfx, plat_len, numtracks, position, platform, false);
-
-                /* As the station is not yet completely finished, the station does not yet exist. */
-                uint16_t callback = GetPurchaseStationCallback(CBID_STATION_BUILD_TILE_LAYOUT, platinfo, 0, statspec, tile, area);
-                if (callback != CALLBACK_FAILED && callback < 8) {
-                    gfx = (callback & -1) + axis;
-                }
-            }
-
-            auto diff = TileIndexToTileIndexDiffC(tile, area.tile);
-            res_layout[diff.y * area.w + diff.x] = gfx;
-        }
-    );
+    /* jrpm: use the built-in station layout generator (vanilla cmclient used
+     * RailStationTileLayout + IterateStation, which jrpm does not provide). */
+    extern void GetStationLayout(uint8_t *layout, uint numtracks, uint plat_len, const StationSpec *statspec);
+    GetStationLayout(res_layout.data(), numtracks, plat_len, statspec);
 
     return res_layout;
 }
@@ -643,7 +626,7 @@ void ObjectHighlight::UpdateTiles() {
             auto tile = AddTileIndexDiffCWrap(this->tile, TileIndexDiffCByDiagDir(dir));
             if (tile == INVALID_TILE) break;
             if (IsTileType(tile, TileType::Railway) && IsCompatibleRail(GetRailType(tile), _cur_railtype)) {
-                this->PlaceExtraDepotRail(tile, _place_depot_extra_dir[dir], _place_depot_extra_track[dir]);
+                this->PlaceExtraDepotRail(tile, _place_depot_extra_dir[static_cast<uint8_t>(dir)], _place_depot_extra_track[static_cast<uint8_t>(dir)]);
                 this->PlaceExtraDepotRail(tile, _place_depot_extra_dir[static_cast<uint8_t>(dir) + 4 & 3], _place_depot_extra_track[static_cast<uint8_t>(dir) + 4 & 3]);
                 this->PlaceExtraDepotRail(tile, _place_depot_extra_dir[static_cast<uint8_t>(dir) + 8 & 3], _place_depot_extra_track[static_cast<uint8_t>(dir) + 8 & 3]);
             }
@@ -843,7 +826,7 @@ void ObjectHighlight::MarkDirty() {
         MarkTileDirtyByTile(kv.first);
     }
     for (const auto &s: this->sprites) {
-        auto sprite = GetSprite(GB(s.sprite_id, 0, SPRITE_WIDTH), SpriteType::Normal, ZOOM_LVL_NORMAL);
+        auto sprite = GetSprite(GB(s.sprite_id, 0, SPRITE_WIDTH), SpriteType::Normal, LowZoomMask(ZoomLevel::Normal));
         auto left = s.pt.x + sprite->x_offs;
         auto top = s.pt.y + sprite->y_offs;
         MarkAllViewportsDirty(
@@ -994,7 +977,7 @@ SpriteID MixTints(SpriteID bottom, SpriteID top) {
 SpriteID GetTintBySelectionColour(SpriteID colour, bool deep=false) {
     switch(colour) {
         case CM_SPR_PALETTE_ZONING_RED: return (deep ? PALETTE_TO_RED : PALETTE_TO_RED);
-        case CM_SPR_PALETTE_ZONING_ORANGE: return (deep ? PALETTE_TO_ORANGE_DEEP : PALETTE_TO_ORANGE);
+        case CM_SPR_PALETTE_ZONING_ORANGE: return (deep ? PALETTE_TO_ORANGE : PALETTE_TO_ORANGE);
         case CM_SPR_PALETTE_ZONING_GREEN: return PALETTE_TO_GREEN;
         case CM_SPR_PALETTE_ZONING_LIGHT_BLUE: return PALETTE_TO_LIGHT_BLUE;
         case CM_SPR_PALETTE_ZONING_YELLOW: return PALETTE_TO_YELLOW;
@@ -1007,9 +990,7 @@ SpriteID GetTintBySelectionColour(SpriteID colour, bool deep=false) {
 SpriteID GetSelectionColourByTint(SpriteID colour) {
     switch(colour) {
         case PALETTE_TO_RED:
-        case PALETTE_TO_RED:
             return CM_SPR_PALETTE_ZONING_RED;
-        case PALETTE_TO_ORANGE_DEEP:
         case PALETTE_TO_ORANGE:
             return CM_SPR_PALETTE_ZONING_ORANGE;
         case PALETTE_TO_GREEN:
@@ -1056,7 +1037,7 @@ void DrawTrainDepotSprite(SpriteID palette, const TileInfo *ti, RailType railtyp
         default: break;
     }
     // if (rti->UsesOverlay()) {
-    //     SpriteID ground = GetCustomRailSprite(rti, INVALID_TILE, RTSG_GROUND);
+    //     SpriteID ground = GetCustomRailSprite(rti, INVALID_TILE, RailSpriteType::Ground);
 
     //     switch (ddir) {
     //         case DiagDirection::SW: DrawSprite(ground + RTO_X, PALETTE_TINT_WHITE, x, y); break;
@@ -1064,10 +1045,10 @@ void DrawTrainDepotSprite(SpriteID palette, const TileInfo *ti, RailType railtyp
     //         default: break;
     //     }
     // }
-    int depot_sprite = GetCustomRailSprite(rti, INVALID_TILE, RTSG_DEPOT);
+    int depot_sprite = GetCustomRailSprite(rti, INVALID_TILE, RailSpriteType::Depot);
     if (depot_sprite != 0) offset = depot_sprite - SPR_RAIL_DEPOT_SE_1;
 
-    DrawRailTileSeq(ti, dts, TO_INVALID, offset, 0, palette);
+    DrawRailTileSeq(ti, dts, TransparencyOption::Invalid, offset, 0, palette);
 }
 
 void AddGroundAsSortableSprite(const TileInfo *ti, SpriteID image, PaletteID pal /*, const SubSprite *sub = nullptr, int extra_offs_x = 0, int extra_offs_y = 0 */) {
@@ -1081,7 +1062,7 @@ struct PreviewStationScopeResolver : public StationScopeResolver {
     bool purchase;  // Running in purchase mode (fake vars)
 
     PreviewStationScopeResolver(ResolverObject &ro, const StationSpec *statspec, TileIndex tile, TileArea area, StationGfx gfx, Axis axis, bool purchase)
-        : StationScopeResolver(ro, statspec, nullptr, tile), area{area}, gfx{gfx}, axis{axis}, purchase{purchase} {}
+        : StationScopeResolver(ro, statspec, nullptr, tile, INVALID_RAILTYPE), area{area}, gfx{gfx}, axis{axis}, purchase{purchase} {}
 
     uint32_t GetRandomBits() const override { return 574740206;  /* It's random, I promise ;) */ };
     uint32_t GetRandomTriggers() const override { return 0; };
@@ -1126,12 +1107,12 @@ struct PreviewStationScopeResolver : public StationScopeResolver {
         return GetPlatformInfo(this->axis, this->gfx, ex, ey, tx, ty, centred);
     }
 
-    uint32_t GetVariable(uint8_t variable, uint32_t parameter, bool &available) const override {
+    uint32_t GetVariable(uint16_t variable, uint32_t parameter, GetVariableExtra &extra) const override {
         // Debug(misc, 0, "Var {:x}({}) requested", variable, parameter);
 
         if (this->purchase) {
             // Don't try to be smart with faking wars, we actually need the dumb way.
-            return StationScopeResolver::GetVariable(variable, parameter, available);
+            return StationScopeResolver::GetVariable(variable, parameter, extra);
         }
 
         switch (variable) {
@@ -1152,7 +1133,7 @@ struct PreviewStationScopeResolver : public StationScopeResolver {
                 Slope tileh = GetTileSlope(tile);
                 bool swap = (this->axis == Axis::Y && HasBit(tileh, CORNER_W) != HasBit(tileh, CORNER_E));
 
-                return GetNearbyTileInformation(tile, this->ro.grffile->grf_version >= 8) ^ (swap ? SLOPE_EW : 0);
+                return GetNearbyTileInformation(tile, this->ro.grffile->grf_version >= 8, 0) ^ (swap ? SLOPE_EW : 0);
             }
 
             case 0x68: { // Station info of nearby tiles
@@ -1178,7 +1159,7 @@ struct PreviewStationScopeResolver : public StationScopeResolver {
             case 0xFA: return ClampTo<uint16_t>(TimerGameCalendar::date - CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR); // Build date, clamped to a 16 bit value
         }
 
-        available = false;
+        extra.available = false;
         return UINT_MAX;
     }
 };
@@ -1190,7 +1171,7 @@ struct StationPreivewResolverObject : public StationResolverObject {
 
     StationPreivewResolverObject(const StationSpec *statspec, TileIndex tile, TileArea area, StationGfx gfx, Axis axis, bool purchase,
             CallbackID callback = CBID_NO_CALLBACK, uint32_t callback_param1 = 0, uint32_t callback_param2 = 0)
-        : StationResolverObject(statspec, nullptr, tile, callback, callback_param1, callback_param2),
+        : StationResolverObject(statspec, nullptr, tile, INVALID_RAILTYPE, callback, callback_param1, callback_param2),
             preview_station_scope{*this, statspec, tile, area, gfx, axis, purchase},
             tile{tile}, offset{} {
 
@@ -1203,7 +1184,7 @@ struct StationPreivewResolverObject : public StationResolverObject {
         this->preview_station_scope.cargo_type = this->station_scope.cargo_type = ctype;
     }
 
-    ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
+    ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, VarSpriteGroupScopeOffset relative = 0) override
     {
         switch (scope) {
             case VSG_SCOPE_SELF:
@@ -1234,13 +1215,13 @@ struct StationPreivewResolverObject : public StationResolverObject {
 uint16_t GetPreviewStationCallback(CallbackID callback, uint32_t param1, uint32_t param2, const StationSpec *statspec, TileIndex tile, TileArea area, StationGfx gfx, Axis axis)
 {
     StationPreivewResolverObject object(statspec, tile, area, gfx, axis, false, callback, param1, param2);
-    return object.ResolveCallback({});
+    return object.ResolveCallback();
 }
 
 uint16_t GetPurchaseStationCallback(CallbackID callback, uint32_t param1, uint32_t param2, const StationSpec *statspec, TileIndex tile, TileArea area)
 {
     StationPreivewResolverObject object(statspec, tile, area, 0, Axis::Invalid, true, callback, param1, param2);
-    return object.ResolveCallback({});
+    return object.ResolveCallback();
 }
 
 SpriteID GetCustomPreviewStationRelocation(const StationSpec *statspec, uint32_t var10, TileIndex tile, TileArea area, StationGfx gfx, Axis axis)
@@ -1252,7 +1233,7 @@ SpriteID GetCustomPreviewStationRelocation(const StationSpec *statspec, uint32_t
 }
 
 void DrawTrainStationSprite(SpriteID palette, const TileInfo *ti, RailType railtype, Axis axis, uint8_t section, StationClassID spec_class, uint16_t spec_index, TileArea area) {
-    int32 total_offset = 0;
+    int32_t total_offset = 0;
     StationGfx gfx = (section & ~1) + (axis == Axis::X ? 0 : 1);
     const StationSpec *statspec = StationClass::Get(spec_class)->GetSpec(spec_index);
     const NewGRFSpriteLayout *layout = nullptr;
@@ -1266,14 +1247,14 @@ void DrawTrainStationSprite(SpriteID palette, const TileInfo *ti, RailType railt
         uint tile_layout = gfx;
         if (statspec->callback_mask.Test(StationCallbackMask::DrawTileLayout)) {
             uint16_t callback = GetPreviewStationCallback(CBID_STATION_DRAW_TILE_LAYOUT, 0, 0, statspec, ti->tile, area, gfx, axis);
-            if (callback != CALLBACK_FAILED) tile_layout = (callback & ~1) + axis;
+            if (callback != CALLBACK_FAILED) tile_layout = (callback & ~1) + static_cast<uint8_t>(axis);
         }
 
         // Debug(misc, 0, "DrawTrainStationSprite layout={}", tile_layout);
 
         /* Ensure the chosen tile layout is valid for this custom station */
         if (!statspec->renderdata.empty()) {
-            layout = &statspec->renderdata[tile_layout < statspec->renderdata.size() ? tile_layout : (uint)axis];
+            layout = &statspec->renderdata[tile_layout < statspec->renderdata.size() ? tile_layout : static_cast<uint8_t>(axis)];
             if (!layout->NeedsPreprocessing()) {
                 t = layout;
                 layout = nullptr;
@@ -1320,7 +1301,7 @@ void DrawTrainStationSprite(SpriteID palette, const TileInfo *ti, RailType railt
     // PaletteID pal  = t->ground.pal;
     RailTrackOffset overlay_offset;
     if (rti != nullptr && rti->UsesOverlay() && SplitGroundSpriteForOverlay(ti, &image, &overlay_offset)) {
-        SpriteID ground = GetCustomRailSprite(rti, ti->tile, RTSG_GROUND);
+        SpriteID ground = GetCustomRailSprite(rti, ti->tile, RailSpriteType::Ground);
         AddGroundAsSortableSprite(ti, image, palette);
         AddGroundAsSortableSprite(ti, ground + overlay_offset, palette);
     } else {
@@ -1338,7 +1319,7 @@ void DrawTrainStationSprite(SpriteID palette, const TileInfo *ti, RailType railt
 
 void DrawRoadStop(SpriteID palette, const TileInfo *ti, RoadType roadtype, DiagDirection orientation, bool is_truck, RoadStopClassID spec_class, uint16_t spec_index) {
     // TODO this is based on preview drawing code, not map one, is it right?
-    int32 total_offset = 0;
+    int32_t total_offset = 0;
     const RoadTypeInfo* rti = GetRoadTypeInfo(roadtype);
     const RoadStopSpec *spec = RoadStopClass::Get(spec_class)->GetSpec(spec_index);
     uint view = (uint)orientation;
@@ -1475,7 +1456,7 @@ void DrawRoadDepot(SpriteID palette, const TileInfo *ti, RoadType roadtype, Diag
 #include "table/station_land.h"
 
 void DrawAirportTile(SpriteID palette, const TileInfo *ti, StationGfx gfx) {
-    int32 total_offset = 0;
+    int32_t total_offset = 0;
     const DrawTileSprites *t = nullptr;
     gfx = GetTranslatedAirportTileID(gfx);
     if (gfx >= NEW_AIRPORTTILE_OFFSET) {
@@ -1542,7 +1523,7 @@ struct IndustryTilePreviewScopeResolver : public IndustryTileScopeResolver {
     uint32_t GetRandomBits() const override { return 0; };
     uint32_t GetRandomTriggers() const override { return 0; };
 
-    uint32_t GetVariable(uint8_t variable, uint32_t parameter, bool &available) const override {
+    uint32_t GetVariable(uint16_t variable, uint32_t parameter, GetVariableExtra &extra) const override {
         // Debug(misc, 0, "TILE VAR {:X} requested", variable);
         switch (variable) {
             /* Construction state of the tile: a value between 0 and 3 */
@@ -1572,7 +1553,7 @@ struct IndustryTilePreviewScopeResolver : public IndustryTileScopeResolver {
                 return 0xFFFF;  // empty tile
 
             default:
-                return IndustryTileScopeResolver::GetVariable(variable, parameter, available);
+                return IndustryTileScopeResolver::GetVariable(variable, parameter, extra);
         }
     }
 };
@@ -1583,9 +1564,9 @@ struct IndustriesPreviewScopeResolver : public IndustriesScopeResolver {
 
     uint32_t GetRandomBits() const override { return 0; };
     uint32_t GetRandomTriggers() const override { return 0; };
-    uint32_t GetVariable(uint8_t variable, uint32_t parameter, bool &available) const override {
+    uint32_t GetVariable(uint16_t variable, uint32_t parameter, GetVariableExtra &extra) const override {
         // Debug(misc, 0, "UNDUSTRY VAR {:X} requested", variable);
-        return IndustriesScopeResolver::GetVariable(variable, parameter, available);
+        return IndustriesScopeResolver::GetVariable(variable, parameter, extra);
     }
 };
 
@@ -1610,7 +1591,7 @@ struct IndustryTilePreviewResolverObject : public ResolverObject {
         this->root_spritegroup = GetIndustryTileSpec(gfx)->grf_prop.spritegroups[0];
     }
 
-    ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override {
+    ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, VarSpriteGroupScopeOffset relative = 0) override {
         // Debug(misc, 0, "Scope requested {} {}", (int)scope, (int)relative);
         switch (scope) {
             case VSG_SCOPE_SELF: return &indtile_scope;
@@ -2070,7 +2051,7 @@ SpriteID GetIndustryZoningPalette(TileIndex tile) {
             n_serviced++;
     }
     if (n_serviced < n_produced)
-        return (n_serviced == 0 ? PALETTE_TO_RED : PALETTE_TO_ORANGE_DEEP);
+        return (n_serviced == 0 ? PALETTE_TO_RED : PALETTE_TO_ORANGE);
     return PAL_NONE;
 }
 
