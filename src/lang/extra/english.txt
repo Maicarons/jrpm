@@ -2651,3 +2651,8 @@ CM_STR_LAND_TOOLTIPS_STATION_CARGO                              :{WHITE}{STRING}
 # Rail blueprint tool (cmclient port)
 CM_STR_RAIL_TOOLBAR_TOOLTIP_BLUEPRINT                           :{BLACK}Rail blueprint tool (copy-paste)
 CM_STR_NO_BLUEPRINT_IN_SLOT                                     :{WHITE}No blueprint in slot {NUM}
+
+STR_ZONING_ACTIVE_STATIONS                                      :Active stations
+STR_ZONING_ADVERTISEMENT_ZONES                                  :Advertisement
+STR_ZONING_CB_ACCEPTANCE                                        :CB cargo acceptance
+STR_ZONING_CB_TOWN_LIMIT                                        :CB town limit

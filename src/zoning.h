@@ -31,8 +31,12 @@ enum ZoningEvaluationMode : uint8_t {
 	ZEM_ONE_WAY_ROAD,  ///< Show one way roads
 	ZEM_TOWN_ZONES,    ///< Town zones (Tz0-Tz4, cmclient port)
 	ZEM_TOWN_GROWTH_TILES, ///< Town growth tiles (cmclient port)
+	ZEM_ACTIVE_STATIONS,   ///< Active/inactive stations (cmclient port)
+	ZEM_ADVERTISEMENT_ZONES, ///< Advertisement zones S/M/L (cmclient port)
+	ZEM_CB_ACCEPTANCE,     ///< Citybuilder cargo acceptance radius (cmclient port)
+	ZEM_CB_TOWN_LIMIT,     ///< Citybuilder town build limit (cmclient port)
 
-	ZEM_LAST_NORMAL_MODE = ZEM_TOWN_GROWTH_TILES,
+	ZEM_LAST_NORMAL_MODE = ZEM_CB_TOWN_LIMIT,
 
 	ZEM_DBG_WATER_FLOOD,
 	ZEM_DBG_WATER_REGION,

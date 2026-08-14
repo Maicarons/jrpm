@@ -378,6 +378,47 @@ inline SpriteID TileZoneCheckTownGrowthTiles(TileIndex tile)
 	}
 }
 
+/* Active stations (cmclient port). */
+inline SpriteID TileZoneCheckActiveStations(TileIndex tile)
+{
+	if (!IsTileType(tile, TileType::Station)) return ZONING_INVALID_SPRITE_ID;
+	const Station *st = Station::GetByTile(tile);
+	if (st == nullptr) return ZONING_INVALID_SPRITE_ID;
+	if (st->time_since_load <= 20 || st->time_since_unload <= 20) return SPR_ZONING_INNER_HIGHLIGHT_GREEN;
+	return SPR_ZONING_INNER_HIGHLIGHT_RED;
+}
+
+/* Town advertisement zones S/M/L (cmclient port). */
+inline SpriteID TileZoneCheckTownAdvertisementZones(TileIndex tile)
+{
+	const Town *town = CalcClosestTownFromTile(tile, 21U);
+	if (town == nullptr) return ZONING_INVALID_SPRITE_ID;
+	uint dist = DistanceManhattan(town->xy, tile);
+	if (dist <= 10) return SPR_ZONING_INNER_HIGHLIGHT_GREEN;
+	if (dist <= 15) return SPR_ZONING_INNER_HIGHLIGHT_YELLOW;
+	if (dist <= 20) return SPR_ZONING_INNER_HIGHLIGHT_LIGHT_BLUE;
+	return ZONING_INVALID_SPRITE_ID;
+}
+
+/* CB cargo acceptance radius (cmclient port). */
+inline SpriteID TileZoneCheckCBBorders(TileIndex tile)
+{
+	for (const Town *town : Town::Iterate()) {
+		if (DistanceMax(town->xy, tile) <= 60) return SPR_ZONING_INNER_HIGHLIGHT_LIGHT_BLUE;
+	}
+	return ZONING_INVALID_SPRITE_ID;
+}
+
+/* CB town build limit (cmclient port). */
+inline SpriteID TileZoneCheckCBTownBorders(TileIndex tile)
+{
+	for (const Town *town : Town::Iterate()) {
+		uint d2 = DistanceMax(town->xy, tile);
+		if (d2 * d2 < town->cache.squared_town_zone_radius[0]) return SPR_ZONING_INNER_HIGHLIGHT_GREEN;
+	}
+	return ZONING_INVALID_SPRITE_ID;
+}
+
 inline SpriteID TileZoneDebugWaterFlood(TileIndex tile)
 {
 	if (IsNonFloodingWaterTile(tile)) {
@@ -444,6 +485,10 @@ SpriteID TileZoningSpriteEvaluation(TileIndex tile, Owner owner, ZoningEvaluatio
 		case ZEM_ONE_WAY_ROAD:  return TileZoneCheckOneWayRoadEvaluation(tile);
 		case ZEM_TOWN_ZONES:    return TileZoneCheckTownZones(tile);
 		case ZEM_TOWN_GROWTH_TILES: return TileZoneCheckTownGrowthTiles(tile);
+		case ZEM_ACTIVE_STATIONS: return TileZoneCheckActiveStations(tile);
+		case ZEM_ADVERTISEMENT_ZONES: return TileZoneCheckTownAdvertisementZones(tile);
+		case ZEM_CB_ACCEPTANCE: return TileZoneCheckCBBorders(tile);
+		case ZEM_CB_TOWN_LIMIT: return TileZoneCheckCBTownBorders(tile);
 
 		case ZEM_DBG_WATER_FLOOD:   return TileZoneDebugWaterFlood(tile);
 		case ZEM_DBG_WATER_REGION:  return TileZoneDebugWaterRegion(tile);
