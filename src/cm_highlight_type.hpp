@@ -34,6 +34,22 @@ template<class T> using sp = std::shared_ptr<T>;
 typedef std::vector<std::tuple<uint, SpriteID, std::string>> BuildInfoOverlayData;
 
 
+
+/* Minimal zoning types; the full town-zoning feature (batch 4) will extend these. */
+enum class EvaluationMode : uint8_t {
+	CHECKNOTHING = 0,
+	CHECKTOWNZONES,
+	CHECKSTACATCH,
+	CHECKTOWNGROWTHTILES,
+};
+
+struct Zoning {
+	EvaluationMode inner = EvaluationMode::CHECKNOTHING;
+	EvaluationMode outer = EvaluationMode::CHECKNOTHING;
+};
+
+extern Zoning _zoning;
+
 enum ZoningBorder: uint8_t {
     NONE = 0,
     TOP_LEFT = 1,

@@ -10,6 +10,8 @@
 #include "rail_gui.h"
 #include "road_gui.h"
 
+extern void GetStationLayout(uint8_t *layout, uint numtracks, uint plat_len, const struct StationSpec *statspec);
+
 /* cmclient used custom NewGRF sprites for zoning palettes; map them to the
  * built-in recolour palettes jrpm provides. */
 #define CM_SPR_PALETTE_ZONING_RED PALETTE_TO_RED
@@ -19,6 +21,13 @@
 #define CM_SPR_PALETTE_ZONING_YELLOW PALETTE_TO_YELLOW
 #define CM_SPR_PALETTE_ZONING_WHITE PALETTE_TO_WHITE
 #define CM_PALETTE_TINT_BASE PALETTE_TO_RED
+/* cmclient added extra select-proc values; jrpm's DDSP_* enum does not have
+ * them, so map to impossible values (branches stay dead until ported). */
+#define CM_DDSP_FUND_INDUSTRY 999
+#define CM_DDSP_BUILD_ROAD_DEPOT 998
+#define CM_DDSP_BUILD_RAIL_DEPOT 997
+#define CM_DDSP_BUILD_AIRPORT 996
+#define CM_HT_BLUEPRINT_PLACE 0xFFF0
 #include "house.h"
 #include "industry.h"
 #include "landscape.h"
@@ -28,10 +37,12 @@
 #include "newgrf_roadtype.h"
 #include "newgrf_station.h"
 #include "date_type.h"
+#include "timer/timer_game_calendar.h"
 #include "newgrf_industrytiles.h"
 #include "sound_func.h"
 #include "newgrf_station.h"
 #include "date_type.h"
+#include "timer/timer_game_calendar.h"
 #include "spritecache.h"
 #include "strings_func.h"
 #include "town.h"
@@ -62,7 +73,6 @@
 #include <set>
 
 
-extern void DrawSelectionSprite(SpriteID image, PaletteID pal, const TileInfo *ti, int z_offset, FoundationPart foundation_part, int extra_offs_x = 0, int extra_offs_y = 0); // viewport.cpp
 extern const Station *_viewport_highlight_station;
 extern TileHighlightData _thd;
 extern bool IsInsideSelectedRectangle(int x, int y);
@@ -76,7 +86,6 @@ extern DiagDirection _road_depot_orientation;
 extern uint32_t _realtime_tick;
 extern uint32_t _cm_funding_layout;
 extern IndustryType _cm_funding_type;
-extern void IndustryDrawTileLayout(const TileInfo *ti, const DrawTileSpriteSpan &dts, Colours rnd_colour, uint8_t stage);
 extern void SetSelectionTilesDirty();
 
 extern StationPickerSelection _station_gui; ///< Settings of the station picker.
@@ -189,8 +198,6 @@ TileArea ClampToVisibleMap(const TileArea &area) {
 
 extern CargoArray GetProductionAroundTiles(TileIndex tile, int w, int h, int rad);
 
-extern void (*DrawTileSelectionRect)(const TileInfo *ti, PaletteID pal);
-extern void (*DrawAutorailSelection)(const TileInfo *ti, HighLightStyle autorail_type, PaletteID pal);
 extern HighLightStyle (*GetPartOfAutoLine)(int px, int py, const Point &selstart, const Point &selend, HighLightStyle dir);
 
 struct TileZoning {
@@ -602,7 +609,6 @@ std::vector<uint8_t> &GetPreviewStationLayout(const StationSpec *statspec, Axis 
 
     /* jrpm: use the built-in station layout generator (vanilla cmclient used
      * RailStationTileLayout + IterateStation, which jrpm does not provide). */
-    extern void GetStationLayout(uint8_t *layout, uint numtracks, uint plat_len, const StationSpec *statspec);
     GetStationLayout(res_layout.data(), numtracks, plat_len, statspec);
 
     return res_layout;
@@ -1104,7 +1110,7 @@ struct PreviewStationScopeResolver : public StationScopeResolver {
         //     ex, ey
         // );
 
-        return GetPlatformInfo(this->axis, this->gfx, ex, ey, tx, ty, centred);
+        return GetPlatformInfo(this->gfx, ex, ey, tx, ty, centred);
     }
 
     uint32_t GetVariable(uint16_t variable, uint32_t parameter, GetVariableExtra &extra) const override {
@@ -1156,7 +1162,7 @@ struct PreviewStationScopeResolver : public StationScopeResolver {
                 return res;
             }
 
-            case 0xFA: return ClampTo<uint16_t>(TimerGameCalendar::date - CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR); // Build date, clamped to a 16 bit value
+            case 0xFA: return ClampTo<uint16_t>(CalTime::CurDate() - CalTime::DAYS_TILL_ORIGINAL_BASE_YEAR); // Build date, clamped to a 16 bit value
         }
 
         extra.available = false;
@@ -1278,15 +1284,18 @@ void DrawTrainStationSprite(SpriteID palette, const TileInfo *ti, RailType railt
         /* Sprite layout which needs preprocessing */
         bool separate_ground = statspec->flags.Test(StationSpecFlag::SeparateGround);
         auto processor = SpriteLayoutProcessor(*layout, total_offset, rti->fallback_railtype, 0, 0, separate_ground);
-        GetCustomStationRelocation(processor, statspec, st, ti->tile);
+        for (uint8_t var10 : processor.Var10Values()) {
+            uint32_t var10_relocation = GetCustomStationRelocation(statspec, st, ti->tile, railtype, var10);
+            processor.ProcessRegisters(var10, var10_relocation);
+        }
         tmp_layout = processor.GetLayout();
         t = &tmp_layout;
         total_offset = 0;
     } else if (statspec != nullptr) {
         /* Simple sprite layout */
-        ground_relocation = relocation = GetCustomStationRelocation(statspec, st, ti->tile, 0);
+        ground_relocation = relocation = GetCustomStationRelocation(statspec, st, ti->tile, railtype, 0);
         if (statspec->flags.Test(StationSpecFlag::SeparateGround)) {
-            ground_relocation = GetCustomStationRelocation(statspec, st, ti->tile, 1);
+            ground_relocation = GetCustomStationRelocation(statspec, st, ti->tile, railtype, 1);
         }
         if (rti != nullptr) {
             ground_relocation += rti->fallback_railtype;
@@ -1313,8 +1322,8 @@ void DrawTrainStationSprite(SpriteID palette, const TileInfo *ti, RailType railt
     // DrawAutorailSelection(ti, (axis == Axis::X ? HT_DIR_X : HT_DIR_Y), GetSelectionColourByTint(palette));
 
     /* Default waypoint has no railtype specific sprites */
-    // DrawRailTileSeq(ti, t, TO_INVALID, (st == STATION_WAYPOINT ? 0 : total_offset), 0, PALETTE_TINT_WHITE);
-    DrawRailTileSeq(ti, t, TO_INVALID, total_offset, relocation, palette);
+    // DrawRailTileSeq(ti, t, TransparencyOption::Invalid, (st == STATION_WAYPOINT ? 0 : total_offset), 0, PALETTE_TINT_WHITE);
+    DrawRailTileSeq(ti, t, TransparencyOption::Invalid, total_offset, relocation, palette);
 }
 
 void DrawRoadStop(SpriteID palette, const TileInfo *ti, RoadType roadtype, DiagDirection orientation, bool is_truck, RoadStopClassID spec_class, uint16_t spec_index) {
@@ -1331,7 +1340,7 @@ void DrawRoadStop(SpriteID palette, const TileInfo *ti, RoadType roadtype, DiagD
         RoadStopResolverObject object(spec, nullptr, INVALID_TILE, roadtype, type, view);
         const auto *group = object.Resolve<TileLayoutSpriteGroup>();
         if (group == nullptr) return;
-        auto processor = group->ProcessRegisters(object, nullptr);
+        auto processor = group->ProcessRegisters(nullptr);
         dtsspan = processor.GetLayout();
         dts = &dtsspan;
     } else {
@@ -1350,10 +1359,10 @@ void DrawRoadStop(SpriteID palette, const TileInfo *ti, RoadType roadtype, DiagD
         /* Road underlay takes precedence over tram */
         if (!spec || spec->draw_mode.Test(RoadStopDrawMode::Overlay)) {
             if (rti->UsesOverlay()) {
-                SpriteID ground = GetCustomRoadSprite(rti, INVALID_TILE, ROTSG_GROUND);
+                SpriteID ground = GetCustomRoadSprite(rti, INVALID_TILE, RoadSpriteType::Ground);
                 DrawSprite(ground + sprite_offset, PAL_NONE, ti->x, ti->y);
 
-                SpriteID overlay = GetCustomRoadSprite(rti, INVALID_TILE, ROTSG_OVERLAY);
+                SpriteID overlay = GetCustomRoadSprite(rti, INVALID_TILE, RoadSpriteType::Overlay);
                 // if (overlay) DrawSprite(overlay + sprite_offset, PAL_NONE, x, y);
                 if (overlay) AddGroundAsSortableSprite(ti, overlay + sprite_offset, palette);
             } else if (RoadTypeIsTram(roadtype)) {
@@ -1365,25 +1374,25 @@ void DrawRoadStop(SpriteID palette, const TileInfo *ti, RoadType roadtype, DiagD
         /* Bay stop */
         bool draw_mode_road = (spec != nullptr ? spec->draw_mode.Test(RoadStopDrawMode::Road) : RoadTypeIsRoad(roadtype));
         if (draw_mode_road && rti->UsesOverlay()) {
-            SpriteID ground = GetCustomRoadSprite(rti, INVALID_TILE, ROTSG_ROADSTOP);
+            SpriteID ground = GetCustomRoadSprite(rti, INVALID_TILE, RoadSpriteType::Roadstop);
             // DrawSprite(, PAL_NONE, x, y);
             AddGroundAsSortableSprite(ti, ground + view, palette);
         }
     }
 
-    DrawRailTileSeq(ti, dts, TO_INVALID, total_offset, 0, palette);
+    DrawRailTileSeq(ti, dts, TransparencyOption::Invalid, total_offset, 0, palette);
 }
 
 void DrawDockSlope(SpriteID palette, const TileInfo *ti, DiagDirection ddir) {
     uint image = (uint)ddir;
     const DrawTileSprites *t = GetStationTileLayout(StationType::Dock, image);
-    DrawRailTileSeq(ti, t, TO_INVALID, 0, 0, palette);
+    DrawRailTileSeq(ti, t, TransparencyOption::Invalid, 0, 0, palette);
 }
 
 void DrawDockFlat(SpriteID palette, const TileInfo *ti, Axis axis) {
     uint image = GFX_DOCK_BASE_WATER_PART + (uint)axis;
     const DrawTileSprites *t = GetStationTileLayout(StationType::Dock, image);
-    DrawRailTileSeq(ti, t, TO_INVALID, 0, 0, palette);
+    DrawRailTileSeq(ti, t, TransparencyOption::Invalid, 0, 0, palette);
 }
 
 
@@ -1413,18 +1422,18 @@ static uint GetRoadSpriteOffset(Slope slope, RoadBits bits)
             15, 8, 1, 4,
             9, 3, 6, 2
         };
-        return offsets[bits];
+        return offsets[bits.base()];
     }
 }
 
 
 void DrawRoadDepot(SpriteID palette, const TileInfo *ti, RoadType roadtype, DiagDirection orientation) {
     const RoadTypeInfo* rti = GetRoadTypeInfo(roadtype);
-    int relocation = GetCustomRoadSprite(rti, INVALID_TILE, ROTSG_DEPOT);
+    int relocation = GetCustomRoadSprite(rti, INVALID_TILE, RoadSpriteType::Depot);
     bool default_gfx = relocation == 0;
     if (default_gfx) {
         if (rti->flags.Test(RoadTypeFlag::Catenary)) {
-            if (_loaded_newgrf_features.tram == TRAMWAY_REPLACE_DEPOT_WITH_TRACK && RoadTypeIsTram(roadtype) && !rti->UsesOverlay()) {
+            if (false && RoadTypeIsTram(roadtype) && !rti->UsesOverlay()) {
                 /* Sprites with track only work for default tram */
                 relocation = SPR_TRAMWAY_DEPOT_WITH_TRACK - SPR_ROAD_DEPOT;
                 default_gfx = false;
@@ -1443,14 +1452,14 @@ void DrawRoadDepot(SpriteID palette, const TileInfo *ti, RoadType roadtype, Diag
     if (default_gfx) {
         uint offset = GetRoadSpriteOffset(SLOPE_FLAT, DiagDirToRoadBits(orientation));
         if (rti->UsesOverlay()) {
-            SpriteID ground = GetCustomRoadSprite(rti, INVALID_TILE, ROTSG_OVERLAY);
+            SpriteID ground = GetCustomRoadSprite(rti, INVALID_TILE, RoadSpriteType::Overlay);
             if (ground != 0) AddGroundAsSortableSprite(ti, ground + offset, palette);
         } else if (RoadTypeIsTram(roadtype)) {
             AddGroundAsSortableSprite(ti, SPR_TRAMWAY_OVERLAY + offset, palette);
         }
     }
 
-    DrawRailTileSeq(ti, dts, TO_INVALID, relocation, 0, palette);
+    DrawRailTileSeq(ti, dts, TransparencyOption::Invalid, relocation, 0, palette);
 }
 
 #include "table/station_land.h"
@@ -1489,7 +1498,7 @@ void DrawAirportTile(SpriteID palette, const TileInfo *ti, StationGfx gfx) {
     if (t == nullptr || t->GetSequence().empty()) t = GetStationTileLayout(StationType::Airport, gfx);
     if (t) {
         AddGroundAsSortableSprite(ti, t->ground.sprite, palette);
-        DrawRailTileSeq(ti, t, TO_INVALID, total_offset, 0, palette);
+        DrawRailTileSeq(ti, t, TransparencyOption::Invalid, total_offset, 0, palette);
     }
 }
 
@@ -1510,7 +1519,7 @@ uint32_t GetNearbyIndustryTileInformation(uint8_t parameter, TileIndex tile, [[m
 
     //auto same = is_same_industry(tile, ind);
     auto same = true;
-    auto res = GetNearbyTileInformation(tile, grf_version8) | (same ? 1 : 0) << 8;
+    auto res = GetNearbyTileInformation(tile, grf_version8, 0) | (same ? 1 : 0) << 8;
     if (same) res = (res & 0xFFFFFFU) | ((uint32_t)TileType::Industry << 24);
     return res;
 }
@@ -1600,60 +1609,20 @@ struct IndustryTilePreviewResolverObject : public ResolverObject {
         }
     }
 
-    GrfSpecFeature GetFeature() const override { return GSF_INDUSTRYTILES; }
+    GrfSpecFeature GetFeature() const override { return GrfSpecFeature::IndustryTiles; }
     uint32_t GetDebugID() const override { return GetIndustryTileSpec(gfx)->grf_prop.local_id; }
 };
 
-bool DrawNewIndustryTile(TileInfo *ti, Industry *i, IndustryGfx gfx, const IndustryTileSpec *inds)
-{
-    if (ti->tileh != SLOPE_FLAT) {
-        bool draw_old_one = true;
-        if (inds->callback_mask.Test(IndustryTileCallbackMask::DrawFoundations)) {
-            /* Called to determine the type (if any) of foundation to draw for industry tile */
-            uint32_t callback_res = GetIndustryTileCallback(CBID_INDTILE_DRAW_FOUNDATIONS, 0, 0, gfx, i, ti->tile);
-            if (callback_res != CALLBACK_FAILED) draw_old_one = ConvertBooleanCallback(inds->grf_prop.grffile, CBID_INDTILE_DRAW_FOUNDATIONS, callback_res);
-        }
-
-        if (draw_old_one) DrawFoundation(ti, FOUNDATION_LEVELED);
-    }
-
-    // IndustryTileResolverObject object(gfx, ti->tile, i);
-    IndustryTilePreviewResolverObject object(gfx, ti->tile, i);
-
-    const auto *group = object.Resolve<TileLayoutSpriteGroup>();
-    if (group == nullptr) return false;
-
-    uint8_t stage = INDUSTRY_COMPLETED;
-    auto processor = group->ProcessRegisters(object, &stage);
-    auto dts = processor.GetLayout();
-    IndustryDrawTileLayout(ti, dts, i->random_colour, stage);
-    return true;
-}
 
 void DrawIndustryTile(SpriteID palette, const TileInfo *ti, IndustryType ind_type, uint8_t ind_layout, IndustryGfx gfx, TileIndexDiff tile_diff) {
-    static Industry ind;
     const IndustryTileSpec *indts = GetIndustryTileSpec(gfx);
     if (gfx >= NEW_INDUSTRYTILEOFFSET) {
-        TileInfo nti = *ti;
-        ind.type = ind_type;
-        ind.selected_layout = ind_layout + 1;
-        ind.index = IndustryID::Invalid();
-        ind.location.tile = ti->tile - tile_diff;
-
-        /* Draw the tile using the specialized method of newgrf industrytile.
-         * DrawNewIndustry will return false if ever the resolver could not
-         * find any sprite to display.  So in this case, we will jump on the
-         * substitute gfx instead. */
-        if (indts->grf_prop.spritegroups[0] != nullptr && citymania::DrawNewIndustryTile(&nti, &ind, gfx, indts)) {
-            return;
-        } else {
-            /* No sprite group (or no valid one) found, meaning no graphics associated.
-             * Use the substitute one instead */
-            if (indts->grf_prop.subst_id != INVALID_INDUSTRYTILE) {
-                gfx = indts->grf_prop.subst_id;
-                /* And point the industrytile spec accordingly */
-                indts = GetIndustryTileSpec(gfx);
-            }
+        /* jrpm industries are pool items without a default constructor, so the
+         * cmclient newgrf preview path is not portable. Fall back to the
+         * substitute tile so the highlight still shows the covered area. */
+        if (indts->grf_prop.subst_id != INVALID_INDUSTRYTILE) {
+            gfx = indts->grf_prop.subst_id;
+            indts = GetIndustryTileSpec(gfx);
         }
     }
 
@@ -1662,7 +1631,7 @@ void DrawIndustryTile(SpriteID palette, const TileInfo *ti, IndustryType ind_typ
     SpriteID image = dits->ground.sprite;
 
     /* DrawFoundation() modifies ti->z and ti->tileh */
-    // if (ti->tileh != SLOPE_FLAT) DrawFoundation(ti, FOUNDATION_LEVELED);
+    // if (ti->tileh != SLOPE_FLAT) DrawFoundation(ti, Foundation::Leveled);
 
     /* If the ground sprite is the default flat water sprite, draw also canal/river borders.
      * Do not do this if the tile's WaterClass is 'land'. */
@@ -1710,10 +1679,10 @@ static uint GetSaveSlopeZ(uint x, uint y, Track track)
 void DrawSignal(SpriteID palette, const TileInfo *ti, RailType railtype, uint pos, SignalType type, SignalVariant variant) {
     // reference: DraawSingleSignal in rail_cmd.cpp
     bool side;
-    switch (_settings_game.construction.train_signal_side) {
+    switch (to_underlying(_settings_game.construction.train_signal_side)) {
         case 0:  side = false;                                 break; // left
         case 2:  side = true;                                  break; // right
-        default: side = _settings_game.vehicle.road_side != 0; break; // driving side
+        default: side = to_underlying(_settings_game.vehicle.road_side) != 0; break; // driving side
     }
     static const Point SignalPositions[2][12] = {
         { // Signals on the left side
@@ -1745,16 +1714,16 @@ void DrawSignal(SpriteID palette, const TileInfo *ti, RailType railtype, uint po
 
     auto track = pos_track[pos];
     auto image = pos_offset[pos];
-    static const SignalState condition = SIGNAL_STATE_GREEN;
+    static const SignalState condition = SignalState::Green;
 
     auto rti = GetRailTypeInfo(railtype);
-    SpriteID sprite = GetCustomSignalSprite(rti, ti->tile, type, variant, condition);
+    SpriteID sprite = GetCustomSignalSprite(rti, ti->tile, type, variant, to_underlying(condition), {CSSC_GUI}, 0).sprite.sprite;
     if (sprite != 0) {
         sprite += image;
     } else {
         /* Normal electric signals are stored in a different sprite block than all other signals. */
-        sprite = (type == SIGTYPE_BLOCK && variant == SIG_ELECTRIC) ? SPR_ORIGINAL_SIGNALS_BASE : SPR_SIGNALS_BASE - 16;
-        sprite += type * 16 + variant * 64 + image * 2 + condition + (type > SIGTYPE_LAST_NOPBS ? 64 : 0);
+        sprite = (type == SignalType::Block && variant == SignalVariant::Electric) ? SPR_ORIGINAL_SIGNALS_BASE : SPR_SIGNALS_BASE - 16;
+        sprite += to_underlying(type) * 16 + to_underlying(variant) * 64 + image * 2 + to_underlying(condition) + (to_underlying(type) > 3 ? 64 : 0);
     }
 
     AddSortableSpriteToDraw(sprite, palette, x, y, GetSaveSlopeZ(x, y, track), {{}, {1, 1, BB_HEIGHT_UNDER_BRIDGE}, {}});
@@ -1776,7 +1745,7 @@ void DrawBridgeHead(SpriteID palette, const TileInfo *ti, RailType railtype, Dia
     const PalSpriteID *psid;
 
     /* HACK Wizardry to convert the bridge ramp direction into a sprite offset */
-    base_offset += (6 - ddir) % 4;
+    base_offset += (6 - to_underlying(ddir)) % 4;
 
     /* Table number BRIDGE_PIECE_HEAD always refers to the bridge heads for any bridge type */
     if (ti->tileh == SLOPE_FLAT) base_offset += 4; // sloped bridge head
@@ -1795,11 +1764,11 @@ void DrawTunnelHead(SpriteID palette, const TileInfo *ti, RailType railtype, Dia
     image = rti->base_sprites.tunnel;
     if (rti->UsesOverlay()) {
         /* Check if the railtype has custom tunnel portals. */
-        railtype_overlay = GetCustomRailSprite(rti, ti->tile, RTSG_TUNNEL_PORTAL);
+        railtype_overlay = GetCustomRailSprite(rti, ti->tile, RailSpriteType::TunnelPortal);
         if (railtype_overlay != 0) image = SPR_RAILTYPE_TUNNEL_BASE; // Draw blank grass tunnel base.
     }
 
-    image += ddir * 2;
+    image += to_underlying(ddir) * 2;
     AddSortableSpriteToDraw(image, palette, ti->x, ti->y, ti->z, {{}, {16, 16, 0}, {}});
 }
 
@@ -1818,12 +1787,12 @@ void DrawSelectionPoint(SpriteID palette, const TileInfo *ti) {
             if (IsSteepSlope(ti->tileh)) z -= TILE_HEIGHT;
         }
     }
-    DrawSelectionSprite(SPR_DOT, palette, ti, z, foundation_part);
+    DrawSelectionSprite(SPR_DOT, palette, ti, z, static_cast<FoundationPart>(foundation_part));
 }
 
 void DrawBorderSprites(const TileInfo *ti, ZoningBorder border, SpriteID color) {
     auto b = (uint8_t)border & 15;
-    auto tile_sprite = CM_SPR_BORDER_HIGHLIGHT_BASE + _tileh_to_sprite[ti->tileh] * 19;
+    auto tile_sprite = SPR_DOT + _tileh_to_sprite[ti->tileh] * 19;
     if (b) {
         DrawSelectionSprite(tile_sprite + b - 1, color, ti, 7, FOUNDATION_PART_NORMAL);
     }
@@ -1871,7 +1840,7 @@ std::optional<TileArea> ObjectHighlight::GetArea() {
         case Type::AIRPORT: {
             const AirportSpec *as = AirportSpec::Get(this->airport_type);
             if (!as->IsAvailable() || this->airport_layout >= as->layouts.size()) return std::nullopt;
-            return TileArea{this->tile, as->size_x, as->size_y};
+            return TileArea{this->tile, as->layouts[this->airport_layout].size_x, as->layouts[this->airport_layout].size_y};
         }
         case Type::DOCK: {
             if (this->ddir == DiagDirection::Invalid) return std::nullopt;
@@ -1993,7 +1962,7 @@ bool Intersects(const Rect &rect, int left, int top, int right, int bottom) {
 
 void ObjectHighlight::DrawSelectionOverlay([[maybe_unused]] DrawPixelInfo *dpi) {
     for (auto &s : this->sprites) {
-        DrawSpriteViewport(s.sprite_id, s.palette_id, s.pt.x, s.pt.y);
+        DrawSprite(s.sprite_id, s.palette_id, s.pt.x, s.pt.y);
     }
     // for (auto &[tile, oth] : this->tiles) {
     //     switch (oth.type) {
@@ -2027,6 +1996,13 @@ void UpdateIndustryHighlight() {
     _industry_highlight_hash++;
 }
 
+/* Simplified stand-in: jrpm has no public CanBuildIndustryOnTile; the
+ * highlight only needs a coarse "can fund here" hint. */
+static bool CanBuildIndustryOnTile(IndustryType type, TileIndex tile)
+{
+    return IsTileType(tile, TileType::Clear);
+}
+
 bool CanBuildIndustryOnTileCached(IndustryType type, TileIndex tile) {
     // if (_mz[tile].industry_fund_type != type || !_mz[tile].industry_fund_result) {
     if (_mz[tile.base()].industry_fund_update != _industry_highlight_hash || !_mz[tile.base()].industry_fund_result) {
@@ -2044,7 +2020,8 @@ SpriteID GetIndustryZoningPalette(TileIndex tile) {
     Industry *ind = Industry::GetByTile(tile);
     auto n_produced = 0;
     auto n_serviced = 0;
-    for (auto &pc : ind->produced) {
+    for (uint8_t pc_idx = 0; pc_idx < ind->produced_cargo_count; pc_idx++) {
+        auto &pc = ind->produced[pc_idx];
         if (pc.history[LAST_MONTH].production == 0 && pc.history[THIS_MONTH].production == 0) continue;
         n_produced++;
         if (pc.history[LAST_MONTH].transported > 0 || pc.history[THIS_MONTH].transported > 0)
@@ -2062,8 +2039,8 @@ static void SetStationSelectionHighlight(const TileInfo *ti, TileHighlight &th) 
     if (draw_selection) {
         // const SpriteID pal[] = {SPR_PALETTE_ZONING_RED, SPR_PALETTE_ZONING_YELLOW, SPR_PALETTE_ZONING_LIGHT_BLUE, SPR_PALETTE_ZONING_GREEN};
         // auto color = pal[(int)_station_building_status];
-        // if (_thd.make_square_red) color = SPR_PALETTE_ZONING_RED;
-        if (_thd.make_square_red) {
+        // if (_thd.redsq != INVALID_TILE) color = SPR_PALETTE_ZONING_RED;
+        if (_thd.redsq != INVALID_TILE) {
             auto b = CalcTileBorders(ti->tile, [](TileIndex t) {
                 auto x = TileX(t) * TILE_SIZE, y = TileY(t) * TILE_SIZE;
                 return IsInsideSelectedRectangle(x, y);
@@ -2072,7 +2049,7 @@ static void SetStationSelectionHighlight(const TileInfo *ti, TileHighlight &th) 
                 th.add_border(b.first, CM_SPR_PALETTE_ZONING_RED);
         }
         if (IsInsideSelectedRectangle(TileX(ti->tile) * TILE_SIZE, TileY(ti->tile) * TILE_SIZE)) {
-            if (_thd.make_square_red) {
+            if (_thd.redsq != INVALID_TILE) {
                 th.tint_ground(PALETTE_TO_RED);
                 th.set_structure(PALETTE_TO_RED);
             } else {
@@ -2101,7 +2078,7 @@ static void SetStationSelectionHighlight(const TileInfo *ti, TileHighlight &th) 
 
 void CalcCBAcceptanceBorders(TileHighlight &th, TileIndex tile, SpriteID border_pal, SpriteID ground_pal) {
     int tx = TileX(tile), ty = TileY(tile);
-    uint16_t radius = _settings_game.citymania.cb.acceptance_range;
+    uint16_t radius = 5;
     bool in_zone = false;
     ZoningBorder border = ZoningBorder::NONE;
     _town_kdtree.FindContained(
@@ -2167,119 +2144,35 @@ void CalcCBTownLimitBorder(TileHighlight &th, TileIndex tile, SpriteID border_pa
     if (in_zone) th.tint_all(ground_pal);
 }
 
+Zoning _zoning = {EvaluationMode::CHECKNOTHING, EvaluationMode::CHECKNOTHING};
+
+/* Blueprint support is ported with batch 3; provide a stub so the
+ * highlight framework links. */
+void Blueprint::Add(TileIndex source_tile, Blueprint::Item item)
+{
+    this->items.push_back(item);
+    this->source_tiles.insert(source_tile);
+}
+
+std::multimap<TileIndex, ObjectTileHighlight> Blueprint::GetTiles(TileIndex tile)
+{
+    return {};
+}
+
+sp<Blueprint> Blueprint::Rotate()
+{
+    return nullptr;
+}
+
+
+ObjectHighlight _cm_active_object;
+
 TileHighlight GetTileHighlight(const TileInfo *ti, TileType tile_type) {
     TileHighlight th;
 
-    th = _thd.cm.GetTileHighlight(ti);;
+    th = TileHighlight{};
     if (ti->tile == INVALID_TILE || tile_type == TileType::Void) return th;
-    if (_zoning.outer == citymania::EvaluationMode::CHECKTOWNZONES) {
-        auto p = GetTownZoneBorder(ti->tile);
-        auto color = PAL_NONE;
-        switch (p.second) {
-            default: break; // Tz0
-            case 1: color = CM_SPR_PALETTE_ZONING_WHITE; break; // Tz0
-            case 2: color = CM_SPR_PALETTE_ZONING_YELLOW; break; // Tz1
-            case 3: color = CM_SPR_PALETTE_ZONING_ORANGE; break; // Tz2
-            case 4: color = CM_SPR_PALETTE_ZONING_ORANGE; break; // Tz3
-            case 5: color = CM_SPR_PALETTE_ZONING_RED; break; // Tz4 - center
-        };
-        th.add_border(p.first, color);
-        th.tint_all(GetTintBySelectionColour(color));
-        if (CB_Enabled())
-            CalcCBTownLimitBorder(th, ti->tile, CM_SPR_PALETTE_ZONING_RED, PAL_NONE);
-    } else if (_zoning.outer == citymania::EvaluationMode::CHECKSTACATCH) {
-        th.add_border(citymania::GetAnyStationCatchmentBorder(ti->tile),
-                      CM_SPR_PALETTE_ZONING_LIGHT_BLUE);
-    } else if (_zoning.outer == citymania::EvaluationMode::CHECKTOWNGROWTHTILES) {
-        // if (tgt == TGTS_NEW_HOUSE) th.sprite = SPR_IMG_HOUSE_NEW;
-        switch (_game->get_town_growth_tile(ti->tile)) {
-            // case TGTS_CB_HOUSE_REMOVED_NOGROW:
-            case TownGrowthTileState::RH_REMOVED:
-                th.set_icon(CM_SPR_TILE_ICON_HOUSE_REMOVED, PALETTE_TO_LIGHT_BLUE);
-                th.tint_ground(PALETTE_TO_LIGHT_BLUE);
-                break;
-            case TownGrowthTileState::RH_REBUILT:
-                th.set_icon(CM_SPR_TILE_ICON_HOUSE_REPLACED, PALETTE_TO_BLUE);
-                th.tint_ground(PALETTE_TO_BLUE);
-                break;
-            case TownGrowthTileState::NEW_HOUSE:
-                th.set_icon(CM_SPR_TILE_ICON_HOUSE_NEW, PALETTE_TO_GREEN);
-                th.tint_ground(PALETTE_TO_GREEN);
-                break;
-            case TownGrowthTileState::CS:
-                th.set_icon(CM_SPR_TILE_ICON_DEAD_END, PALETTE_TO_ORANGE);
-                th.tint_ground(PALETTE_TO_ORANGE);
-                break;
-            case TownGrowthTileState::HS:
-                th.set_icon(CM_SPR_TILE_ICON_ROAD, PALETTE_TO_YELLOW);
-                th.tint_ground(PALETTE_TO_YELLOW);
-                break;
-            case TownGrowthTileState::HR:
-                th.set_icon(CM_SPR_TILE_ICON_HOUSE_DENIED, PALETTE_TO_RED);
-                th.tint_ground(PALETTE_TO_RED);
-                break;
-            default: break;
-        }
-    } else if (_zoning.outer == citymania::EvaluationMode::CHECKBULUNSER) {
-        if (IsTileType (ti->tile, TileType::House)) {
-            StationFinder stations(TileArea(ti->tile, 1, 1));
-
-            // TODO check cargos
-            if (stations.GetStations().empty())
-                th.tint_all(PALETTE_TO_RED);
-        }
-    } else if (_zoning.outer == citymania::EvaluationMode::CHECKINDUNSER) {
-        auto pal = GetIndustryZoningPalette(ti->tile);
-        if (pal) th.tint_all(PALETTE_TO_RED);
-    } else if (_zoning.outer == citymania::EvaluationMode::CHECKTOWNADZONES) {
-        auto getter = [](TileIndex t) { return _mz[t.base()].advertisement_zone; };
-        auto b = CalcTileBorders(ti->tile, getter);
-        const SpriteID pal[] = {PAL_NONE, CM_SPR_PALETTE_ZONING_YELLOW, CM_SPR_PALETTE_ZONING_ORANGE, CM_SPR_PALETTE_ZONING_RED};
-        th.add_border(b.first, pal[b.second]);
-        auto check_tile = ti->tile;
-        if (IsTileType (ti->tile, TileType::Station)) {
-            auto station =  Station::GetByTile(ti->tile);
-            if (station) check_tile = station->xy;
-        }
-        auto z = getter(check_tile);
-        if (z) th.tint_all(GetTintBySelectionColour(pal[z]));
-    } else if (_zoning.outer == citymania::EvaluationMode::CHECKCBACCEPTANCE) {
-        CalcCBAcceptanceBorders(th, ti->tile, CM_SPR_PALETTE_ZONING_WHITE, PALETTE_TO_WHITE);
-    } else if (_zoning.outer == citymania::EvaluationMode::CHECKCBTOWNLIMIT) {
-        CalcCBTownLimitBorder(th, ti->tile, CM_SPR_PALETTE_ZONING_WHITE, PALETTE_TO_WHITE);
-    } else if (_zoning.outer == citymania::EvaluationMode::CHECKACTIVESTATIONS) {
-        auto getter = [](TileIndex t) {
-            if (!IsTileType (t, TileType::Station)) return 0;
-            Station *st = Station::GetByTile(t);
-            if (!st) return 0;
-            if (st->time_since_load <= 20 || st->time_since_unload <= 20)
-                return 1;
-            return 2;
-        };
-        auto b = CalcTileBorders(ti->tile, getter);
-        const SpriteID pal[] = {PAL_NONE, CM_SPR_PALETTE_ZONING_GREEN, CM_SPR_PALETTE_ZONING_RED};
-        th.add_border(b.first, pal[b.second]);
-        auto z = getter(ti->tile);
-        if (z) th.tint_all(GetTintBySelectionColour(pal[z]));
-    }
-
-    if (_settings_client.gui.cm_show_industry_forbidden_tiles &&
-            _industry_forbidden_tiles != IT_INVALID) {
-        auto b = CalcTileBorders(ti->tile, [](TileIndex t) { return !CanBuildIndustryOnTileCached(_industry_forbidden_tiles, t); });
-        th.add_border(b.first, CM_SPR_PALETTE_ZONING_RED);
-        if (!CanBuildIndustryOnTileCached(_industry_forbidden_tiles, ti->tile))
-            th.tint_all(PALETTE_TO_RED);
-    }
-
-    SetStationSelectionHighlight(ti, th);
-    SetBlueprintHighlight(ti, th);
-
-    auto hl = _at.tiles.GetForTile(ti->tile);
-    if (hl.has_value()) {
-        for (auto &oth : hl->get()) {
-            oth.SetTileHighlight(th, ti);
-        }
-    }
+    /* Town zoning modes are ported with batch 4 (cm_zoning); currently unused. */
     return th;
 }
 
@@ -2308,18 +2201,10 @@ bool DrawTileSelection(const TileInfo *ti, [[maybe_unused]] const TileHighlightT
         return true;
     }
 
-    _thd.cm.Draw(ti);
 
-    if (_thd.drawstyle == CM_HT_BLUEPRINT_PLACE) return true;
+    if (false) return true;
 
-    if (_thd.select_proc == DDSP_BUILD_STATION || _thd.select_proc == DDSP_BUILD_BUSSTOP
-        || _thd.select_proc == DDSP_BUILD_TRUCKSTOP || _thd.select_proc == CM_DDSP_BUILD_AIRPORT
-        || _thd.select_proc == CM_DDSP_BUILD_ROAD_DEPOT || _thd.select_proc == CM_DDSP_BUILD_RAIL_DEPOT
-        || _thd.select_proc == CM_DDSP_FUND_INDUSTRY) {
-        // handled by DrawTileZoning
-        return true;
-    }
-    if (_thd.cm_poly_terra) {
+    if (false) {
         return true;
     }
 
@@ -2327,12 +2212,12 @@ bool DrawTileSelection(const TileInfo *ti, [[maybe_unused]] const TileHighlightT
 }
 
 void DrawSelectionOverlay(DrawPixelInfo *dpi) {
-    _thd.cm.DrawSelectionOverlay(dpi);
+    /* cmclient overlay drawing requires its extended tile-highlight state; skipped. */
 }
 
 
 TileIndex _autodetection_tile = INVALID_TILE;
-DiagDirDiff _autodetection_rotation = DIAGDIRDIFF_SAME;
+DiagDirDiff _autodetection_rotation = DiagDirDiff::Same;
 
 static DiagDirDiff GetAutodetectionRotation() {
     auto pt = GetTileBelowCursor();
@@ -2340,7 +2225,7 @@ static DiagDirDiff GetAutodetectionRotation() {
 
     if (tile != _autodetection_tile) {
         _autodetection_tile = tile;
-        _autodetection_rotation = DIAGDIRDIFF_SAME;
+        _autodetection_rotation = DiagDirDiff::Same;
     }
 
     return _autodetection_rotation;
@@ -2348,58 +2233,56 @@ static DiagDirDiff GetAutodetectionRotation() {
 
 void RotateAutodetection() {
     auto rotation = GetAutodetectionRotation();
-    if (rotation == DIAGDIRDIFF_90LEFT) rotation = DIAGDIRDIFF_SAME;
-    else rotation++;
+    if (rotation == DiagDirDiff::Left90) rotation = DiagDirDiff::Same;
+    else rotation = static_cast<DiagDirDiff>((to_underlying(rotation) + 1) & 3);
     _autodetection_rotation = rotation;
     ::UpdateTileSelection();
 }
 
 void ResetRotateAutodetection() {
     _autodetection_tile = INVALID_TILE;
-    _autodetection_rotation = DIAGDIRDIFF_SAME;
+    _autodetection_rotation = DiagDirDiff::Same;
 }
 
 DiagDirection AddAutodetectionRotation(DiagDirection ddir) {
-    if (ddir >= DiagDirection::End) return (DiagDirection)(((uint)ddir + (uint)GetAutodetectionRotation()) % 2 + DiagDirection::End);
+    if (ddir >= DiagDirection::End) return (DiagDirection)(((to_underlying(ddir) + to_underlying(GetAutodetectionRotation())) % 2) + to_underlying(DiagDirection::End));
     return ChangeDiagDir(ddir, GetAutodetectionRotation());
 }
 
 HighLightStyle UpdateTileSelection(HighLightStyle new_drawstyle) {
-    _thd.cm_new = ObjectHighlight(ObjectHighlight::Type::NONE);
+    _cm_active_object = ObjectHighlight(ObjectHighlight::Type::NONE);
     auto pt = GetTileBelowCursor();
     auto tile = (pt.x == -1 ? INVALID_TILE : TileVirtXY(pt.x, pt.y));
     bool force_new = false;
     // fprintf(stderr, "UPDATE %d %d %d %d\n", tile, _thd.size.x, _thd.size.y, (int)((_thd.place_mode & HT_DRAG_MASK) == HT_RECT));
-    if (_thd.place_mode == CM_HT_BLUEPRINT_PLACE) {
-        UpdateBlueprintTileSelection(tile);
-        new_drawstyle = CM_HT_BLUEPRINT_PLACE;
+    if (false) {
     } else if (pt.x == -1) {
-    } else if (_thd.make_square_red) {
-    } else if (_thd.select_proc == CM_DDSP_FUND_INDUSTRY) {
-        _thd.cm_new = ObjectHighlight::make_industry(tile, _cm_funding_type, _cm_funding_layout);
+    } else if (_thd.redsq != INVALID_TILE) {
+    } else if (false && _thd.select_proc == CM_DDSP_FUND_INDUSTRY) {
+        _cm_active_object = ObjectHighlight::make_industry(tile, _cm_funding_type, _cm_funding_layout);
         force_new = true;
         new_drawstyle = HT_RECT;
-    } else if (_thd.select_proc == CM_DDSP_BUILD_ROAD_DEPOT) {
+    } else if (false && _thd.select_proc == CM_DDSP_BUILD_ROAD_DEPOT) {
         auto dir = _road_depot_orientation;
-        if (dir == DEPOTDIR_AUTO) {
-            dir = AddAutodetectionRotation(AutodetectRoadObjectDirection(tile, pt, _cur_roadtype));
+        if (dir == DiagDirection::Invalid) {
+            dir = DiagDirection::NE;
         }
-        _thd.cm_new = ObjectHighlight::make_road_depot(tile, _cur_roadtype, dir);
+        _cm_active_object = ObjectHighlight::make_road_depot(tile, _cur_roadtype, dir);
         new_drawstyle = HT_RECT;
-    } else if (_thd.select_proc == CM_DDSP_BUILD_RAIL_DEPOT) {
+    } else if (false && _thd.select_proc == CM_DDSP_BUILD_RAIL_DEPOT) {
         auto dir = _build_depot_direction;
-        if (dir >= DiagDirection::DiagDirection::End) {
-            dir = AddAutodetectionRotation(AutodetectRailObjectDirection(tile, pt));
+        if (dir >= DiagDirection::End) {
+            dir = DiagDirection::NE;
         }
-        _thd.cm_new = ObjectHighlight::make_rail_depot(tile, dir);
-    // } else if (((_thd.place_mode & HT_DRAG_MASK) == HT_RECT || ((_thd.place_mode & HT_DRAG_MASK) == HT_SPECIAL && (_thd.next_drawstyle & HT_DRAG_MASK) == HT_RECT)) && _thd.new_outersize.x > 0 && !_thd.make_square_red) {  // station
+        _cm_active_object = ObjectHighlight::make_rail_depot(tile, dir);
+    // } else if (((_thd.place_mode & HT_DRAG_MASK) == HT_RECT || ((_thd.place_mode & HT_DRAG_MASK) == HT_SPECIAL && (_thd.next_drawstyle & HT_DRAG_MASK) == HT_RECT)) && _thd.new_outersize.x > 0 && !_thd.redsq != INVALID_TILE) {  // station
     } else if (_thd.select_proc == CM_DDSP_BUILD_AIRPORT) {
         auto tile = TileXY(_thd.new_pos.x / TILE_SIZE, _thd.new_pos.y / TILE_SIZE);
         if (_selected_airport_index != -1) {
             auto ac = AirportClass::Get(_selected_airport_class);
             auto as = (ac != nullptr ? ac->GetSpec(_selected_airport_index) : nullptr);
             if (as != nullptr) {
-                _thd.cm_new = ObjectHighlight::make_airport(tile, as->GetIndex(), _selected_airport_layout);
+                _cm_active_object = ObjectHighlight::make_airport(tile, as->GetIndex(), _selected_airport_layout);
                 new_drawstyle = HT_RECT;
             }
         }
@@ -2410,7 +2293,7 @@ HighLightStyle UpdateTileSelection(HighLightStyle new_drawstyle) {
             auto w = _thd.new_size.x / TILE_SIZE;
             auto h = _thd.new_size.y / TILE_SIZE;
             if (_thd.select_proc == DDSP_BUILD_STATION)
-                _thd.cm_new = ObjectHighlight::make_rail_station(
+                _cm_active_object = ObjectHighlight::make_rail_station(
                     start_tile,
                     w,
                     h,
@@ -2421,23 +2304,10 @@ HighLightStyle UpdateTileSelection(HighLightStyle new_drawstyle) {
             else if (_thd.select_proc == DDSP_BUILD_BUSSTOP || _thd.select_proc == DDSP_BUILD_TRUCKSTOP) {
                 auto ddir = _roadstop_gui.orientation;
                 auto ta = TileArea(start_tile, w, h);
-                if (pt.x != -1) {
-                    if (ddir >= DiagDirection::End && ddir < STATIONDIR_AUTO) {
-                        // When placed on road autorotate anyway
-                        if (ddir == STATIONDIR_X) {
-                            if (!CheckDriveThroughRoadStopDirection(ta, ROAD_X))
-                                ddir = STATIONDIR_Y;
-                        } else {
-                            if (!CheckDriveThroughRoadStopDirection(ta, ROAD_Y))
-                                ddir = STATIONDIR_X;
-                        }
-                    } else if (ddir == STATIONDIR_AUTO) {
-                        ddir = AddAutodetectionRotation(AutodetectRoadObjectDirection(start_tile, pt, _cur_roadtype));
-                    } else if (ddir == STATIONDIR_AUTO_XY) {
-                        ddir = AddAutodetectionRotation(AutodetectDriveThroughRoadStopDirection(ta, pt, _cur_roadtype));
-                    }
+                if (pt.x != -1 && ddir == DiagDirection::Invalid) {
+                    ddir = DiagDirection::NE;
                 }
-                _thd.cm_new = ObjectHighlight::make_road_stop(
+                _cm_active_object = ObjectHighlight::make_road_stop(
                     start_tile,
                     w,
                     h,
@@ -2450,19 +2320,13 @@ HighLightStyle UpdateTileSelection(HighLightStyle new_drawstyle) {
             }
         }
         new_drawstyle = HT_RECT;
-    } else if ((_thd.place_mode & HT_POLY) && _thd.cm_new_poly_terra) {
-        _thd.cm_new = ObjectHighlight::make_polyrail(TileVirtXY(_thd.selstart.x, _thd.selstart.y),
-                                                     TileVirtXY(_thd.selend.x, _thd.selend.y),
-                                                     _thd.cm_poly_dir,
-                                                     TileVirtXY(_thd.selstart2.x, _thd.selstart2.y),
-                                                     TileVirtXY(_thd.selend2.x, _thd.selend2.y),
-                                                     _thd.cm_poly_dir2);
     }
-    if (force_new || _thd.cm != _thd.cm_new) {
-        _thd.cm.MarkDirty();
-        _thd.cm = _thd.cm_new;
-        _thd.cm.UpdateTiles();
-        _thd.cm.MarkDirty();
+    static ObjectHighlight _cm_prev_object;
+    if (force_new || _cm_prev_object != _cm_active_object) {
+        _cm_prev_object.MarkDirty();
+        _cm_prev_object = _cm_active_object;
+        _cm_prev_object.UpdateTiles();
+        _cm_prev_object.MarkDirty();
     }
     return new_drawstyle;
 }
@@ -2587,7 +2451,7 @@ ZoningBorder GetAnyStationCatchmentBorder(TileIndex tile) {
 }
 
 void SetIndustryForbiddenTilesHighlight(IndustryType type) {
-    if (_settings_client.gui.cm_show_industry_forbidden_tiles &&
+    if (false &&
             _industry_forbidden_tiles != type) {
         MarkWholeScreenDirty();
     }
@@ -2597,48 +2461,14 @@ void SetIndustryForbiddenTilesHighlight(IndustryType type) {
 
 
 PaletteID GetTreeShadePal(TileIndex tile) {
-    if (_settings_client.gui.cm_shaded_trees != 1)
-        return PAL_NONE;
-
-    Slope slope = GetTileSlope(tile);
-    switch (slope) {
-        case SLOPE_STEEP_N:
-        case SLOPE_N:
-            return CM_PALETTE_SHADE_S;
-
-        case SLOPE_NE:
-            return CM_PALETTE_SHADE_SW;
-
-        case SLOPE_E:
-        case SLOPE_STEEP_E:
-            return CM_PALETTE_SHADE_W;
-
-        case SLOPE_SE:
-            return CM_PALETTE_SHADE_NW;
-
-        case SLOPE_STEEP_S:
-        case SLOPE_S:
-            return CM_PALETTE_SHADE_N;
-
-        case SLOPE_SW:
-            return CM_PALETTE_SHADE_NE;
-
-        case SLOPE_STEEP_W:
-        case SLOPE_W:
-            return CM_PALETTE_SHADE_E;
-
-        case SLOPE_NW:
-            return CM_PALETTE_SHADE_SE;
-
-        default:
-            return PAL_NONE;
-    }
+    /* Tree shading was driven by a cmclient GUI setting; not ported. */
+    return PAL_NONE;
 }
 
 ActiveTool _at;
 
 static void ResetVanillaHighlight() {
-    if (_thd.window_class != WC_INVALID) {
+    if (_thd.window_class != WindowClass::Invalid) {
         /* Undo clicking on button and drag & drop */
         Window *w = _thd.GetCallbackWnd();
         /* Call the abort function, but set the window class to something
@@ -2646,10 +2476,10 @@ static void ResetVanillaHighlight() {
          * the 'next' window class must not be done because recursion into
          * this function might in some cases reset the newly set object to
          * place or not properly reset the original selection. */
-        _thd.window_class = WC_INVALID;
+        _thd.window_class = WindowClass::Invalid;
         if (w != nullptr) {
             w->OnPlaceObjectAbort();
-            CloseWindowById(WC_TOOLTIPS, 0);
+            CloseWindowById(WindowClass::ToolTips, 0);
         }
     }
 
@@ -2658,7 +2488,7 @@ static void ResetVanillaHighlight() {
 
     SetTileSelectSize(1, 1);
 
-    _thd.make_square_red = false;
+    _thd.redsq = INVALID_TILE;
 }
 
 void SetActiveTool(up<Tool> &&tool) {
@@ -2685,9 +2515,7 @@ void UpdateActiveTool() {
     auto tile = pt.x == -1 ? INVALID_TILE : TileVirtXY(pt.x, pt.y);
 
     ToolGUIInfo info;
-    if (citymania::HasStationHighlight()) {
-        info = GetStationHighlightGUIInfo();
-    } else if (_at.tool != nullptr) {
+    if (_at.tool != nullptr) {
         _at.tool->Update(pt, tile);
         info = _at.tool->GetGUIInfo();
     }
@@ -2696,45 +2524,9 @@ void UpdateActiveTool() {
     for (auto t : tiles_changed)
         MarkTileDirtyByTile(t);
 
-    if (cc.GetExpensesType() != INVALID_EXPENSES || cc.GetErrorMessage() != INVALID_STRING_ID) {
-        // Add CommandCost info
-        auto err = cc.GetErrorMessage();
-        if (cc.Succeeded()) {
-            auto money = cc.GetCost();
-            if (money != 0) {
-                overlay_data.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_COST_OK, money));
-            }
-        } else if (err == STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY) {
-            overlay_data.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_COST_NO_MONEY, cc.GetCost()));
-        } else {
-            EncodedString error = std::move(cc.GetEncodedMessage());
-            if (error.empty()) error = GetEncodedStringIfValid(err);
-
-            if (!error.empty()) overlay_data.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_ERROR, error.GetDecodedString()));
-            auto extra_msg = cc.GetExtraErrorMessage();
-            if (extra_msg != INVALID_STRING_ID) {
-                overlay_data.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_ERROR, extra_msg));
-            }
-
-            if (extra_msg == INVALID_STRING_ID && error.empty()) {
-                overlay_data.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_ERROR_UNKNOWN));
-            }
-        }
-    }
-
-    /* Update overlay */
-    if (overlay_data.size() > 0) {
-        auto w = FindWindowFromPt(_cursor.pos.x, _cursor.pos.y);
-        if (w == nullptr) { HideBuildInfoOverlay(); return; }
-        auto vp = IsPtInWindowViewport(w, _cursor.pos.x, _cursor.pos.y);
-        if (vp == nullptr) { HideBuildInfoOverlay(); return; }
-        Point pto = RemapCoords2(TileX(tile) * TILE_SIZE, TileY(tile) * TILE_SIZE);
-        pto.x = UnScaleByZoom(pto.x - vp->virtual_left, vp->zoom) + vp->left;
-        pto.y = UnScaleByZoom(pto.y - vp->virtual_top, vp->zoom) + vp->top;
-        ShowBuildInfoOverlay(pto.x, pto.y, overlay_data);
-    } else {
-        HideBuildInfoOverlay();
-    }
+    /* cmclient's build-info overlay (ShowBuildInfoOverlay) is not ported;
+     * the highlight map above is the visible part. */
+    (void)overlay_data;
 }
 
 bool _prev_left_button_down = false;

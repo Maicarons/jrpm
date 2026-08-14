@@ -68,7 +68,7 @@ static bool _place_road_start_half_x;
 static bool _place_road_start_half_y;
 static bool _place_road_end_half;
 
-static RoadType _cur_roadtype;
+RoadType _cur_roadtype;
 
 static DiagDirection _road_depot_orientation;
 

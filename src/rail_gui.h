@@ -32,6 +32,7 @@ struct StationPickerSelection {
 };
 
 extern StationPickerSelection _station_gui;
+extern RailType _cur_railtype;
 
 
 #endif /* RAIL_GUI_H */

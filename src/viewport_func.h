@@ -13,6 +13,7 @@
 #include "gfx_type.h"
 #include "sprite.h"
 #include "viewport_type.h"
+#include "tilehighlight_type.h"
 #include "window_type.h"
 #include "tile_map.h"
 #include "station_type.h"
@@ -151,6 +152,8 @@ void ViewportMapInvalidateTunnelCacheByTile(const TileIndex tile, const Axis axi
 void ViewportMapBuildTunnelCache();
 
 void DrawTileSelectionRect(const TileInfo *ti, PaletteID pal);
+void DrawAutorailSelection(const TileInfo *ti, HighLightStyle highlight_style, PaletteID pal);
+void SetSelectionTilesDirty();
 void DrawSelectionSprite(SpriteID image, PaletteID pal, const TileInfo *ti, int z_offset, FoundationPart foundation_part, int extra_offs_x = 0, int extra_offs_y = 0, const SubSprite *sub = nullptr);
 
 struct Waypoint;

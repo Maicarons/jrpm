@@ -34,6 +34,7 @@ struct RoadStopPickerSelection {
 };
 
 extern RoadStopPickerSelection _roadstop_gui;
+extern RoadType _cur_roadtype;
 
 
 #endif /* ROAD_GUI_H */

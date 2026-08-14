@@ -1598,7 +1598,7 @@ static HighLightStyle GetPartOfAutoLine(int px, int py, const Point &selstart, c
  * @param highlight_style Highlight to draw
  * @param pal Palette to use, -1 to autodetect
  */
-static void DrawAutorailSelection(const TileInfo *ti, HighLightStyle highlight_style, PaletteID pal = -1)
+void DrawAutorailSelection(const TileInfo *ti, HighLightStyle highlight_style, PaletteID pal = -1)
 {
 	SpriteID image;
 	FoundationPart foundation_part = FOUNDATION_PART_NORMAL;
@@ -5064,7 +5064,7 @@ void ChangeFixedViewportRoutePath(VehicleID from, VehicleID to)
  *
  * @ingroup dirty
  */
-static void SetSelectionTilesDirty()
+void SetSelectionTilesDirty()
 {
 	int x_size = _thd.size.x;
 	int y_size = _thd.size.y;
