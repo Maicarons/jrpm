@@ -11,6 +11,10 @@
 #include "command_func.h"
 #include "rail_gui.h"
 #include "road_gui.h"
+#include "station_cmd.h"
+#include "station_gui.h"
+#include "station_func.h"
+#include "station_base.h"
 
 extern void GetStationLayout(uint8_t *layout, uint numtracks, uint plat_len, const struct StationSpec *statspec);
 
@@ -23,6 +27,12 @@ extern void GetStationLayout(uint8_t *layout, uint numtracks, uint plat_len, con
 #define CM_SPR_PALETTE_ZONING_YELLOW PALETTE_TO_YELLOW
 #define CM_SPR_PALETTE_ZONING_WHITE PALETTE_TO_WHITE
 #define CM_PALETTE_TINT_BASE PALETTE_TO_RED
+/* cmclient station highlight palette tints (cm_station_gui.cpp). */
+#define CM_PALETTE_TINT_WHITE   PALETTE_TO_WHITE
+#define CM_PALETTE_TINT_CYAN    PALETTE_TO_CYAN
+#define CM_PALETTE_TINT_BLUE    PALETTE_TO_BLUE
+#define CM_PALETTE_TINT_RED_DEEP PALETTE_TO_RED
+#define CM_PALETTE_TINT_YELLOW  PALETTE_TO_YELLOW
 /* cmclient's extra select-proc values are now part of jrpm's
  * ViewportDragDropSelectionProcess enum (viewport_type.h). */
 #include "house.h"
@@ -88,6 +98,7 @@ extern void SetSelectionTilesDirty();
 
 extern StationPickerSelection _station_gui; ///< Settings of the station picker.
 extern RoadStopPickerSelection _roadstop_gui;
+
 
 template <>
 struct std::hash<citymania::ObjectTileHighlight> {
@@ -163,6 +174,29 @@ struct std::hash<citymania::ObjectTileHighlight> {
 
 namespace citymania {
 
+/** Compute the tile area into which the given station can be joined/extended
+ *  (cmclient port from cm_station_gui.cpp). */
+static TileArea GetStationJoinArea(StationID station_id)
+{
+    auto station = Station::GetIfValid(station_id);
+    if (station == nullptr) return {};
+    auto &r = station->rect;
+    auto d = (int)_settings_game.station.station_spread - 1;
+    TileArea ta(
+        TileXY(std::max<int>(r.right - d, 0), std::max<int>(r.bottom - d, 0)),
+        TileXY(std::min<int>(r.left + d, (int)Map::SizeX() - 1),
+               std::min<int>(r.top + d, (int)Map::SizeY() - 1)));
+    return ta;
+}
+
+/* Cached GUI info (highlight map + overlay data + cost) for the currently
+ * active object tool. Filled by citymania::UpdateTileSelection() and
+ * consumed by citymania::UpdateActiveTool(). Mirrors cmclient's
+ * placement-driven ToolGUIInfo but bypasses the Tool class machinery
+ * (which is not ported to jrpm). */
+ToolGUIInfo _cm_gui_info;
+bool _cm_gui_active = false;
+
 TileArea ClampToVisibleMap(const TileArea &area) {
     if (area.tile >= Map::Size()) return {};
     auto x = TileX(area.tile);
@@ -194,7 +228,6 @@ TileArea ClampToVisibleMap(const TileArea &area) {
     };
 }
 
-extern CargoArray GetProductionAroundTiles(TileIndex tile, int w, int h, int rad);
 
 extern HighLightStyle (*GetPartOfAutoLine)(int px, int py, const Point &selstart, const Point &selend, HighLightStyle dir);
 
@@ -2276,39 +2309,146 @@ HighLightStyle UpdateTileSelection(HighLightStyle new_drawstyle) {
             }
         }
     } else if (_thd.select_proc == DDSP_BUILD_STATION || _thd.select_proc == DDSP_BUILD_BUSSTOP
-               || _thd.select_proc == DDSP_BUILD_TRUCKSTOP) {  // station
+               || _thd.select_proc == DDSP_BUILD_TRUCKSTOP) {  // station / road stop (cmclient port)
         if (_thd.size.x >= (int)TILE_SIZE && _thd.size.y >= (int)TILE_SIZE) {
-            auto start_tile = TileXY(_thd.new_pos.x / TILE_SIZE, _thd.new_pos.y / TILE_SIZE);
-            auto w = _thd.new_size.x / TILE_SIZE;
-            auto h = _thd.new_size.y / TILE_SIZE;
-            if (_thd.select_proc == DDSP_BUILD_STATION)
+            const auto start_tile = TileXY(_thd.new_pos.x / TILE_SIZE, _thd.new_pos.y / TILE_SIZE);
+            const auto w = _thd.new_size.x / TILE_SIZE;
+            const auto h = _thd.new_size.y / TILE_SIZE;
+            const TileArea ta(start_tile, w, h);
+
+            /* Object preview sprite (station building or road stop). */
+            if (_thd.select_proc == DDSP_BUILD_STATION) {
                 _cm_active_object = ObjectHighlight::make_rail_station(
-                    start_tile,
-                    w,
-                    h,
-                    _station_gui.axis,
-                    _station_gui.sel_class,
-                    _station_gui.sel_type
-                );
-            else if (_thd.select_proc == DDSP_BUILD_BUSSTOP || _thd.select_proc == DDSP_BUILD_TRUCKSTOP) {
+                    start_tile, w, h, _station_gui.axis, _station_gui.sel_class, _station_gui.sel_type);
+            } else { /* BUSSTOP / TRUCKSTOP */
                 auto ddir = _roadstop_gui.orientation;
-                auto ta = TileArea(start_tile, w, h);
-                if (pt.x != -1 && ddir == DiagDirection::Invalid) {
-                    ddir = DiagDirection::NE;
-                }
+                if (pt.x != -1 && ddir == DiagDirection::Invalid) ddir = DiagDirection::NE;
                 _cm_active_object = ObjectHighlight::make_road_stop(
-                    start_tile,
-                    w,
-                    h,
-                    _cur_roadtype,
-                    ddir,
+                    start_tile, w, h, _cur_roadtype, ddir,
                     _thd.select_proc == DDSP_BUILD_TRUCKSTOP,
-                    _roadstop_gui.sel_class,
-                    _roadstop_gui.sel_type
-                );
+                    _roadstop_gui.sel_class, _roadstop_gui.sel_type);
             }
+
+            /* Extended preview: coverage area + cost overlay (cmclient port of
+             * cm_station_gui.cpp::PlacementAction::PrepareGUIInfo). */
+            if (_thd.select_proc == DDSP_BUILD_STATION) {
+                BuildInfoOverlayData overlay;
+                HighlightMap hlmap;
+                CommandCost cc;
+                int rad = (int)CA_UNMODIFIED + _settings_game.station.catchment_increase;
+                if (_settings_game.station.modified_catchment) rad = _settings_game.station.catchment_increase;
+                TileArea rad_area = ta;
+                rad_area.Expand(rad);
+                rad_area = ClampToVisibleMap(rad_area);
+
+                /* Cost via DoCommandFlag::QueryCost. */
+                cc = Command<Commands::BuildRailStation>::Do(
+                    CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildRailStation>()) | DoCommandFlag::QueryCost,
+                    start_tile, _cur_railtype, _station_gui.axis,
+                    (uint8_t)ta.w, (uint8_t)ta.h,
+                    _station_gui.sel_class, _station_gui.sel_type,
+                    StationID::Invalid(), false);
+
+                /* Coverage tint (catchment area). */
+                for (auto t : rad_area) {
+                    hlmap.Add(t, ObjectTileHighlight::make_tint(CM_PALETTE_TINT_WHITE));
+                }
+                {
+                    std::set<TileIndex> cov_set;
+                    for (auto t : rad_area) cov_set.insert(t);
+                    hlmap.AddTilesBorder(cov_set, CM_PALETTE_TINT_WHITE);
+                }
+                /* Station building sprite preview on top of the white frame. */
+                _cm_active_object.AddToHighlightMap(hlmap, CM_PALETTE_TINT_WHITE);
+
+                /* Cost overlay line. */
+                if (cc.GetCost() != 0) {
+                    auto err = cc.GetErrorMessage();
+                    if (cc.Succeeded()) {
+                        overlay.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_COST_OK, cc.GetCost()));
+                    } else if (err == STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY) {
+                        overlay.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_COST_NO_MONEY, cc.GetCost()));
+                    } else {
+                        overlay.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_ERROR_UNKNOWN));
+                    }
+                }
+
+                /* Supplies (cmclient port). */
+                {
+                    auto production = GetProductionAroundTiles(ta.tile, (int)ta.w, (int)ta.h, rad);
+                    bool has_header = false;
+                    for (CargoType i : EnumRange(NUM_CARGO)) {
+                        if (production[i] == 0) continue;
+                        const CargoSpec *cs = CargoSpec::Get(i);
+                        if (cs == nullptr) continue;
+                        if (!has_header) {
+                            overlay.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_STATION_SUPPLIES));
+                            has_header = true;
+                        }
+                        overlay.emplace_back(1, cs->GetCargoIcon(), GetString(CM_STR_BUILD_INFO_OVERLAY_STATION_CARGO, i, production[i] >> 8));
+                    }
+                }
+
+                /* Accepts (cmclient port). */
+                {
+                    CargoTypes always_accepted;
+                    CargoArray cargoes = GetAcceptanceAroundTiles(ta.tile, (int)ta.w, (int)ta.h, rad).first;
+                    std::vector<std::pair<uint, std::string>> cargostr;
+                    for (CargoType i : EnumRange(NUM_CARGO)) {
+                        if (cargoes[i] > 0) {
+                            if (cargoes[i] < 8) {
+                                cargostr.emplace_back(2, GetString(CM_STR_BULID_INFO_OVERLAY_ACCEPTS_CARGO_PARTIAL, CargoTypes{}.Set(i), cargoes[i]));
+                            } else if (always_accepted.Test(i)) {
+                                cargostr.emplace_back(1, GetString(CM_STR_BULID_INFO_OVERLAY_ACCEPTS_CARGO_FULL, CargoTypes{}.Set(i), cargoes[i]));
+                            } else {
+                                cargostr.emplace_back(0, GetString(CM_STR_BULID_INFO_OVERLAY_ACCEPTS_CARGO, CargoTypes{}.Set(i)));
+                            }
+                        }
+                    }
+                    std::stable_sort(cargostr.begin(), cargostr.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
+                    std::string cargolist;
+                    for (auto &[_, s] : cargostr) {
+                        if (!cargolist.empty()) cargolist += ", ";
+                        cargolist += s;
+                    }
+                    if (cargolist.empty()) cargolist = GetString(STR_JUST_NOTHING);
+                    overlay.emplace_back(0, PAL_NONE, GetString(CM_STR_BULID_INFO_OVERLAY_ACCEPTS, cargolist));
+                }
+
+                /* Town + Size (cmclient port). */
+                {
+                    Town *t = ClosestTownFromTile(ta.tile, _settings_game.economy.dist_local_authority);
+                    if (t != nullptr) {
+                        auto town_allowed = CheckIfAuthorityAllowsNewStation(ta.tile, {}).Succeeded();
+                        auto rating = t->ratings[_current_company];
+                        auto dist = DistanceManhattan(t->xy, ta.tile);
+                        StringID zone_id;
+                        if (dist <= 10) {
+                            zone_id = CM_STR_BULID_INFO_OVERLAY_TOWN_S_ADS;
+                        } else if (dist <= 15) {
+                            zone_id = CM_STR_BULID_INFO_OVERLAY_TOWN_M_ADS;
+                        } else if (dist <= 20) {
+                            zone_id = CM_STR_BULID_INFO_OVERLAY_TOWN_L_ADS;
+                        } else {
+                            zone_id = CM_STR_BULID_INFO_OVERLAY_TOWN_NO_ADS;
+                        }
+                        overlay.emplace_back(0, PAL_NONE, GetString(
+                            town_allowed ? CM_STR_BULID_INFO_OVERLAY_TOWN_ALLOWS : CM_STR_BULID_INFO_OVERLAY_TOWN_DENIES,
+                            t->index, rating, zone_id));
+                    } else {
+                        overlay.emplace_back(0, PAL_NONE, GetString(CM_STR_BULID_INFO_OVERLAY_TOWN_NONE));
+                    }
+                    overlay.emplace_back(0, PAL_NONE, GetString(CM_STR_BULID_INFO_OVERLAY_STATION_SIZE, ta.w, ta.h));
+                }
+                _cm_gui_info = {std::move(hlmap), std::move(overlay), cc};
+                _cm_gui_active = true;
+            } else {
+                _cm_gui_info = {};
+                _cm_gui_active = false;
+            }
+            new_drawstyle = HT_RECT;
         }
-        new_drawstyle = HT_RECT;
+        force_new = true;
     }
     if (force_new || _cm_prev_object != _cm_active_object) {
         _cm_prev_object.MarkDirty();
@@ -2506,6 +2646,12 @@ void UpdateActiveTool() {
     if (_at.tool != nullptr) {
         _at.tool->Update(pt, tile);
         info = _at.tool->GetGUIInfo();
+    } else if (_cm_gui_active) {
+        /* jrpm: station placement preview (cmclient port of
+         * PlacementAction::PrepareGUIInfo) -- the active object hint
+         * plus the catchment coverage tint plus the cost overlay all
+         * travel through this single ToolGUIInfo blob. */
+        info = _cm_gui_info;
     } else if (_cm_prev_object.type != ObjectHighlight::Type::NONE) {
         /* jrpm: no Tool classes are ported; feed the active object
          * highlight (built & UpdateTiles()ed by UpdateTileSelection)

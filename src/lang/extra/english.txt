@@ -2624,6 +2624,22 @@ CM_STR_BUILD_INFO_OVERLAY_STATION_CARGO                         :{GOLD}{CARGO_LO
 CM_STR_BUILD_INFO_OVERLAY_ERROR                                 :{RED}Error: {RAW_STRING}
 CM_STR_BUILD_INFO_OVERLAY_ERROR_UNKNOWN                         :{RED}Unknown Error!
 
+# cmclient station placement overlay (cm_station_gui.cpp PlacementAction)
+CM_STR_BULID_INFO_OVERLAY_NEW_STATION                           :{GOLD}New station
+CM_STR_BULID_INFO_OVERLAY_JOIN_STATION                          :{LTBLUE}Join {STATION}
+CM_STR_BULID_INFO_OVERLAY_ACCEPTS                               :{WHITE}Accepts: {GOLD}{RAW_STRING}
+CM_STR_BULID_INFO_OVERLAY_ACCEPTS_CARGO                         :{GOLD}{CARGO_LIST}
+CM_STR_BULID_INFO_OVERLAY_ACCEPTS_CARGO_FULL                    :{GOLD}{CARGO_LIST}({NUM}/8)
+CM_STR_BULID_INFO_OVERLAY_ACCEPTS_CARGO_PARTIAL                 :{SILVER}{CARGO_LIST}({NUM}/8)
+CM_STR_BULID_INFO_OVERLAY_TOWN_NONE                             :{WHITE}Town: {GOLD}None
+CM_STR_BULID_INFO_OVERLAY_TOWN_ALLOWS                           :{WHITE}Town: {GREEN}{TOWN}[{NUM}], {STRING}
+CM_STR_BULID_INFO_OVERLAY_TOWN_DENIES                           :{WHITE}Town: {RED}{TOWN}[{NUM}], {STRING}
+CM_STR_BULID_INFO_OVERLAY_TOWN_NO_ADS                           :{WHITE}no ad zone
+CM_STR_BULID_INFO_OVERLAY_TOWN_L_ADS                            :{GOLD}large {WHITE}ad zone
+CM_STR_BULID_INFO_OVERLAY_TOWN_M_ADS                            :{GOLD}medium {WHITE}ad zone
+CM_STR_BULID_INFO_OVERLAY_TOWN_S_ADS                            :{GOLD}small {WHITE}ad zone
+CM_STR_BULID_INFO_OVERLAY_STATION_SIZE                          :{WHITE}Size: {GOLD}{NUM}x{NUM}
+
 # Land tooltips (cmclient port)
 CM_STR_LAND_TOOLTIPS_HOUSE_NAME                                 :{LTBLUE}{STRING}
 CM_STR_LAND_TOOLTIPS_HOUSE_POPULATION                           :{BLACK}Population: {NUM}
