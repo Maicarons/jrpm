@@ -20,14 +20,17 @@ class GlobalAI extends AIController {
 		AICompany.SetName("GlobalAI Demo");
 
 		if (!AIGlobal.IsGlobalAccessAllowed()) {
-			AILog.Info("Global API not allowed. Enable the game setting 'game.script.allow_global_ai_access' to let this AI see the whole game.", AILog.INFO);
-			return;
+			AILog.Info("Global API not allowed. Enable the game setting 'game.script.allow_global_ai_access' to let this AI see the whole game.");
+			/* Keep the AI alive; it would otherwise be treated as having died. */
+			while (true) {
+				AIController.Sleep(100);
+			}
 		}
 
-		AILog.Info("Whole-game perception demo:", AILog.INFO);
+		AILog.Info("Whole-game perception demo:");
 
 		local companies = AIGlobalCompanyList();
-		AILog.Info("Companies in game: " + companies.Count(), AILog.INFO);
+		AILog.Info("Companies in game: " + companies.Count());
 
 		foreach (company_id, value in companies) {
 			local name    = AIGlobal.GetCompanyName(company_id);
@@ -44,11 +47,11 @@ class GlobalAI extends AIController {
 			AILog.Info("  " + name + ": balance=" + balance
 				+ " loan=" + loan + " value=" + worth + " rating=" + rating
 				+ " vehicles(t/r/s/a)=" + trains + "/" + road + "/" + ships + "/" + planes
-				+ " stations=" + stations, AILog.INFO);
+				+ " stations=" + stations);
 		}
 
 		AILog.Info("Map size: " + AIGlobal.GetMapSizeX() + "x" + AIGlobal.GetMapSizeY()
-			+ ", year: " + AIGlobal.GetYear() + ", date: " + AIGlobal.GetDate(), AILog.INFO);
+			+ ", year: " + AIGlobal.GetYear() + ", date: " + AIGlobal.GetDate());
 
 		/*
 		 * This is where an AI's own control logic would plug in: for example,
