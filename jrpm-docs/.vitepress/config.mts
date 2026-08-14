@@ -8,6 +8,15 @@ export default defineConfig({
   lastUpdated: true,
   cleanUrls: true,
 
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
+    ['meta', { name: 'theme-color', content: '#00b7ff' }],
+    ['meta', { property: 'og:image', content: '/jrpm-hero.png' }],
+    ['meta', { property: 'og:title', content: 'OpenTTD-JRPM · 文档站' }],
+    ['meta', { property: 'og:description', content: 'JGR Patchpack 精品 fork —— 机车换挂 · 模块化机场 · 并行下载 · 整局感知 AI' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+  ],
+
   themeConfig: {
     logo: '/logo.svg',
     nav: [
