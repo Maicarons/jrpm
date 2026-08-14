@@ -58,6 +58,11 @@
 
 #include "safeguards.h"
 
+/* cmclient port: industry type/layout currently being funded, consumed by
+ * the object-level highlight system (cm_highlight.cpp). */
+uint32_t _cm_funding_layout = 0;
+IndustryType _cm_funding_type = IT_INVALID;
+
 bool _ignore_industry_restrictions;
 static std::bitset<NUM_INDUSTRYTYPES> _displayed_industries; ///< Communication from the industry chain window to the smallmap window about what industries to display.
 static std::bitset<NUM_INDUSTRYTYPES> _displayed_industries_in;
@@ -685,7 +690,7 @@ public:
 						Command<Commands::BuildIndustry>::Post(STR_ERROR_CAN_T_CONSTRUCT_THIS_INDUSTRY, TileIndex{}, this->selected_type, 0, false, InteractiveRandom());
 						this->HandleButtonClick(WID_DPI_FUND_WIDGET);
 					} else {
-						HandlePlacePushButton(this, WID_DPI_FUND_WIDGET, SPR_CURSOR_INDUSTRY, HT_RECT);
+						HandlePlacePushButton(this, WID_DPI_FUND_WIDGET, SPR_CURSOR_INDUSTRY, HT_RECT, CM_DDSP_FUND_INDUSTRY);
 					}
 				}
 				break;
@@ -707,6 +712,8 @@ public:
 		this->UpdateAvailability();
 
 		const IndustrySpec *indsp = GetIndustrySpec(this->selected_type);
+		_cm_funding_type = type;
+		_cm_funding_layout = (indsp != nullptr && !indsp->layouts.empty()) ? 0 : 0;
 
 		this->SetDirty();
 

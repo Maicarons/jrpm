@@ -211,6 +211,12 @@ enum ViewportDragDropSelectionProcess : uint8_t {
 	DDSP_CONVERT_ROAD,         ///< Road conversion
 	DDSP_CM_BLUEPRINT_AREA,     ///< Blueprint area selection (cmclient port)
 	DDSP_CM_RAIL_BLUEPRINT,   ///< Rail blueprint tool (cmclient port)
+
+	/* CityMania extra actions (ported from cmclient) */
+	CM_DDSP_FUND_INDUSTRY,     ///< Fund new industry
+	CM_DDSP_BUILD_ROAD_DEPOT,  ///< Build road depot
+	CM_DDSP_BUILD_RAIL_DEPOT,  ///< Build rail depot
+	CM_DDSP_BUILD_AIRPORT,     ///< Build airport
 };
 
 

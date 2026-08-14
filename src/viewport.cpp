@@ -5831,9 +5831,10 @@ void UpdateTileSelection()
 		if ((new_drawstyle & HT_DRAG_MASK) != HT_NONE) SetSelectionTilesDirty();
 	}
 
-	/* Object-level highlight (cmclient port): let the highlight framework
-	 * build its active-object preview from the tile selection. */
+	/* Object-level highlight (cmclient port): build the active-object
+	 * highlight map from the tile selection. */
 	citymania::UpdateTileSelection(new_drawstyle);
+	citymania::UpdateActiveTool();
 }
 
 /**
@@ -6857,9 +6858,9 @@ EventState VpHandlePlaceSizingDrag()
  * @param mode Mode to perform.
  * @param w %Window requesting the mode change.
  */
-void SetObjectToPlaceWnd(CursorID icon, PaletteID pal, HighLightStyle mode, Window *w)
+void SetObjectToPlaceWnd(CursorID icon, PaletteID pal, HighLightStyle mode, Window *w, ViewportDragDropSelectionProcess cm_process)
 {
-	SetObjectToPlace(icon, pal, mode, w->window_class, w->window_number, w->GetWindowToken());
+	SetObjectToPlace(icon, pal, mode, w->window_class, w->window_number, cm_process, w->GetWindowToken());
 }
 
 #include "table/animcursors.h"
@@ -6873,7 +6874,7 @@ void SetObjectToPlaceWnd(CursorID icon, PaletteID pal, HighLightStyle mode, Wind
  * @param window_num Number of the window in its class requesting the mode change.
  * @param window_token Window token of the window in its class requesting the mode change, if non-zero.
  */
-void SetObjectToPlace(CursorID icon, PaletteID pal, HighLightStyle mode, WindowClass window_class, WindowNumber window_num, WindowToken window_token)
+void SetObjectToPlace(CursorID icon, PaletteID pal, HighLightStyle mode, WindowClass window_class, WindowNumber window_num, ViewportDragDropSelectionProcess cm_process, WindowToken window_token)
 {
 	if (_thd.window_class != WindowClass::Invalid) {
 		/* Undo clicking on button and drag & drop */
@@ -6909,6 +6910,7 @@ void SetObjectToPlace(CursorID icon, PaletteID pal, HighLightStyle mode, WindowC
 	_thd.window_class = window_class;
 	_thd.window_number = window_num;
 	_thd.window_token = window_token;
+	_thd.select_proc = cm_process;
 
 	if ((mode & HT_DRAG_MASK) == HT_SPECIAL) { // special tools, like tunnels or docks start with presizing mode
 		VpStartPreSizing();

@@ -23,12 +23,8 @@ extern void GetStationLayout(uint8_t *layout, uint numtracks, uint plat_len, con
 #define CM_SPR_PALETTE_ZONING_YELLOW PALETTE_TO_YELLOW
 #define CM_SPR_PALETTE_ZONING_WHITE PALETTE_TO_WHITE
 #define CM_PALETTE_TINT_BASE PALETTE_TO_RED
-/* cmclient added extra select-proc values; jrpm's DDSP_* enum does not have
- * them, so map to impossible values (branches stay dead until ported). */
-#define CM_DDSP_FUND_INDUSTRY 999
-#define CM_DDSP_BUILD_ROAD_DEPOT 998
-#define CM_DDSP_BUILD_RAIL_DEPOT 997
-#define CM_DDSP_BUILD_AIRPORT 996
+/* cmclient's extra select-proc values are now part of jrpm's
+ * ViewportDragDropSelectionProcess enum (viewport_type.h). */
 #include "house.h"
 #include "industry.h"
 #include "landscape.h"
@@ -85,6 +81,7 @@ extern uint8_t _selected_airport_layout;
 extern DiagDirection _build_depot_direction; ///< Currently selected depot direction
 extern DiagDirection _road_depot_orientation;
 extern uint32_t _realtime_tick;
+/* Defined in industry_gui.cpp (cmclient port). */
 extern uint32_t _cm_funding_layout;
 extern IndustryType _cm_funding_type;
 extern void SetSelectionTilesDirty();
@@ -2153,6 +2150,9 @@ Zoning _zoning = {EvaluationMode::CHECKNOTHING, EvaluationMode::CHECKNOTHING};
 
 
 ObjectHighlight _cm_active_object;
+/* Holds the last built & UpdateTiles()ed active object (cmclient stores this
+ * in _thd.cm); used by UpdateActiveTool to populate _at.tiles for rendering. */
+ObjectHighlight _cm_prev_object;
 
 TileHighlight GetTileHighlight(const TileInfo *ti, TileType tile_type) {
     TileHighlight th;
@@ -2247,18 +2247,18 @@ HighLightStyle UpdateTileSelection(HighLightStyle new_drawstyle) {
         new_drawstyle = HT_BLUEPRINT_PLACE;
     } else if (pt.x == -1) {
     } else if (_thd.redsq != INVALID_TILE) {
-    } else if (false && _thd.select_proc == CM_DDSP_FUND_INDUSTRY) {
+    } else if (_thd.select_proc == CM_DDSP_FUND_INDUSTRY) {
         _cm_active_object = ObjectHighlight::make_industry(tile, _cm_funding_type, _cm_funding_layout);
         force_new = true;
         new_drawstyle = HT_RECT;
-    } else if (false && _thd.select_proc == CM_DDSP_BUILD_ROAD_DEPOT) {
+    } else if (_thd.select_proc == CM_DDSP_BUILD_ROAD_DEPOT) {
         auto dir = _road_depot_orientation;
         if (dir == DiagDirection::Invalid) {
             dir = DiagDirection::NE;
         }
         _cm_active_object = ObjectHighlight::make_road_depot(tile, _cur_roadtype, dir);
         new_drawstyle = HT_RECT;
-    } else if (false && _thd.select_proc == CM_DDSP_BUILD_RAIL_DEPOT) {
+    } else if (_thd.select_proc == CM_DDSP_BUILD_RAIL_DEPOT) {
         auto dir = _build_depot_direction;
         if (dir >= DiagDirection::End) {
             dir = DiagDirection::NE;
@@ -2310,7 +2310,6 @@ HighLightStyle UpdateTileSelection(HighLightStyle new_drawstyle) {
         }
         new_drawstyle = HT_RECT;
     }
-    static ObjectHighlight _cm_prev_object;
     if (force_new || _cm_prev_object != _cm_active_object) {
         _cm_prev_object.MarkDirty();
         _cm_prev_object = _cm_active_object;
@@ -2507,6 +2506,13 @@ void UpdateActiveTool() {
     if (_at.tool != nullptr) {
         _at.tool->Update(pt, tile);
         info = _at.tool->GetGUIInfo();
+    } else if (_cm_prev_object.type != ObjectHighlight::Type::NONE) {
+        /* jrpm: no Tool classes are ported; feed the active object
+         * highlight (built & UpdateTiles()ed by UpdateTileSelection)
+         * into _at.tiles so DrawTileSelection can render it. */
+        HighlightMap hlmap;
+        _cm_prev_object.AddToHighlightMap(hlmap, PAL_NONE);
+        info = {std::move(hlmap), {}, {}};
     }
     auto [hlmap, overlay_data, cc] = info;
     auto tiles_changed = _at.tiles.UpdateWithMap(hlmap);

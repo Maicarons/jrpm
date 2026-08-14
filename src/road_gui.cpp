@@ -70,7 +70,7 @@ static bool _place_road_end_half;
 
 RoadType _cur_roadtype;
 
-static DiagDirection _road_depot_orientation;
+DiagDirection _road_depot_orientation;
 
 struct RoadWaypointPickerSelection {
 	RoadStopClassID sel_class; ///< Selected road waypoint class.
@@ -570,7 +570,9 @@ struct BuildRoadToolbarWindow : Window {
 		_one_way_button_clicked = false;
 
 		if (widget != WID_ROT_ONE_WAY && widget != WID_ROT_REMOVE) {
-			started = HandlePlacePushButton(this, widget, this->GetCursorForWidget(widget), this->GetHighLightStyleForWidget(widget));
+			ViewportDragDropSelectionProcess cm_process = DDSP_DEMOLISH_AREA;
+			if (widget == WID_ROT_DEPOT) cm_process = CM_DDSP_BUILD_ROAD_DEPOT;
+			started = HandlePlacePushButton(this, widget, this->GetCursorForWidget(widget), this->GetHighLightStyleForWidget(widget), cm_process);
 			this->last_started_action = widget;
 		}
 

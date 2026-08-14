@@ -166,12 +166,10 @@ public:
 	virtual void OnMouseOver(Point pt, WidgetID widget) override
 	{
 		if (pt.x != -1 && IsViewportMouseHoverActive()) {
-			/* cmclient-style land tooltips; fall back to the built-in tooltip. */
+			/* cmclient-style land tooltips; replaces the built-in tooltip. */
 			const Point p = GetTileBelowCursor();
 			const TileIndex tile = TileVirtXY(p.x, p.y);
-			if (tile < Map::Size() && !citymania::ShowLandTooltips(tile, this)) {
-				ShowTooltipForTile(this, tile);
-			}
+			if (tile < Map::Size()) citymania::ShowLandTooltips(tile, this);
 		}
 	}
 

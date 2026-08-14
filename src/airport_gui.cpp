@@ -52,9 +52,9 @@ static AirType _cur_airtype;                     ///< Air type of the current bu
 static AirportTileType _airport_tile_type;       ///< Current airport tile type (hangar, infrastructure...
 static DiagDirection _rotation_dir;              ///< Exit direction for new hangars, or rotation for heliports and infrastructure.
 static bool _remove_button_clicked;              ///< Flag whether 'remove' toggle-button is currently enabled
-static AirportClassID _selected_airport_class;   ///< the currently visible airport class
-static int _selected_airport_index;              ///< the index of the selected airport in the current class or -1
-static uint8_t _selected_airport_layout;         ///< selected airport layout number.
+AirportClassID _selected_airport_class;   ///< the currently visible airport class
+int _selected_airport_index;              ///< the index of the selected airport in the current class or -1
+uint8_t _selected_airport_layout;         ///< selected airport layout number.
 static DiagDirection _selected_rotation;         ///< selected rotation for airport.
 static uint8_t _selected_infra_catch_rotation;   ///< selected rotation for infrastructure.
 static AirportTiles _selected_infra_catch;       ///< selected infrastructure type.
@@ -296,7 +296,7 @@ struct BuildAirToolbarWindow : Window {
 				return;
 
 			case WID_AT_AIRPORT:
-				if (HandlePlacePushButton(this, WID_AT_AIRPORT, SPR_CURSOR_AIRPORT, HT_RECT)) {
+				if (HandlePlacePushButton(this, WID_AT_AIRPORT, SPR_CURSOR_AIRPORT, HT_RECT, CM_DDSP_BUILD_AIRPORT)) {
 					ShowBuildAirportPicker(this);
 					this->last_user_action = widget;
 				}

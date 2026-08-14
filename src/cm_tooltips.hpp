@@ -11,7 +11,7 @@ class LandInfoWindow;
 
 namespace citymania {
 
-bool ShowLandTooltips(TileIndex tile, Window *parent);
+void ShowLandTooltips(TileIndex tile, Window *parent);
 Window *FindHoverableWindowFromPt(int x, int y);
 
 } // namespace citymania

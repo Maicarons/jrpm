@@ -81,7 +81,7 @@ void CcGiveMoney(const CommandCost &result, Money money, CompanyID dest_company)
  * @param mode Tile highlighting mode, e.g. drawing a rectangle or a dot on the ground
  * @return true if the button is clicked, false if it's unclicked
  */
-bool HandlePlacePushButton(Window *w, WidgetID widget, CursorID cursor, HighLightStyle mode)
+bool HandlePlacePushButton(Window *w, WidgetID widget, CursorID cursor, HighLightStyle mode, ViewportDragDropSelectionProcess cm_process)
 {
 	if (w->IsWidgetDisabled(widget)) return false;
 
@@ -93,7 +93,7 @@ bool HandlePlacePushButton(Window *w, WidgetID widget, CursorID cursor, HighLigh
 		return false;
 	}
 
-	SetObjectToPlace(cursor, PAL_NONE, mode, w->window_class, w->window_number);
+	SetObjectToPlace(cursor, PAL_NONE, mode, w->window_class, w->window_number, cm_process);
 	w->LowerWidget(widget);
 	return true;
 }
@@ -555,13 +555,11 @@ struct MainWindow : Window
 	virtual void OnMouseOver(Point pt, WidgetID widget) override
 	{
 		if (pt.x != -1 && _game_mode != GameMode::Menu && IsViewportMouseHoverActive()) {
-			/* cmclient-style land tooltips (house/industry/station details); fall back to
-			 * the built-in tooltip (town name, depots, waypoints) when not covered. */
+			/* cmclient-style land tooltips (house/industry/station details).
+			 * This replaces the built-in tooltip exactly like cmclient does. */
 			const Point p = GetTileBelowCursor();
 			const TileIndex tile = TileVirtXY(p.x, p.y);
-			if (tile < Map::Size() && !citymania::ShowLandTooltips(tile, this)) {
-				ShowTooltipForTile(this, tile);
-			}
+			if (tile < Map::Size()) citymania::ShowLandTooltips(tile, this);
 		}
 	}
 

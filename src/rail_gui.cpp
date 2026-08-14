@@ -64,7 +64,7 @@
 
 RailType _cur_railtype;               ///< Rail type of the current build-rail toolbar.
 static bool _remove_button_clicked;          ///< Flag whether 'remove' toggle-button is currently enabled
-static DiagDirection _build_depot_direction; ///< Currently selected depot direction
+DiagDirection _build_depot_direction; ///< Currently selected depot direction
 static bool _convert_signal_button;          ///< convert signal button in the signal GUI pressed
 static bool _trace_restrict_button;          ///< trace restrict button in the signal GUI pressed
 static bool _program_signal_button;          ///< program signal button in the signal GUI pressed
@@ -800,7 +800,9 @@ struct BuildRailToolbarWindow : Window {
 		}
 
 		this->last_user_action = widget;
-		bool started = HandlePlacePushButton(this, widget, this->GetCursorForWidget(widget), this->GetHighLightStyleForWidget(widget));
+		ViewportDragDropSelectionProcess cm_process = DDSP_DEMOLISH_AREA;
+		if (widget == WID_RAT_BUILD_DEPOT) cm_process = CM_DDSP_BUILD_RAIL_DEPOT;
+		bool started = HandlePlacePushButton(this, widget, this->GetCursorForWidget(widget), this->GetHighLightStyleForWidget(widget), cm_process);
 
 		switch (widget) {
 			case WID_RAT_BUILD_DEPOT:

@@ -222,14 +222,14 @@ struct LandTooltipsWindow : public Window
     }
 };
 
-bool ShowLandTooltips(TileIndex tile, Window *parent) {
+void ShowLandTooltips(TileIndex tile, Window *parent) {
     static TileIndex last_tooltip_tile = INVALID_TILE;
-    if (tile == last_tooltip_tile) return false;
+    if (tile == last_tooltip_tile) return;
     last_tooltip_tile = tile;
 
     if (tile == INVALID_TILE) {
         CloseWindowById(WindowClass::CmLandTooltips, 0);
-        return false;
+        return;
     }
 
     uint param = 0;
@@ -262,9 +262,8 @@ bool ShowLandTooltips(TileIndex tile, Window *parent) {
     }
     CloseWindowById(WindowClass::CmLandTooltips, 0);
 
-    if (param == 0) return false;
+    if (param == 0) return;
     new LandTooltipsWindow(parent, param);
-    return true;
 }
 
 /* copied from window.cpp */
