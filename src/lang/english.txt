@@ -1538,6 +1538,9 @@ STR_CONFIG_SETTING_FREIGHT_TRAINS_HELPTEXT                      :Set the impact 
 STR_CONFIG_SETTING_PLANE_SPEED                                  :Plane speed factor: {STRING2}
 STR_CONFIG_SETTING_PLANE_SPEED_HELPTEXT                         :Set the relative speed of planes compared to other vehicle types, to reduce the amount of income of transport by aircraft
 STR_CONFIG_SETTING_PLANE_SPEED_VALUE                            :1 / {COMMA}
+STR_CONFIG_SETTING_PLANE_TAXI_SPEED                             :Plane taxiing speed: {STRING2}
+STR_CONFIG_SETTING_PLANE_TAXI_SPEED_HELPTEXT                    :Set the relative taxiing speed of planes on the airport. Higher values make planes taxi faster. (divide by 4)
+STR_CONFIG_SETTING_PLANE_TAXI_SPEED_VALUE                       :{STRING2}
 
 STR_CONFIG_SETTING_PLANE_CRASHES                                :Number of plane crashes: {STRING2}
 STR_CONFIG_SETTING_PLANE_CRASHES_HELPTEXT                       :Set the chance of a random aircraft crash happening.{}* Large airplanes always have a risk of crashing when landing on small airports
@@ -4698,6 +4701,33 @@ STR_VEHICLE_COMMAND_STARTED                                     :{GREEN}Started
 
 # Vehicle details
 STR_VEHICLE_DETAILS_CAPTION                                     :{WHITE}{VEHICLE} (Details)
+STR_TRIP_HISTORY                                                 :{BLACK}History
+STR_TRIP_HISTORY_TOOLTIP                                         :{BLACK}Shows the history of the last 10 trips
+STR_TRIP_HISTORY_CAPTION                                         :{WHITE}{VEHICLE} Trip History
+STR_TRIP_HISTORY_RECEIVED_LABEL                                  :{BLACK}Received
+STR_TRIP_HISTORY_RECEIVED_LABEL_TIP                              :{BLACK}The date when the cargo was received
+STR_TRIP_HISTORY_PROFIT_LABEL                                    :{BLACK}Profit
+STR_TRIP_HISTORY_PROFIT_LABEL_TIP                                :{BLACK}The profit received from each trip
+STR_TRIP_HISTORY_PERCHANGE_LABEL                                 :{BLACK}% Change
+STR_TRIP_HISTORY_PERCHANGE_LABEL_TIP                             :{BLACK}Percentage change between the current and last trips profit
+STR_TRIP_HISTORY_TBT_LABEL                                       :{BLACK}TBT
+STR_TRIP_HISTORY_TBT_LABEL_TIP                                   :{BLACK}Time taken between the current and last trip
+STR_TRIP_HISTORY_DAYCHANGE_LABEL                                 :{BLACK}Change
+STR_TRIP_HISTORY_DAYCHANGE_LABEL_TIP                             :{BLACK}Change (in days) between the current and last trips length
+STR_TRIP_HISTORY_OCCUPANCY_LABEL                                 :{BLACK}Occupancy
+STR_TRIP_HISTORY_OCCUPANCY_LABEL_TIP                             :{BLACK}Average occupancy (in percent) during the trip
+STR_TRIP_HISTORY_TOTALINCOME                                     :{BLACK}Total income for the last {NUM} trip{P "" s}:{LTBLUE} {CURRENCY_SHORT} {BLACK}({LTBLUE}{CURRENCY_SHORT} {BLACK} per day)
+STR_TRIP_HISTORY_DAYAVERAGE                                      :{BLACK}Average trip length:{LTBLUE} {NUM} day{P "" s}
+STR_TRIP_HISTORY_DAYAVERAGE_IMPROVEMENT                          :{BLACK}Improvement over last {NUM} trip{P "" s}:{LTBLUE} {NUM}%
+STR_TRIP_HISTORY_DATE                                            :{BLACK}{DATE_LONG}
+STR_TRIP_HISTORY_PROFIT                                          :{BLACK}{CURRENCY_SHORT}
+STR_TRIP_HISTORY_VIRTUAL_PROFIT                                  :{YELLOW}{CURRENCY_SHORT}
+STR_TRIP_HISTORY_PROFITCHANGEPOS                                 :{GREEN}+{NUM}%
+STR_TRIP_HISTORY_PROFITCHANGENEG                                 :{RED}{NUM}%
+STR_TRIP_HISTORY_TBT                                             :{BLACK}{NUM} day{P "" s}
+STR_TRIP_HISTORY_TBTCHANGEPOS                                    :{RED}+{NUM}
+STR_TRIP_HISTORY_TBTCHANGENEG                                    :{GREEN}{NUM}
+STR_TRIP_HISTORY_OCCUPANCY                                       :{BLACK}{NUM}%
 
 ###length VEHICLE_TYPES
 STR_VEHICLE_DETAILS_TRAIN_RENAME                                :{BLACK}Name train

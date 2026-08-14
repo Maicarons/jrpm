@@ -276,6 +276,12 @@ enum class WindowClass : uint16_t {
 	VehicleTimetable,
 
 	/**
+	 * Vehicle trip history; %Window numbers:
+	 *   - #VehicleID = #VehicleTripHistoryWidgets
+	 */
+	VehicleTripHistory,
+
+	/**
 	 * Company colour selection; %Window numbers:
 	 *   - #CompanyID = #SelectCompanyLiveryWidgets
 	 */

@@ -708,6 +708,7 @@ void UpdateAircraftCache(Aircraft *v, bool update_range)
  * Special velocities for aircraft
  */
 enum AircraftSpeedLimits {
+	SPEED_LIMIT_TAXI     =     50,  ///< Maximum speed of an aircraft while taxiing
 	SPEED_LIMIT_APPROACH =    230,  ///< Maximum speed of an aircraft on finals
 	SPEED_LIMIT_BROKEN   =    320,  ///< Maximum speed of an aircraft that is broken
 	SPEED_LIMIT_HOLD     =    425,  ///< Maximum speed of an aircraft that flies the holding pattern
@@ -735,6 +736,10 @@ static int UpdateAircraftSpeed(Aircraft *v)
 			speed_limit = v->IsAircraftOnHold() ? SPEED_LIMIT_HOLD : SPEED_LIMIT_APPROACH;
 		} else if (!v->IsAircraftFlying()){
 			speed_limit = GetAirTypeInfo(GetAirType(v->GetNextTile()))->max_speed;
+			/* Configurable taxiing speed (relative to the plane_speed factor). */
+			if (v->state == AS_RUNNING) {
+				speed_limit = std::min<uint>(speed_limit, (SPEED_LIMIT_TAXI / 4) * _settings_game.vehicle.plane_taxi_speed);
+			}
 		}
 	} else if (v->state == AS_RUNNING) {
 		assert(IsAirportTile(v->tile));

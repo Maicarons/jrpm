@@ -660,6 +660,9 @@ add_files(
     vehiclelist.cpp
     vehiclelist.h
     vehiclelist_func.h
+    triphistory.h
+    triphistory_cmd.cpp
+    triphistory_gui.cpp
     viewport.cpp
     viewport_cmd.h
     viewport_func.h

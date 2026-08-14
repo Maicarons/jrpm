@@ -71,6 +71,8 @@ void ShowVehicleListWindow(CompanyID company, VehicleType vehicle_type);
 void ShowVehicleListWindow(CompanyID company, VehicleType vehicle_type, StationID station);
 void ShowVehicleListWindow(CompanyID company, VehicleType vehicle_type, TileIndex depot_tile);
 
+void ShowTripHistoryWindow(const Vehicle *v);
+
 void DirtyVehicleListWindowForVehicle(const Vehicle *v);
 
 /**

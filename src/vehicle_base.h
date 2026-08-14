@@ -14,6 +14,7 @@
 #include "track_type.h"
 #include "command_type_fwd_declare.h"
 #include "economy_type.h"
+#include "triphistory.h"
 #include "order_base.h"
 #include "cargopacket.h"
 #include "texteff.hpp"
@@ -281,6 +282,8 @@ public:
 	Money value = 0;                             ///< Value of the vehicle
 
 	CargoPayment *cargo_payment = nullptr;       ///< The cargo payment we're currently in
+
+	TripHistory trip_history;                    ///< History of the last few trips (profit/date/occupancy).
 
 	/**
 	 * Heading for this tile.

@@ -921,6 +921,7 @@ void UpdateVehicleTimetable(Vehicle *v, bool travelling)
 		 * current time. Otherwise set the late counter appropriately to when
 		 * the vehicle should have arrived. */
 		if (!set_scheduled_dispatch) just_started = !v->vehicle_flags.Test(VehicleFlag::TimetableStarted);
+		v->trip_history.NewRound();
 
 		if (v->timetable_start != 0) {
 			v->lateness_counter = (_state_ticks - v->timetable_start).AsTicks();

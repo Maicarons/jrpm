@@ -72,6 +72,7 @@ enum VehicleDetailsWidgets : WidgetID {
 	WID_VD_DETAILS_TOTAL_CARGO,         ///< Show the capacity and carried cargo amounts aggregated per cargo of the train.
 	WID_VD_DETAILS_PERFORMANCE,         ///< Show train performance statistics for empty and fully loaded.
 	WID_VD_EXTRA_ACTIONS,               ///< Extra actions drop-down.
+	WID_VD_TRIP_HISTORY,                ///< Show the trip history of the vehicle.
 };
 
 /** Widgets of the #VehicleListWindow class. */

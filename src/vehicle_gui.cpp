@@ -3124,6 +3124,7 @@ static constexpr std::initializer_list<NWidgetPart> _nested_nontrain_vehicle_det
 		NWidget(WWT_CLOSEBOX, Colours::Grey),
 		NWidget(WWT_IMGBTN, Colours::Grey, WID_VD_EXTRA_ACTIONS), SetAspect(WidgetDimensions::ASPECT_UP_DOWN_BUTTON), SetSpriteTip(SPR_ARROW_DOWN, STR_VEHICLE_DETAILS_EXTRA_ACTIONS_TOOLTIP),
 		NWidget(WWT_CAPTION, Colours::Grey, WID_VD_CAPTION),
+		NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_VD_TRIP_HISTORY), SetMinimalSize(44, 0), SetStringTip(STR_TRIP_HISTORY, STR_TRIP_HISTORY_TOOLTIP),
 		NWidget(WWT_SHADEBOX, Colours::Grey),
 		NWidget(WWT_DEFSIZEBOX, Colours::Grey),
 		NWidget(WWT_STICKYBOX, Colours::Grey),
@@ -3148,6 +3149,7 @@ static constexpr std::initializer_list<NWidgetPart> _nested_train_vehicle_detail
 		NWidget(WWT_CLOSEBOX, Colours::Grey),
 		NWidget(WWT_IMGBTN, Colours::Grey, WID_VD_EXTRA_ACTIONS), SetAspect(WidgetDimensions::ASPECT_UP_DOWN_BUTTON), SetSpriteTip(SPR_ARROW_DOWN, STR_VEHICLE_DETAILS_EXTRA_ACTIONS_TOOLTIP),
 		NWidget(WWT_CAPTION, Colours::Grey, WID_VD_CAPTION), SetStringTip(STR_VEHICLE_DETAILS_CAPTION, STR_TOOLTIP_WINDOW_TITLE_DRAG_THIS),
+		NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_VD_TRIP_HISTORY), SetMinimalSize(44, 0), SetStringTip(STR_TRIP_HISTORY, STR_TRIP_HISTORY_TOOLTIP),
 		NWidget(WWT_SHADEBOX, Colours::Grey),
 		NWidget(WWT_DEFSIZEBOX, Colours::Grey),
 		NWidget(WWT_STICKYBOX, Colours::Grey),
@@ -3758,6 +3760,11 @@ struct VehicleDetailsWindow : Window {
 	void OnClick([[maybe_unused]] Point pt, WidgetID widget, [[maybe_unused]] int click_count) override
 	{
 		switch (widget) {
+			case WID_VD_TRIP_HISTORY: {
+				const Vehicle *v = Vehicle::Get(this->window_number);
+				ShowTripHistoryWindow(v);
+				break;
+			}
 			case WID_VD_INCREASE_SERVICING_INTERVAL:   // increase int
 			case WID_VD_DECREASE_SERVICING_INTERVAL: { // decrease int
 				const Vehicle *v = Vehicle::Get(this->window_number);
@@ -4234,6 +4241,7 @@ public:
 		CloseWindowById(WindowClass::VehicleRefit, this->window_number, false);
 		CloseWindowById(WindowClass::VehicleDetails, this->window_number, false);
 		CloseWindowById(WindowClass::VehicleTimetable, this->window_number, false);
+		CloseWindowById(WindowClass::VehicleTripHistory, this->window_number, false);
 		CloseWindowById(WindowClass::ScheduledDispatchSlots, this->window_number, false);
 
 		if (this->fixed_route_overlay_active) {
