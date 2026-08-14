@@ -37,6 +37,7 @@ enum BuildRoadDepotWidgets : WidgetID {
 	WID_BROD_DEPOT_SE,  ///< Depot with SE entry.
 	WID_BROD_DEPOT_SW,  ///< Depot with SW entry.
 	WID_BROD_DEPOT_NW,  ///< Depot with NW entry.
+	CM_WID_BROD_DEPOT_AUTO, ///< Auto-select depot orientation (cmclient port).
 };
 
 /** Widgets of the #BuildRoadStationWindow class. */

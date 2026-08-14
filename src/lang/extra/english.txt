@@ -2656,3 +2656,8 @@ STR_ZONING_ACTIVE_STATIONS                                      :Active stations
 STR_ZONING_ADVERTISEMENT_ZONES                                  :Advertisement
 STR_ZONING_CB_ACCEPTANCE                                        :CB cargo acceptance
 STR_ZONING_CB_TOWN_LIMIT                                        :CB town limit
+
+# Auto orientation button (cmclient port)
+CM_STR_STATION_BUILD_ORIENTATION_AUTO                            :{BLACK}Auto
+CM_STR_STATION_BUILD_ORIENTATION_AUTO_TOOLTIP                    :{BLACK}Automatically select orientation based on adjacent road
+CM_STR_BUILD_DEPOT_ROAD_ORIENTATION_AUTO_TOOLTIP                 :{BLACK}Automatically select road depot orientation based on adjacent road

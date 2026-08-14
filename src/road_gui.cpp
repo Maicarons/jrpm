@@ -682,10 +682,21 @@ struct BuildRoadToolbarWindow : Window {
 				PlaceProc_DemolishArea(tile);
 				break;
 
-			case WID_ROT_DEPOT:
+			case WID_ROT_DEPOT: {
+				DiagDirection dir = _road_depot_orientation;
+				if (dir >= DiagDirection::End) {
+					/* Auto: pick the direction of the first adjacent road tile. */
+					dir = DiagDirection::NE;
+					for (DiagDirection d : {DiagDirection::NE, DiagDirection::NW, DiagDirection::SE, DiagDirection::SW}) {
+						TileIndex t = TileAddByDiagDir(tile, d);
+						if (IsTileType(t, TileType::Road)) { dir = d; break; }
+					}
+					_road_depot_orientation = dir;
+				}
 				Command<Commands::BuildRoadDepot>::Post(GetRoadTypeInfo(this->roadtype)->strings.err_depot, CommandCallback::RoadDepot,
-						tile, _cur_roadtype, _road_depot_orientation);
+						tile, _cur_roadtype, dir);
 				break;
+			}
 
 			case WID_ROT_BUILD_WAYPOINT:
 				PlaceRoad_Waypoint(tile);
@@ -1217,8 +1228,16 @@ struct BuildRoadDepotWindow : public PickerWindowBase {
 			case WID_BROD_DEPOT_NE:
 			case WID_BROD_DEPOT_SW:
 			case WID_BROD_DEPOT_SE:
+			case CM_WID_BROD_DEPOT_AUTO:
 				this->RaiseWidget(WID_BROD_DEPOT_NE + _road_depot_orientation);
-				_road_depot_orientation = (DiagDirection)(widget - WID_BROD_DEPOT_NE);
+				if (widget == CM_WID_BROD_DEPOT_AUTO) {
+					/* Auto mode: store DiagDirection::End as a sentinel; the
+					 * concrete direction is resolved when the depot is placed
+					 * (see WID_ROT_DEPOT in OnPlaceObject). */
+					_road_depot_orientation = DiagDirection::End;
+				} else {
+					_road_depot_orientation = static_cast<DiagDirection>(widget - WID_BROD_DEPOT_NE);
+				}
 				this->LowerWidget(WID_BROD_DEPOT_NE + _road_depot_orientation);
 				SndClickBeep();
 				this->SetDirty();
@@ -1247,6 +1266,7 @@ static constexpr std::initializer_list<NWidgetPart> _nested_build_road_depot_wid
 			EndContainer(),
 		EndContainer(),
 		NWidget(NWID_SPACER), SetMinimalSize(0, 3),
+		NWidget(WWT_TEXTBTN, Colours::Grey, CM_WID_BROD_DEPOT_AUTO), SetMinimalSize(2 * 66 + WidgetDimensions::unscaled.hsep_normal, 12), SetFill(0, 0), SetStringTip(CM_STR_STATION_BUILD_ORIENTATION_AUTO, CM_STR_BUILD_DEPOT_ROAD_ORIENTATION_AUTO_TOOLTIP),
 	EndContainer(),
 };
 
