@@ -15,7 +15,6 @@ set(BASESET_SOURCE_FILES
 )
 set(BASESET_OTHER_SOURCE_FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/openttd.grf
-        ${CMAKE_CURRENT_SOURCE_DIR}/opntitle.dat
         ${CMAKE_CURRENT_SOURCE_DIR}/orig_extra.grf
         ${CMAKE_CURRENT_SOURCE_DIR}/OpenTTD-Sans.ttf
         ${CMAKE_CURRENT_SOURCE_DIR}/OpenTTD-Serif.ttf
