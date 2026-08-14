@@ -602,7 +602,7 @@ bool LoadBlueprint(uint slot) {
 
 static bool ConBlueprintCopy(std::span<std::string_view> argv)
 {
-	if (argv.empty()) {
+	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Copy the rail layout in the current tile selection to the blueprint buffer. Usage: 'blueprint_copy'.");
 		return true;
 	}
@@ -613,7 +613,7 @@ static bool ConBlueprintCopy(std::span<std::string_view> argv)
 
 static bool ConBlueprintBuild(std::span<std::string_view> argv)
 {
-	if (argv.empty()) {
+	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Build the active blueprint at the selected tile. Usage: 'blueprint_build'.");
 		return true;
 	}
@@ -624,11 +624,11 @@ static bool ConBlueprintBuild(std::span<std::string_view> argv)
 
 static bool ConBlueprintSave(std::span<std::string_view> argv)
 {
-	if (argv.empty()) {
+	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Save the active blueprint to a slot. Usage: 'blueprint_save <0-15>'.");
 		return true;
 	}
-	auto r = ParseInteger(argv[0]);
+	auto r = ParseInteger(argv[1]);
 	if (!r.has_value() || *r >= MAX_BLUEPRINT_SLOTS) {
 		IConsolePrint(CC_ERROR, "Invalid slot.");
 		return false;
@@ -639,11 +639,11 @@ static bool ConBlueprintSave(std::span<std::string_view> argv)
 
 static bool ConBlueprintLoad(std::span<std::string_view> argv)
 {
-	if (argv.empty()) {
+	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Load a blueprint from a slot. Usage: 'blueprint_load <0-15>'.");
 		return true;
 	}
-	auto r = ParseInteger(argv[0]);
+	auto r = ParseInteger(argv[1]);
 	if (!r.has_value() || *r >= MAX_BLUEPRINT_SLOTS) {
 		IConsolePrint(CC_ERROR, "Invalid slot.");
 		return false;
@@ -654,7 +654,7 @@ static bool ConBlueprintLoad(std::span<std::string_view> argv)
 
 static bool ConBlueprintRotate(std::span<std::string_view> argv)
 {
-	if (argv.empty()) {
+	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Rotate the active blueprint 90 degrees. Usage: 'blueprint_rotate'.");
 		return true;
 	}

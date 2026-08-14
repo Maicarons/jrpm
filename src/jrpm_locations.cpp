@@ -33,12 +33,12 @@ static ViewportLocation _locations[NUM_LOCATIONS];
 
 static bool ConSaveLocation(std::span<std::string_view> argv)
 {
-	if (argv.empty()) {
+	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Save the current viewport position to a slot. Usage: 'savelocation <slot 1-9>'.");
 		return true;
 	}
 
-	auto result = ParseInteger(argv[0], 0);
+	auto result = ParseInteger(argv[1], 0);
 	if (!result.has_value() || *result == 0 || *result > NUM_LOCATIONS) {
 		IConsolePrint(CC_ERROR, "Invalid slot. Please use a value between 1 and 9.");
 		return false;
@@ -59,12 +59,12 @@ static bool ConSaveLocation(std::span<std::string_view> argv)
 
 static bool ConGotoLocation(std::span<std::string_view> argv)
 {
-	if (argv.empty()) {
+	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Jump to a saved viewport position. Usage: 'gotolocation <slot 1-9>'.");
 		return true;
 	}
 
-	auto result = ParseInteger(argv[0], 0);
+	auto result = ParseInteger(argv[1], 0);
 	if (!result.has_value() || *result == 0 || *result > NUM_LOCATIONS) {
 		IConsolePrint(CC_ERROR, "Invalid slot. Please use a value between 1 and 9.");
 		return false;
@@ -95,12 +95,12 @@ static bool ConGotoLocation(std::span<std::string_view> argv)
 
 static bool ConCompanyCargo(std::span<std::string_view> argv)
 {
-	if (argv.empty()) {
+	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Show the cargo details of a company. Usage: 'company_cargo <company_id>'.");
 		return true;
 	}
 
-	auto result = ParseInteger(argv[0], 0);
+	auto result = ParseInteger(argv[1], 0);
 	if (!result.has_value() || *result >= MAX_COMPANIES) {
 		IConsolePrint(CC_ERROR, "Invalid company id.");
 		return false;
@@ -111,12 +111,12 @@ static bool ConCompanyCargo(std::span<std::string_view> argv)
 
 static bool ConWatchCompany(std::span<std::string_view> argv)
 {
-	if (argv.empty()) {
+	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Center the viewport on a company and watch it. Usage: 'watch <company_id>' or 'watch' for the company list window.");
 		return true;
 	}
 
-	auto result = ParseInteger(argv[0], 0);
+	auto result = ParseInteger(argv[1], 0);
 	if (!result.has_value() || *result >= MAX_COMPANIES) {
 		IConsolePrint(CC_ERROR, "Invalid company id.");
 		return false;

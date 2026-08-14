@@ -29,6 +29,7 @@
 #include "company_func.h"
 #include "company_gui.h"
 #include "command_func.h"
+#include "cm_command_record.h"
 #include "command_log.h"
 #include "news_func.h"
 #include "fios.h"
@@ -1535,6 +1536,9 @@ void WriteVehicleInfo(format_target &buffer, const Vehicle *u, const Vehicle *v,
  */
 void StateGameLoop()
 {
+	/* jrpm command recording per-tick maintenance. */
+	CommandRecordTick();
+
 	if (!_networking || _network_server) {
 		StateGameLoop_LinkGraphPauseControl();
 	}

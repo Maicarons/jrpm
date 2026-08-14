@@ -12,6 +12,7 @@
 #include "error.h"
 #include "gui.h"
 #include "command_func.h"
+#include "cm_command_record.h"
 #include "command_settings_type.h"
 #include "command_table.h"
 #include "network/network_type.h"
@@ -681,6 +682,9 @@ CommandCost DoCommandPInternal(Commands cmd, TileIndex tile, const CommandPayloa
 	BasePersistentStorageArray::SwitchMode(PSM_ENTER_COMMAND);
 	CommandCost res2 = command.exec({ tile, flags | DoCommandFlag::Execute, payload });
 	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_COMMAND);
+
+	/* Record the executed command for later replay (cmclient port). */
+	CommandRecordLog(cmd, tile, payload, error_msg, _current_company);
 
 	if (cmd == Commands::CompanyControl) {
 		cur_company.Trash();
