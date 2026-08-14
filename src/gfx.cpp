@@ -9,6 +9,7 @@
 
 #include "stdafx.h"
 #include "gfx_func.h"
+#include "cm_overlays.hpp"
 #include "gfx_layout.h"
 #include "progress.h"
 #include "zoom_func.h"
@@ -1575,6 +1576,7 @@ void RedrawScreenRect(int left, int top, int right, int bottom)
 	}
 
 	if (_networking) NetworkUndrawChatMessage();
+	citymania::UndrawOverlays(left, top, right, bottom);
 
 	DrawOverlappedWindowForAll(left, top, right, bottom);
 
@@ -1674,6 +1676,7 @@ void DrawDirtyBlocks()
 		auto clear_overlays = [&]() {
 			if (cleared_overlays) return;
 			if (_cursor.visible) UndrawMouseCursor();
+			citymania::UndrawOverlays(0, 0, _screen.width, _screen.height);
 			if (_networking) NetworkUndrawChatMessage();
 			cleared_overlays = true;
 		};

@@ -14,6 +14,7 @@
 #include "strings_func.h"
 #include "tunnelbridge.h"
 #include "tilehighlight_func.h"
+#include "cm_tooltips.hpp"
 #include "zoom_func.h"
 #include "window_func.h"
 #include "gfx_func.h"
@@ -165,10 +166,12 @@ public:
 	virtual void OnMouseOver(Point pt, WidgetID widget) override
 	{
 		if (pt.x != -1 && IsViewportMouseHoverActive()) {
-			/* Show tooltip with last month production or town name */
+			/* cmclient-style land tooltips; fall back to the built-in tooltip. */
 			const Point p = GetTileBelowCursor();
 			const TileIndex tile = TileVirtXY(p.x, p.y);
-			if (tile < Map::Size()) ShowTooltipForTile(this, tile);
+			if (tile < Map::Size() && !citymania::ShowLandTooltips(tile, this)) {
+				ShowTooltipForTile(this, tile);
+			}
 		}
 	}
 

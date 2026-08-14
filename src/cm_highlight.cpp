@@ -3,6 +3,8 @@
 #include "cm_highlight.hpp"
 
 #include "cm_highlight_type.hpp"
+#include "cm_blueprint.hpp"
+#include "cm_overlays.hpp"
 
 #include "core/math_func.hpp"
 #include "table/bridge_land.h"
@@ -27,7 +29,6 @@ extern void GetStationLayout(uint8_t *layout, uint numtracks, uint plat_len, con
 #define CM_DDSP_BUILD_ROAD_DEPOT 998
 #define CM_DDSP_BUILD_RAIL_DEPOT 997
 #define CM_DDSP_BUILD_AIRPORT 996
-#define CM_HT_BLUEPRINT_PLACE 0xFFF0
 #include "house.h"
 #include "industry.h"
 #include "landscape.h"
@@ -2185,7 +2186,7 @@ bool DrawTileSelection(const TileInfo *ti, [[maybe_unused]] const TileHighlightT
     }
 
 
-    if (false) return true;
+    if (_thd.drawstyle == HT_BLUEPRINT_PLACE) return true;
 
     if (false) {
         return true;
@@ -2238,7 +2239,9 @@ HighLightStyle UpdateTileSelection(HighLightStyle new_drawstyle) {
     auto tile = (pt.x == -1 ? INVALID_TILE : TileVirtXY(pt.x, pt.y));
     bool force_new = false;
     // fprintf(stderr, "UPDATE %d %d %d %d\n", tile, _thd.size.x, _thd.size.y, (int)((_thd.place_mode & HT_DRAG_MASK) == HT_RECT));
-    if (false) {
+    if (_thd.place_mode == HT_BLUEPRINT_PLACE) {
+        UpdateBlueprintTileSelection(tile);
+        new_drawstyle = HT_BLUEPRINT_PLACE;
     } else if (pt.x == -1) {
     } else if (_thd.redsq != INVALID_TILE) {
     } else if (false && _thd.select_proc == CM_DDSP_FUND_INDUSTRY) {
@@ -2507,9 +2510,45 @@ void UpdateActiveTool() {
     for (auto t : tiles_changed)
         MarkTileDirtyByTile(t);
 
-    /* cmclient's build-info overlay (ShowBuildInfoOverlay) is not ported;
-     * the highlight map above is the visible part. */
-    (void)overlay_data;
+    if (cc.GetExpensesType() != ExpensesType::Invalid || cc.GetErrorMessage() != INVALID_STRING_ID) {
+        /* Add CommandCost info to the build overlay. */
+        auto err = cc.GetErrorMessage();
+        if (cc.Succeeded()) {
+            auto money = cc.GetCost();
+            if (money != 0) {
+                overlay_data.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_COST_OK, money));
+            }
+        } else if (err == STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY) {
+            overlay_data.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_COST_NO_MONEY, cc.GetCost()));
+        } else {
+            EncodedString error = std::move(cc.GetEncodedMessage());
+            if (error.empty()) error = GetEncodedStringIfValid(err);
+
+            if (!error.empty()) overlay_data.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_ERROR, error.GetDecodedString()));
+            auto extra_msg = cc.GetExtraErrorMessage();
+            if (extra_msg != INVALID_STRING_ID) {
+                overlay_data.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_ERROR, extra_msg));
+            }
+
+            if (extra_msg == INVALID_STRING_ID && error.empty()) {
+                overlay_data.emplace_back(0, PAL_NONE, GetString(CM_STR_BUILD_INFO_OVERLAY_ERROR_UNKNOWN));
+            }
+        }
+    }
+
+    /* Show the build info overlay next to the cursor. */
+    if (overlay_data.size() > 0) {
+        auto w = FindWindowFromPt(_cursor.pos.x, _cursor.pos.y);
+        if (w == nullptr) { HideBuildInfoOverlay(); return; }
+        auto vp = IsPtInWindowViewport(w, _cursor.pos.x, _cursor.pos.y);
+        if (vp == nullptr) { HideBuildInfoOverlay(); return; }
+        Point pto = RemapCoords2(TileX(tile) * TILE_SIZE, TileY(tile) * TILE_SIZE);
+        pto.x = UnScaleByZoom(pto.x - vp->virtual_left, vp->zoom) + vp->left;
+        pto.y = UnScaleByZoom(pto.y - vp->virtual_top, vp->zoom) + vp->top;
+        ShowBuildInfoOverlay(pto.x, pto.y, overlay_data);
+    } else {
+        HideBuildInfoOverlay();
+    }
 }
 
 bool _prev_left_button_down = false;

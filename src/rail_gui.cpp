@@ -40,6 +40,7 @@
 #include "zoom_func.h"
 #include "rail_cmd.h"
 #include "rail_gui.h"
+#include "cm_blueprint.hpp"
 #include "tracerestrict.h"
 #include "programmable_signals.h"
 #include "newgrf_newsignals.h"
@@ -714,6 +715,7 @@ struct BuildRailToolbarWindow : Window {
 			case WID_RAT_BUILD_BRIDGE: return SPR_CURSOR_BRIDGE;
 			case WID_RAT_BUILD_TUNNEL: return GetRailTypeInfo(_cur_railtype)->cursor.tunnel;
 			case WID_RAT_CONVERT_RAIL: return GetRailTypeInfo(_cur_railtype)->cursor.convert;
+			case WID_RAT_BLUEPRINT: return SPR_CURSOR_RAIL_STATION;
 			default: NOT_REACHED();
 		}
 	}
@@ -739,6 +741,7 @@ struct BuildRailToolbarWindow : Window {
 			case WID_RAT_BUILD_BRIDGE: return HT_RECT;
 			case WID_RAT_BUILD_TUNNEL: return HT_SPECIAL | HT_TUNNEL;
 			case WID_RAT_CONVERT_RAIL: return _ctrl_pressed ? HT_RAIL : HT_RECT | HT_DIAGONAL;
+			case WID_RAT_BLUEPRINT: return HT_RECT;
 			default: NOT_REACHED();
 		}
 	}
@@ -909,6 +912,10 @@ struct BuildRailToolbarWindow : Window {
 				PlaceRail_Station(tile);
 				break;
 
+			case WID_RAT_BLUEPRINT:
+				VpStartPlaceSizing(tile, VPM_X_AND_Y, DDSP_CM_BLUEPRINT_AREA);
+				break;
+
 			case WID_RAT_BUILD_SIGNALS:
 				VpStartPlaceSizing(tile, VPM_SIGNALDIRS, DDSP_BUILD_SIGNALS);
 				break;
@@ -977,6 +984,12 @@ struct BuildRailToolbarWindow : Window {
 					Command<Commands::ConvertRailTrack>::Post(STR_ERROR_CAN_T_CONVERT_RAIL, CommandCallback::PlaySound_CONSTRUCTION_RAIL, end_tile, (_thd.drawstyle & HT_RAIL) ? end_tile : start_tile, track, _cur_railtype);
 					break;
 				}
+
+				case DDSP_CM_BLUEPRINT_AREA:
+					SetObjectToPlace(SPR_CURSOR_RAIL_STATION, PAL_NONE, HT_BLUEPRINT_PLACE, this->window_class, this->window_number);
+					citymania::BlueprintCopyArea(start_tile, end_tile);
+					this->last_user_action = WID_RAT_BLUEPRINT;
+					break;
 
 				case DDSP_REMOVE_STATION:
 				case DDSP_BUILD_STATION:
@@ -1149,6 +1162,8 @@ static constexpr std::initializer_list<NWidgetPart> _nested_build_rail_widgets =
 						SetFill(0, 1), SetToolbarMinimalSize(2), SetSpriteTip(SPR_IMG_BRIDGE, STR_RAIL_TOOLBAR_TOOLTIP_BUILD_RAILROAD_BRIDGE),
 		NWidget(WWT_IMGBTN, Colours::DarkGreen, WID_RAT_BUILD_TUNNEL),
 						SetFill(0, 1), SetToolbarMinimalSize(1), SetSpriteTip(SPR_IMG_TUNNEL_RAIL, STR_RAIL_TOOLBAR_TOOLTIP_BUILD_RAILROAD_TUNNEL),
+		NWidget(WWT_IMGBTN, Colours::DarkGreen, WID_RAT_BLUEPRINT),
+						SetFill(0, 1), SetToolbarMinimalSize(1), SetSpriteTip(SPR_IMG_RAIL_STATION, CM_STR_RAIL_TOOLBAR_TOOLTIP_BLUEPRINT),
 		NWidget(WWT_IMGBTN, Colours::DarkGreen, WID_RAT_REMOVE),
 						SetFill(0, 1), SetToolbarMinimalSize(1), SetSpriteTip(SPR_IMG_REMOVE, STR_RAIL_TOOLBAR_TOOLTIP_TOGGLE_BUILD_REMOVE_FOR),
 		NWidget(WWT_IMGBTN, Colours::DarkGreen, WID_RAT_CONVERT_RAIL),

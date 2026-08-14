@@ -136,6 +136,7 @@ enum class WindowClass : uint16_t {
 	 *   - 0 = #ToolTipsWidgets
 	 */
 	ToolTips,
+	CmLandTooltips, ///< cmclient-style land info tooltip (cmclient port)
 
 	/**
 	* Station rating tooltip window; %Window numbers:

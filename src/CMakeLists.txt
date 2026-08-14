@@ -674,6 +674,10 @@ add_files(
     cm_command_record.h
     cm_town_growth.cpp
     cm_town_growth.h
+    cm_overlays.cpp
+    cm_overlays.hpp
+    cm_tooltips.cpp
+    cm_tooltips.hpp
     cm_highlight.cpp
     cm_highlight.hpp
     cm_highlight_type.hpp

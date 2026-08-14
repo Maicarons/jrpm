@@ -19,6 +19,7 @@
 #include "vehicle_base.h"
 #include "depot_func.h"
 #include "window_func.h"
+#include "cm_overlays.hpp"
 #include "tilehighlight_func.h"
 #include "network/network.h"
 #include "querystring_gui.h"
@@ -3464,6 +3465,7 @@ void UpdateWindows()
 		if (w->viewport != nullptr && !w->IsShaded()) ApplyNextViewportPosition(w);
 	}
 	ViewportDoDrawProcessAllPending();
+	citymania::DrawOverlays();
 	NetworkDrawChatMessage();
 	/* Redraw mouse cursor in case it was hidden */
 	DrawMouseCursor();

@@ -209,6 +209,8 @@ enum ViewportDragDropSelectionProcess : uint8_t {
 	DDSP_REMOVE_BUSSTOP,       ///< Road stop removal (buses)
 	DDSP_REMOVE_TRUCKSTOP,     ///< Road stop removal (trucks)
 	DDSP_CONVERT_ROAD,         ///< Road conversion
+	DDSP_CM_BLUEPRINT_AREA,     ///< Blueprint area selection (cmclient port)
+	DDSP_CM_RAIL_BLUEPRINT,   ///< Rail blueprint tool (cmclient port)
 };
 
 

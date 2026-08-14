@@ -27,6 +27,7 @@
 #include "company_cmd.h"
 #include "company_func.h"
 #include "toolbar_gui.h"
+#include "cm_tooltips.hpp"
 #include "statusbar_gui.h"
 #include "linkgraph/linkgraph_gui.h"
 #include "tilehighlight_func.h"
@@ -554,10 +555,13 @@ struct MainWindow : Window
 	virtual void OnMouseOver(Point pt, WidgetID widget) override
 	{
 		if (pt.x != -1 && _game_mode != GameMode::Menu && IsViewportMouseHoverActive()) {
-			/* Show tooltip with last month production or town name */
+			/* cmclient-style land tooltips (house/industry/station details); fall back to
+			 * the built-in tooltip (town name, depots, waypoints) when not covered. */
 			const Point p = GetTileBelowCursor();
 			const TileIndex tile = TileVirtXY(p.x, p.y);
-			if (tile < Map::Size()) ShowTooltipForTile(this, tile);
+			if (tile < Map::Size() && !citymania::ShowLandTooltips(tile, this)) {
+				ShowTooltipForTile(this, tile);
+			}
 		}
 	}
 

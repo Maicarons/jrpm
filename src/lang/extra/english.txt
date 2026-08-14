@@ -2615,3 +2615,24 @@ STR_CONFIG_SETTING_NEWS_CARGO_FLOW                              :Overflowing car
 STR_CONFIG_SETTING_NEWS_CARGO_FLOW_HELPTEXT                     :Warn about stations where cargo is accumulating.{}The detection is based on shape of the cargo history graph, not on specific amount threshold.
 
 STR_STATION_CARGO_OVERFLOW                                      :{WHITE}{CARGO_LIST} overflowing at {STATION}
+
+# Build info overlay (cmclient port)
+CM_STR_BUILD_INFO_OVERLAY_COST_OK                               :{GREEN}Cost: {CURRENCY_LONG}
+CM_STR_BUILD_INFO_OVERLAY_COST_NO_MONEY                         :{RED}Cost: {CURRENCY_LONG}
+CM_STR_BUILD_INFO_OVERLAY_STATION_SUPPLIES                      :{WHITE}Supplies:
+CM_STR_BUILD_INFO_OVERLAY_STATION_CARGO                         :{GOLD}{CARGO_LONG}
+CM_STR_BUILD_INFO_OVERLAY_ERROR                                 :{RED}Error: {RAW_STRING}
+CM_STR_BUILD_INFO_OVERLAY_ERROR_UNKNOWN                         :{RED}Unknown Error!
+
+# Land tooltips (cmclient port)
+CM_STR_LAND_TOOLTIPS_HOUSE_NAME                                 :{LTBLUE}{STRING}
+CM_STR_LAND_TOOLTIPS_HOUSE_POPULATION                           :{BLACK}Population: {NUM}
+CM_STR_LAND_TOOLTIPS_INDUSTRY_NAME                              :{LTBLUE}{INDUSTRY}
+CM_STR_LAND_TOOLTIPS_INDUSTRY_CARGO                             :{WHITE}{STRING} {BLACK}{CARGO_SHORT} {YELLOW}{NUM}% ({NUM}/month)
+CM_STR_LAND_TOOLTIPS_STATION_NAME                               :{LTBLUE}{STATION}
+CM_STR_LAND_TOOLTIPS_STATION_CARGO                              :{WHITE}{STRING} {BLACK}{CARGO_SHORT} {YELLOW}{NUM}%
+
+# Rail blueprint tool (cmclient port)
+CM_STR_RAIL_TOOLBAR_TOOLTIP_BLUEPRINT                           :{BLACK}Rail blueprint tool (copy-paste)
+CM_STR_NO_BLUEPRINT_IN_SLOT                                     :{WHITE}No blueprint in slot {NUM}
+
