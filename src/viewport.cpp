@@ -5830,6 +5830,10 @@ void UpdateTileSelection()
 		/* Draw the new tile selection? */
 		if ((new_drawstyle & HT_DRAG_MASK) != HT_NONE) SetSelectionTilesDirty();
 	}
+
+	/* Object-level highlight (cmclient port): let the highlight framework
+	 * build its active-object preview from the tile selection. */
+	citymania::UpdateTileSelection(new_drawstyle);
 }
 
 /**
