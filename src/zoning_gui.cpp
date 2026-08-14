@@ -54,6 +54,8 @@ static const std::initializer_list<ZoningModeInfo> _zone_modes = {
 	ZoningModeInfo(ZEM_2x2_GRID,         STR_ZONING_2x2_GRID),
 	ZoningModeInfo(ZEM_3x3_GRID,         STR_ZONING_3x3_GRID),
 	ZoningModeInfo(ZEM_ONE_WAY_ROAD,     STR_ZONING_ONE_WAY_ROAD),
+	ZoningModeInfo(ZEM_TOWN_ZONES,       STR_ZONING_TOWN_ZONES),
+	ZoningModeInfo(ZEM_TOWN_GROWTH_TILES, STR_ZONING_TOWN_GROWTH_TILES),
 
 	ZoningModeInfo(ZEM_DBG_WATER_FLOOD,   "Debug: Flooding"),
 	ZoningModeInfo(ZEM_DBG_WATER_REGION,  "Debug: Water regions"),

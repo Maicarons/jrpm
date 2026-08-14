@@ -2148,8 +2148,10 @@ STR_ZONING_BUL_UNSER                                            :Unserved buildi
 STR_ZONING_IND_UNSER                                            :Unserved industries
 STR_ZONING_TRACERESTRICT                                        :Restricted signals
 STR_ZONING_2x2_GRID                                             :2x2 town road grid
+STR_ZONING_TOWN_GROWTH_TILES                                      :Town growth tiles
 STR_ZONING_3x3_GRID                                             :3x3 town road grid
 STR_ZONING_ONE_WAY_ROAD                                         :One way roads
+STR_ZONING_TOWN_ZONES                                             :Town zones (Tz)
 
 STR_STATION_RATING_TOOLTIP_RATING_DETAILS                       :{STRING} Rating Details
 STR_STATION_RATING_TOOLTIP_TOTAL_RATING                         :Total target rating: {LTBLUE}{NUM}%

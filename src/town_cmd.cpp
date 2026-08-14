@@ -55,6 +55,7 @@
 #include "game/game.hpp"
 #include "zoom_func.h"
 #include "zoning.h"
+#include "cm_town_growth.h"
 #include "terraform_cmd.h"
 #include "clear_map.h"
 #include "tree_map.h"
@@ -3239,6 +3240,8 @@ static bool TryBuildTownHouse(Town *t, TileIndex tile, TownExpandModes modes)
 
 		const HouseSpec *hs = HouseSpec::Get(house);
 		BuildTownHouse(t, tile, hs, house, random_bits, false, false);
+		/* Record the growth tile (cmclient port). */
+		SetTownGrowthTile(tile, GetTownGrowthTile(tile) == TownGrowthTileState::RH_REMOVED ? TownGrowthTileState::RH_REBUILT : TownGrowthTileState::NEW_HOUSE);
 		return true;
 	}
 
@@ -3458,6 +3461,9 @@ void ClearTownHouse(Town *t, TileIndex tile)
 	assert_tile(IsTileType(tile, TileType::House), tile);
 
 	HouseID house = GetHouseType(tile);
+
+	/* Record the demolition (cmclient port); the main tile of the house. */
+	SetTownGrowthTile(tile + GetHouseNorthPart(house), TownGrowthTileState::RH_REMOVED);
 
 	/* The northernmost tile of the house is the main house. */
 	tile += GetHouseNorthPart(house);
@@ -4724,6 +4730,9 @@ Town::AcceptedHistory SumHistory(std::span<const Town::AcceptedHistory> history)
 
 void TownsMonthlyLoop()
 {
+	/* Roll the town growth tile maps over (cmclient port). */
+	RotateTownGrowthTiles();
+
 	for (Town *t : Town::Iterate()) {
 		/* Check for active town actions and decrement their counters. */
 		if (t->road_build_months != 0) t->road_build_months--;

@@ -670,6 +670,8 @@ add_files(
     jrpm_console_commands.cpp
     jrpm_console_commands.h
     cm_blueprint.cpp
+    cm_town_growth.cpp
+    cm_town_growth.h
     cm_highlight.cpp
     cm_highlight.hpp
     cm_highlight_type.hpp

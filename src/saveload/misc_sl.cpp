@@ -10,6 +10,7 @@
 #include "../stdafx.h"
 
 #include "saveload.h"
+#include "../cm_town_growth.h"
 #include "compat/misc_sl_compat.h"
 
 #include "../date_func.h"
@@ -143,11 +144,69 @@ struct VIEWChunkHandler : ChunkHandler {
 	}
 };
 
+/** Access a std::pair<TileIndex, TownGrowthTileState> field for SaveLoad. */
+static const SaveLoad _growth_tile_desc[] = {
+	SLE_VARNAME(TownsGrowthTilesIndex::value_type, first,  "tile",  SLE_UINT32),
+	SLE_VARNAME(TownsGrowthTilesIndex::value_type, second, "state", SLE_UINT8),
+};
+
+struct GRWTChunkHandler : ChunkHandler {
+	GRWTChunkHandler() : ChunkHandler('GRWT', CH_TABLE) {}
+
+	void Save() const override
+	{
+		SlTableHeader(_growth_tile_desc);
+
+		SlSetArrayIndex(0);
+		SlSetStructListLength(_town_growth_tiles.size());
+		for (auto &p : _town_growth_tiles) SlObject(&p, _growth_tile_desc);
+
+		SlSetArrayIndex(1);
+		SlSetStructListLength(_town_growth_tiles_last_month.size());
+		for (auto &p : _town_growth_tiles_last_month) SlObject(&p, _growth_tile_desc);
+	}
+
+	void Load() const override
+	{
+		const std::vector<SaveLoad> slt = SlCompatTableHeader(_growth_tile_desc, {});
+		if (!IsSavegameVersionBefore(SLV_RIFF_TO_ARRAY) && SlIterateArray() == -1) return;
+
+		TownsGrowthTilesIndex::value_type tmp{};
+
+		size_t length = SlGetStructListLength(10000);
+		for (size_t i = 0; i < length; i++) {
+			SlObject(&tmp, slt);
+			_town_growth_tiles[tmp.first] = tmp.second;
+		}
+
+		if (SlIterateArray() == -1) return;
+		length = SlGetStructListLength(10000);
+		for (size_t i = 0; i < length; i++) {
+			SlObject(&tmp, slt);
+			_town_growth_tiles_last_month[tmp.first] = tmp.second;
+		}
+
+		if (!IsSavegameVersionBefore(SLV_RIFF_TO_ARRAY) && SlIterateArray() != -1) SlErrorCorrupt("Too many GRWT entries");
+	}
+
+	void LoadCheck(size_t) const override
+	{
+		this->Load();
+	}
+
+	void FixPointers() const override
+	{
+	}
+};
+
+static const GRWTChunkHandler GRWT;
+
 static const DATEChunkHandler DATE;
 static const VIEWChunkHandler VIEW;
 static const ChunkHandlerRef misc_chunk_handlers[] = {
 	DATE,
 	VIEW,
+	GRWT,
 };
 
 extern const ChunkHandlerTable _misc_chunk_handlers(misc_chunk_handlers);

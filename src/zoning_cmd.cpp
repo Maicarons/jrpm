@@ -24,6 +24,7 @@
 #include "tracerestrict.h"
 #include "window_func.h"
 #include "zoning.h"
+#include "cm_town_growth.h"
 #include "viewport_func.h"
 #include "road_map.h"
 #include "animated_tile.h"
@@ -336,6 +337,47 @@ inline SpriteID TileZoneCheckOneWayRoadEvaluation(TileIndex tile)
 	}
 }
 
+/* Town zones (Tz0-Tz4) - cmclient port. */
+inline SpriteID TileZoneCheckTownZones(TileIndex tile)
+{
+	uint8_t next_zone = 0;
+	uint8_t tz = static_cast<uint8_t>(HouseZone::TownEnd);
+
+	for (Town *town : Town::Iterate()) {
+		uint dist = DistanceSquare(tile, town->xy);
+		/* Town code uses <= for town borders (Tz0) but < for other zones. */
+		while (next_zone < static_cast<uint8_t>(HouseZone::TownEnd)
+			&& (town->cache.squared_town_zone_radius[next_zone] == 0
+				|| dist <= town->cache.squared_town_zone_radius[next_zone] - (next_zone == static_cast<uint8_t>(HouseZone::TownEdge) ? 0 : 1))) {
+			if (town->cache.squared_town_zone_radius[next_zone] != 0) tz = next_zone;
+			next_zone++;
+		}
+	}
+
+	switch (static_cast<HouseZone>(tz)) {
+		case HouseZone::TownEdge:         return SPR_ZONING_INNER_HIGHLIGHT_LIGHT_BLUE; // Tz0
+		case HouseZone::TownOutskirt:     return SPR_ZONING_INNER_HIGHLIGHT_RED; // Tz1
+		case HouseZone::TownOuterSuburb:  return SPR_ZONING_INNER_HIGHLIGHT_YELLOW; // Tz2
+		case HouseZone::TownInnerSuburb:  return SPR_ZONING_INNER_HIGHLIGHT_GREEN; // Tz3
+		case HouseZone::TownCentre:       return SPR_ZONING_INNER_HIGHLIGHT_WHITE; // Tz4
+		default:                          return ZONING_INVALID_SPRITE_ID;
+	}
+}
+
+/* Town growth tiles - cmclient port. */
+inline SpriteID TileZoneCheckTownGrowthTiles(TileIndex tile)
+{
+	switch (GetTownGrowthTile(tile)) {
+		case TownGrowthTileState::RH_REMOVED: return SPR_ZONING_INNER_HIGHLIGHT_LIGHT_BLUE;
+		case TownGrowthTileState::RH_REBUILT: return SPR_ZONING_INNER_HIGHLIGHT_WHITE;
+		case TownGrowthTileState::NEW_HOUSE:  return SPR_ZONING_INNER_HIGHLIGHT_GREEN;
+		case TownGrowthTileState::CS:         return SPR_ZONING_INNER_HIGHLIGHT_ORANGE;
+		case TownGrowthTileState::HS:         return SPR_ZONING_INNER_HIGHLIGHT_YELLOW;
+		case TownGrowthTileState::HR:         return SPR_ZONING_INNER_HIGHLIGHT_RED;
+		default:                              return ZONING_INVALID_SPRITE_ID;
+	}
+}
+
 inline SpriteID TileZoneDebugWaterFlood(TileIndex tile)
 {
 	if (IsNonFloodingWaterTile(tile)) {
@@ -400,6 +442,8 @@ SpriteID TileZoningSpriteEvaluation(TileIndex tile, Owner owner, ZoningEvaluatio
 		case ZEM_2x2_GRID:      return TileZoneCheckRoadGridEvaluation(tile, 3);
 		case ZEM_3x3_GRID:      return TileZoneCheckRoadGridEvaluation(tile, 4);
 		case ZEM_ONE_WAY_ROAD:  return TileZoneCheckOneWayRoadEvaluation(tile);
+		case ZEM_TOWN_ZONES:    return TileZoneCheckTownZones(tile);
+		case ZEM_TOWN_GROWTH_TILES: return TileZoneCheckTownGrowthTiles(tile);
 
 		case ZEM_DBG_WATER_FLOOD:   return TileZoneDebugWaterFlood(tile);
 		case ZEM_DBG_WATER_REGION:  return TileZoneDebugWaterRegion(tile);
