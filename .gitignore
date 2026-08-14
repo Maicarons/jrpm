@@ -9,6 +9,7 @@ docs/source/*
 /out
 /vcpkg_installed
 *.tmp
+/.workbuddy
 
 # Local build tooling
 .deps/

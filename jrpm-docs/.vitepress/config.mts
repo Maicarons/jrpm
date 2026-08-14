@@ -4,6 +4,7 @@ export default defineConfig({
   title: 'OpenTTD-JRPM',
   description: 'JRPM —— 融合 jgrpp 与 pulsexlb 特性的 OpenTTD 增强版：机车换挂、模块化机场、并行下载、整局感知 AI',
   lang: 'zh-CN',
+  base: '/jrpm/',
   lastUpdated: true,
   cleanUrls: true,
 
@@ -113,7 +114,7 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/Maicarons/OpenTTD-patches' },
+      { icon: 'github', link: 'https://github.com/Maicarons/jrpm' },
     ],
   },
 })
