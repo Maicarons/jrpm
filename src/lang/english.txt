@@ -398,6 +398,8 @@ STR_TOOLBAR_TOOLTIP_DISPLAY_GOALS_LIST                          :{BLACK}Open goa
 STR_TOOLBAR_TOOLTIP_DISPLAY_GRAPHS                              :{BLACK}Open company graphs and cargo payment rates
 STR_TOOLBAR_TOOLTIP_DISPLAY_COMPANY_LEAGUE                      :{BLACK}Open company league table
 STR_TOOLBAR_TOOLTIP_FUND_CONSTRUCTION_OF_NEW                    :{BLACK}Open industry directory, industry chain, or fund construction of a new industry
+STR_TOOLBAR_TOOLTIP_CARGOS_PAYMENTS                          :{BLACK}Open cargo payments rates
+STR_TOOLBAR_TOOLTIP_WATCH_COMPANY                            :{BLACK}Watch another company
 STR_TOOLBAR_TOOLTIP_DISPLAY_LIST_OF_COMPANY_TRAINS              :{BLACK}Open list of company's trains. Ctrl+Click to show or hide vehicle groups, opposite of the chosen setting
 STR_TOOLBAR_TOOLTIP_DISPLAY_LIST_OF_COMPANY_ROAD_VEHICLES       :{BLACK}Open list of company's road vehicles. Ctrl+Click to show or hide vehicle groups, opposite of the chosen setting
 STR_TOOLBAR_TOOLTIP_DISPLAY_LIST_OF_COMPANY_SHIPS               :{BLACK}Open list of company's ships. Ctrl+Click to show or hide vehicle groups, opposite of the chosen setting
