@@ -146,7 +146,7 @@ if [ -n "$RELEASETAG" ]; then
 	unignore_files
 	trap '' EXIT
 	if [ "${RELEASETAG:0:6}" = "jgrpp-" -a -n "${RELEASETAG:6}" ]; then
-		sed -i "1 s/^\(## JGR's Patchpack version \).\+/\1${RELEASETAG:6}/" README.md
+		sed -i "1 s/^\(# OpenTTD-JRPM version \).\+/\1${RELEASETAG:6}/" README.md
 	fi
 	git add .ottdrev-vc README.md jgrpp-changelog.md
 	git commit -m "Version: Committing version data for tag: $RELEASETAG"

@@ -1,4 +1,4 @@
-## JGR's Patchpack: Low level changes
+## OpenTTD-JRPM: Low level changes
 
 This document describes low-level changes to the codebase which are not generally visible when actually running/playing the game, this is a non-exhaustive list.
 
