@@ -669,6 +669,9 @@ add_files(
     jrpm_cargo_table.h
     jrpm_console_commands.cpp
     jrpm_console_commands.h
+    cm_highlight.cpp
+    cm_highlight.hpp
+    cm_highlight_type.hpp
     viewport.cpp
     viewport_cmd.h
     viewport_func.h

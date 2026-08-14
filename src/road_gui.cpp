@@ -78,12 +78,7 @@ struct RoadWaypointPickerSelection {
 };
 static RoadWaypointPickerSelection _waypoint_gui; ///< Settings of the road waypoint picker.
 
-struct RoadStopPickerSelection {
-	RoadStopClassID sel_class; ///< Selected road stop class.
-	uint16_t sel_type; ///< Selected road stop type within the class.
-	DiagDirection orientation; ///< Selected orientation of the road stop.
-};
-static RoadStopPickerSelection _roadstop_gui;
+RoadStopPickerSelection _roadstop_gui;
 
 static bool IsRoadStopEverAvailable(const RoadStopSpec *spec, StationType type)
 {

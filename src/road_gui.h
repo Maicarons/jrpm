@@ -11,6 +11,7 @@
 #define ROAD_GUI_H
 
 #include "road.h"
+#include "newgrf_roadstop.h"
 #include "road_type.h"
 #include "tile_type.h"
 #include "direction_type.h"
@@ -24,5 +25,15 @@ void ConnectRoadToStructure(TileIndex tile, DiagDirection direction);
 DropDownList GetRoadTypeDropDownList(RoadTramTypes rtts, bool for_replacement = false, bool all_option = false);
 DropDownList GetScenRoadTypeDropDownList(RoadTramTypes rtts, bool show_cost, bool use_name = false);
 void InitializeRoadGUI();
+
+/** Selected road stop class/type/orientation (shared with cm_highlight). */
+struct RoadStopPickerSelection {
+	RoadStopClassID sel_class = ROADSTOP_CLASS_DFLT; ///< Selected road stop class.
+	uint16_t sel_type = 0; ///< Selected road stop type within the class.
+	DiagDirection orientation = DiagDirection::Invalid; ///< Selected orientation.
+};
+
+extern RoadStopPickerSelection _roadstop_gui;
+
 
 #endif /* ROAD_GUI_H */

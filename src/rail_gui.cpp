@@ -83,12 +83,7 @@ struct WaypointPickerSelection {
 };
 static WaypointPickerSelection _waypoint_gui; ///< Settings of the waypoint picker.
 
-struct StationPickerSelection {
-	StationClassID sel_class; ///< Selected station class.
-	uint16_t sel_type; ///< Selected station type within the class.
-	Axis axis; ///< Selected orientation of the station.
-};
-static StationPickerSelection _station_gui; ///< Settings of the station picker.
+StationPickerSelection _station_gui; ///< Settings of the station picker.
 
 
 static void HandleStationPlacement(TileIndex start, TileIndex end);

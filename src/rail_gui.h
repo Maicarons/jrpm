@@ -12,6 +12,8 @@
 
 #include "rail_gui_type.h"
 #include "rail_type.h"
+#include "direction_type.h"
+#include "newgrf_station.h"
 #include "dropdown_type.h"
 
 struct Window *ShowBuildRailToolbar(RailType railtype);
@@ -21,5 +23,15 @@ void ReinitGuiAfterToggleElrail(bool disable);
 void ResetSignalVariant(int32_t = 0);
 void InitializeRailGUI();
 DropDownList GetRailTypeDropDownList(bool for_replacement = false, bool all_option = false);
+
+/** Selected station class/type/orientation (shared with cm_highlight). */
+struct StationPickerSelection {
+	StationClassID sel_class = STAT_CLASS_DFLT; ///< Selected station class.
+	uint16_t sel_type = 0; ///< Selected station type within the class.
+	Axis axis = Axis::X; ///< Selected orientation of the station.
+};
+
+extern StationPickerSelection _station_gui;
+
 
 #endif /* RAIL_GUI_H */
