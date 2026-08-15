@@ -515,7 +515,10 @@ inline SpriteID TileZoningSpriteEvaluationCached(TileIndex tile, Owner owner, Zo
 				case 2: return SPR_ZONING_INNER_HIGHLIGHT_ORANGE;
 				case 3: return SPR_ZONING_INNER_HIGHLIGHT_BLACK;
 				case 4: return SPR_ZONING_INNER_HIGHLIGHT_LIGHT_BLUE;
-				default: NOT_REACHED();
+				default:
+					/* Forward-compat: discard stale entry and refetch. */
+					cache.erase(iter);
+					return TileZoningSpriteEvaluation(tile, owner, ev_mode);
 			}
 		} else {
 			SpriteID s = TileZoningSpriteEvaluation(tile, owner, ev_mode);
@@ -526,7 +529,12 @@ inline SpriteID TileZoningSpriteEvaluationCached(TileIndex tile, Owner owner, Zo
 				case SPR_ZONING_INNER_HIGHLIGHT_ORANGE:     val |= 2; break;
 				case SPR_ZONING_INNER_HIGHLIGHT_BLACK:      val |= 3; break;
 				case SPR_ZONING_INNER_HIGHLIGHT_LIGHT_BLUE: val |= 4; break;
-				default: NOT_REACHED();
+				default:
+					/* Not one of the 5 cacheable sprites (e.g. new cmclient
+					 * modes returning GREEN/YELLOW/WHITE). Cache as zero so the
+					 * next frame refetches, and pass the sprite through. */
+					cache.insert(iter, val);
+					return s;
 			}
 			cache.insert(iter, val);
 			return s;

@@ -1462,6 +1462,10 @@ static uint GetRoadSpriteOffset(Slope slope, RoadBits bits)
 
 
 void DrawRoadDepot(SpriteID palette, const TileInfo *ti, RoadType roadtype, DiagDirection orientation) {
+    if (orientation >= DiagDirection::End) {
+        /* Clamp invalid/Auto sentinel so _road_depot[] stays in bounds. */
+        orientation = DiagDirection::NE;
+    }
     const RoadTypeInfo* rti = GetRoadTypeInfo(roadtype);
     int relocation = GetCustomRoadSprite(rti, INVALID_TILE, RoadSpriteType::Depot);
     bool default_gfx = relocation == 0;
@@ -2286,7 +2290,9 @@ HighLightStyle UpdateTileSelection(HighLightStyle new_drawstyle) {
         new_drawstyle = HT_RECT;
     } else if (_thd.select_proc == CM_DDSP_BUILD_ROAD_DEPOT) {
         auto dir = _road_depot_orientation;
-        if (dir == DiagDirection::Invalid) {
+        if (dir >= DiagDirection::End) {
+            /* Auto mode / invalid sentinel: clamp to a real direction
+             * before the highlight preview indexes _road_depot[]. */
             dir = DiagDirection::NE;
         }
         _cm_active_object = ObjectHighlight::make_road_depot(tile, _cur_roadtype, dir);
