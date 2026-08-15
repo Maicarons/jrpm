@@ -27,8 +27,6 @@ enum ToolbarNormalWidgets : WidgetID {
 	WID_TN_GRAPHS,        ///< Graph menu.
 	WID_TN_LEAGUE,        ///< Company league menu.
 	WID_TN_INDUSTRIES,    ///< Industry menu.
-	WID_TN_CARGOS,        ///< Transported cargo menu (cmclient port).
-	WID_TN_WATCH,         ///< Watch gui menu (cmclient port).
 	WID_TN_VEHICLE_START, ///< Helper for the offset of the vehicle menus.
 	WID_TN_TRAINS        = WID_TN_VEHICLE_START, ///< Train menu.
 	WID_TN_ROADVEHS,      ///< Road vehicle menu.
