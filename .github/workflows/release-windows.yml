@@ -154,8 +154,14 @@ jobs:
 
         echo "::group::Prepare PDB to be bundled"
         PDB=$(ls bundles/*.zip | cut -d/ -f2 | sed 's/.zip$/.pdb/')
-        cp openttd.pdb bundles/${PDB}
-        xz -9 bundles/${PDB}
+        # The executable is renamed to openttd-jrpm (see CMake BINARY_NAME), so the
+        # MSVC-generated PDB is openttd-jrpm.pdb, not the upstream default openttd.pdb.
+        if [ -f openttd-jrpm.pdb ]; then
+          cp openttd-jrpm.pdb "bundles/${PDB}"
+        else
+          cp "$(ls *.pdb | head -1)" "bundles/${PDB}"
+        fi
+        xz -9 "bundles/${PDB}"
         echo "::endgroup::"
 
         echo "::group::Cleanup"
