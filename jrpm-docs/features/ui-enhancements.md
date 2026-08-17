@@ -17,15 +17,15 @@ gotolocation <1-9>    # 跳转到已保存的位置
 
 ## 公司货运明细（Company Cargo Details）
 
-按货物列出公司**已送达运量**的统计窗口，可切换**总计 / 上个月**两个周期。
+按货物列出公司**已送达运量 + 收入**的统计窗口，可切换**总计 / 上个月**两个周期。
 
 ```
 company_cargo <company_id>    # 打开货运明细窗口
 ```
 
-- 窗口列出每种标准货物的运量 + 底部总计
+- 窗口列出每种标准货物的运量、收入 + 底部总计（与 cmclient 完全一致）
 - 点击表头"Cargo"切换总计/上月周期
-- 说明：jrpm 的 `CompanyEconomyEntry` 不含**每货物收入**字段（cmclient 为此扩展了存档格式），为避免破坏存档兼容，本版本只提供运量列；每货物收入需后续存档扩展
+- 每货物收入通过 `CompanyEconomyEntry::cargo_income` 跟踪（`XSLFI_COMPANY_CARGO_INCOME` 存档扩展），存档往返无损
 
 ## 观战辅助（Watch）
 

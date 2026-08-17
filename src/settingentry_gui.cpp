@@ -1274,6 +1274,41 @@ SettingsContainer &GetSettingsTree()
 			network->Add(new SettingEntry("network.use_relay_service"));
 		}
 
+		/* jrpm fork: independent on/off toggles for features newly added in this version.
+		 * Every toggle defaults to OFF (opt-in) so users can disable misbehaving features. */
+		SettingsPage *jrpm_features = main->Add(new SettingsPage(STR_CONFIG_SETTING_JRPM_FEATURES));
+		{
+			SettingsPage *jrpm_excl = jrpm_features->Add(new SettingsPage(STR_CONFIG_SETTING_JRPM_FEATURES_JRPM));
+			{
+				jrpm_excl->Add(new SettingEntry("jrpm_features.enable_resource_download"));
+				jrpm_excl->Add(new SettingEntry("jrpm_features.enable_vehicle_autogroup"));
+				jrpm_excl->Add(new SettingEntry("jrpm_features.enable_global_ai"));
+			}
+
+			SettingsPage *modded = jrpm_features->Add(new SettingsPage(STR_CONFIG_SETTING_JRPM_FEATURES_MODDED));
+			{
+				modded->Add(new SettingEntry("jrpm_features.enable_trip_history"));
+				modded->Add(new SettingEntry("jrpm_features.enable_plane_taxi_speed"));
+			}
+
+			SettingsPage *cmclient = jrpm_features->Add(new SettingsPage(STR_CONFIG_SETTING_JRPM_FEATURES_CMCLIENT));
+			{
+				cmclient->Add(new SettingEntry("jrpm_features.enable_location_bookmarks"));
+				cmclient->Add(new SettingEntry("jrpm_features.enable_cargo_details"));
+				cmclient->Add(new SettingEntry("jrpm_features.enable_spectate"));
+				cmclient->Add(new SettingEntry("jrpm_features.enable_highlight"));
+				cmclient->Add(new SettingEntry("jrpm_features.enable_blueprint"));
+				cmclient->Add(new SettingEntry("jrpm_features.enable_town_zoning"));
+				cmclient->Add(new SettingEntry("jrpm_features.enable_command_replay"));
+			}
+
+			SettingsPage *pulsexlb = jrpm_features->Add(new SettingsPage(STR_CONFIG_SETTING_JRPM_FEATURES_PULSEXLB));
+			{
+				pulsexlb->Add(new SettingEntry("jrpm_features.enable_decouple"));
+				pulsexlb->Add(new SettingEntry("jrpm_features.enable_modular_airport"));
+			}
+		}
+
 		main->Init();
 	}
 	return *main;

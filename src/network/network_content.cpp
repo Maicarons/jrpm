@@ -342,6 +342,7 @@ void ClientNetworkContentSocketHandler::DownloadSelectedContentHTTP(const Conten
 	this->http_response_index = -1;
 
 	auto mirrors = NetworkContentMirrorUris();
+	if (!_settings_game.jrpm_features.enable_resource_download) mirrors.resize(std::min<size_t>(mirrors.size(), 1));
 	if (this->mirror_index >= mirrors.size()) this->mirror_index = 0;
 
 	NetworkHTTPSocketHandler::Connect(mirrors[this->mirror_index], this, content_request.to_string());
@@ -717,7 +718,7 @@ void ClientNetworkContentSocketHandler::StartDownloadSessions()
 		return;
 	}
 
-	size_t parallel = std::max<size_t>(1, _settings_client.network.content_download_parallel);
+	size_t parallel = _settings_game.jrpm_features.enable_resource_download ? std::max<size_t>(1, _settings_client.network.content_download_parallel) : 1;
 	while (this->download_sessions.size() < parallel && this->next_file_index < this->pending_files.size()) {
 		ContentFileDownload file = std::move(this->pending_files[this->next_file_index++]);
 
@@ -860,6 +861,7 @@ void ClientNetworkContentSocketHandler::OnAllSessionsDone()
 
 	uint files, bytes;
 	auto mirrors = NetworkContentMirrorUris();
+	if (!_settings_game.jrpm_features.enable_resource_download) mirrors.resize(std::min<size_t>(mirrors.size(), 1));
 	if (this->mirror_index + 1 < mirrors.size()) {
 		this->mirror_index++;
 		this->DownloadSelectedContent(files, bytes, false);

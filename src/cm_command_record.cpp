@@ -3,6 +3,7 @@
  */
 
 #include "stdafx.h"
+#include "settings_type.h"
 
 #include "cm_command_record.h"
 
@@ -76,6 +77,10 @@ void CommandRecordTick()
 
 static bool ConCmdRecord(std::span<std::string_view> argv)
 {
+	if (!_settings_game.jrpm_features.enable_command_replay) {
+		IConsolePrint(CC_ERROR, "The command record & replay feature is disabled in the settings (jrpm feature toggles).");
+		return true;
+	}
 	/* argv[0] is the command name; parameters start at argv[1]. */
 	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Record executed commands. Usage: 'cmdrecord [start [file]]' / 'cmdrecord stop'.");
@@ -138,6 +143,10 @@ static void ReplayExecute(DynBaseCommandContainer &container, CompanyID company)
 
 static bool ConCmdReplay(std::span<std::string_view> argv)
 {
+	if (!_settings_game.jrpm_features.enable_command_replay) {
+		IConsolePrint(CC_ERROR, "The command record & replay feature is disabled in the settings (jrpm feature toggles).");
+		return true;
+	}
 	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Replay a recorded command file. Usage: 'cmdreplay <file>'.");
 		return true;

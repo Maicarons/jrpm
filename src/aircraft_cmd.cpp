@@ -604,6 +604,47 @@ void Aircraft::OnNewDay()
 	AgeVehicle(this);
 }
 
+/**
+ * Live re-evaluation of the cb36-based max speed for display purposes.
+ * The cached value in vcache.cached_max_speed was observed to be stale in jrpm
+ * (frozen at the hangar-time default), so we bypass it and ask the NewGRF for
+ * the current speed directly. PROB_PA_AIRCRAFT_CACHE is the cache key used by
+ * ShowAircraftStatusWindow; we deliberately avoid reading it here.
+ */
+int Aircraft::GetDisplayMaxSpeed() const
+{
+	/* The GUI "max speed" is the engine's design max, computed once per
+	 * aircraft in UpdateAircraftCache via Engine::GetDisplayMaxSpeed —
+	 * i.e. cb36 PROP_AIRCRAFT_SPEED in engine context, matching the buy
+	 * window. For NewGRF planes that don't override via cb36, this falls
+	 * back to the original YAC 1-11 VehInfo.max_speed (e.g. 35 -> 450
+	 * km/h). For AeroLinersSet-style NewGRFs that override, it picks up
+	 * the stated design max (68 -> 870) so the detail window matches the
+	 * buy window instead of being polluted by the per-state cb36 value
+	 * (35 in cruise, 7 in approach) the vehicle context would return. */
+	return this->acache.cached_design_max;
+}
+
+int Aircraft::GetLiveMaxSpeed() const
+{
+	/* Runtime speed cap for UpdateAircraftSpeed. Prefer the engine's design
+	 * max (acache.cached_design_max, computed via Engine::GetDisplayMaxSpeed
+	 * in ENGINE context — the same value the buy window and the GUI "max
+	 * speed" field show). This makes the aircraft actually reach its design
+	 * top speed in cruise, matching cmclient/vanilla, where the reported
+	 * "fastest speed" during cruise is the design max — not the per-state
+	 * cb36 value (35 -> 450 in cruise, 7 -> 89 on approach) that
+	 * vcache.cached_max_speed would otherwise hold and that made jrpm cap
+	 * cruise at ~450, which the user perceived as "scaled down". Only for
+	 * NewGRF planes whose engine entry has no design max (cached_design_max
+	 * == 0) do we fall back to the per-state cb36 value. */
+	uint design = this->acache.cached_design_max;
+	if (design != 0) return design;
+	uint max_speed = GetVehicleProperty(this, PROP_AIRCRAFT_SPEED, 0);
+	if (max_speed != 0) return (max_speed * 128) / 10;
+	return AircraftVehInfo(this->engine_type)->max_speed;
+}
+
 /** Economy day handler */
 void Aircraft::OnPeriodic()
 {
@@ -691,6 +732,16 @@ void UpdateAircraftCache(Aircraft *v, bool update_range)
 		v->vcache.cached_max_speed = AircraftVehInfo(v->engine_type)->max_speed;
 	}
 
+	/* jrpm: seed the GUI "max speed" cache with the engine's design max.
+	 * Engine::GetDisplayMaxSpeed asks cb36 PROP_AIRCRAFT_SPEED in engine
+	 * context — that's where NewGRF planes return their stated design max
+	 * (e.g. AeroLinersSet returns 68 -> 870 for BAC 1-11-200), which
+	 * matches the buy window. For non-NewGRF planes this falls back to
+	 * the original YAC 1-11 entry max_speed (35 -> 450). Either way it's
+	 * a constant for the lifetime of the vehicle, not the per-state
+	 * value vcache.cached_max_speed ends up holding. */
+	v->acache.cached_design_max = Engine::Get(v->engine_type)->GetDisplayMaxSpeed();
+
 	/* Update cargo aging period. */
 	v->vcache.cached_cargo_age_period = GetVehicleProperty(v, PROP_AIRCRAFT_CARGO_AGE_PERIOD, EngInfo(v->engine_type)->cargo_age_period);
 	Aircraft *u = v->Next(); // Shadow for mail
@@ -738,7 +789,10 @@ static int UpdateAircraftSpeed(Aircraft *v)
 			speed_limit = GetAirTypeInfo(GetAirType(v->GetNextTile()))->max_speed;
 			/* Configurable taxiing speed (relative to the plane_speed factor). */
 			if (v->state == AS_RUNNING) {
-				speed_limit = std::min<uint>(speed_limit, (SPEED_LIMIT_TAXI / 4) * _settings_game.vehicle.plane_taxi_speed);
+				/* jrpm: the adjustable taxi speed is behind the enable_plane_taxi_speed
+				 * toggle; when disabled, fall back to the default factor (4 -> x1). */
+				uint8_t taxi_speed = _settings_game.jrpm_features.enable_plane_taxi_speed ? _settings_game.vehicle.plane_taxi_speed : 4;
+				speed_limit = std::min<uint>(speed_limit, (SPEED_LIMIT_TAXI / 4) * taxi_speed);
 			}
 		}
 	} else if (v->state == AS_RUNNING) {
@@ -766,9 +820,18 @@ static int UpdateAircraftSpeed(Aircraft *v)
 		speed_limit = std::min<uint>(speed_limit, SPEED_LIMIT_BROKEN);
 	}
 
-	if (v->vcache.cached_max_speed < speed_limit) {
+	/* jrpm: cap speed by GetLiveMaxSpeed() instead of the stale
+	 * vcache.cached_max_speed. The cmclient state-machine rewrite stops
+	 * refreshing cached_max_speed once the plane is in flight, leaving the
+	 * cap frozen at an early value. GetLiveMaxSpeed() re-runs cb36 in
+	 * vehicle context every tick, so the cap follows the current flight
+	 * state (cruise / approach / taxi) and falls back to the engine's
+	 * static max for non-NewGRF planes. The GUI "max" is held separately
+	 * in acache.cached_design_max and never crosses this limiter's wire. */
+	uint live_max = static_cast<uint>(v->GetLiveMaxSpeed());
+	if (live_max < speed_limit) {
 		if (v->cur_speed < speed_limit) hard_limit = false;
-		speed_limit = v->vcache.cached_max_speed;
+		speed_limit = live_max;
 	}
 
 	v->subspeed = (t = v->subspeed) + (uint8_t)spd;

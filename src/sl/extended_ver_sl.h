@@ -208,6 +208,7 @@ enum SlXvFeatureIndex {
 	XSLFI_CHILLPP,                                ///< This is a ChillPP game, use this for loading some settings
 	XSLFI_ORDER_DECOUPLE,                         ///< Couple/decouple train orders
 	XSLFI_PLANE_TAXI_SPEED,                       ///< Configurable plane taxiing speed
+	XSLFI_COMPANY_CARGO_INCOME,                   ///< Per-cargo company income (cmclient port)
 
 	XSLFI_SIZE,                                   ///< Total count of features, including null feature
 };

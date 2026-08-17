@@ -3484,11 +3484,25 @@ void ClearTownHouse(Town *t, TileIndex tile)
 		t->stadium_count--;
 	}
 
-	/* Do the actual clearing of tiles */
+	/* Do the actual clearing of tiles. Each subtile is guarded with IsTileType
+	 * so a missing or replaced neighbour (e.g. an orphaned subtile after the
+	 * house was partially destroyed, or a NewGRF that builds an inconsistent
+	 * layout) does not trip the assert in DoClearTownHouseHelper. In the rare
+	 * broken-layout case a skipped subtile may leave a small building-counter
+	 * desync, which is far preferable to crashing the game. */
 	DoClearTownHouseHelper(tile, t, house);
-	if (hs->building_flags.Any(BUILDING_2_TILES_Y))   DoClearTownHouseHelper(tile + TileDiffXY(0, 1), t, ++house);
-	if (hs->building_flags.Any(BUILDING_2_TILES_X))   DoClearTownHouseHelper(tile + TileDiffXY(1, 0), t, ++house);
-	if (hs->building_flags.Any(BUILDING_HAS_4_TILES)) DoClearTownHouseHelper(tile + TileDiffXY(1, 1), t, ++house);
+	if (hs->building_flags.Any(BUILDING_2_TILES_Y)) {
+		TileIndex sub = tile + TileDiffXY(0, 1);
+		if (IsTileType(sub, TileType::House)) DoClearTownHouseHelper(sub, t, ++house);
+	}
+	if (hs->building_flags.Any(BUILDING_2_TILES_X)) {
+		TileIndex sub = tile + TileDiffXY(1, 0);
+		if (IsTileType(sub, TileType::House)) DoClearTownHouseHelper(sub, t, ++house);
+	}
+	if (hs->building_flags.Any(BUILDING_HAS_4_TILES)) {
+		TileIndex sub = tile + TileDiffXY(1, 1);
+		if (IsTileType(sub, TileType::House)) DoClearTownHouseHelper(sub, t, ++house);
+	}
 
 	RemoveNearbyStations(t, tile, hs->building_flags);
 
@@ -4731,7 +4745,7 @@ Town::AcceptedHistory SumHistory(std::span<const Town::AcceptedHistory> history)
 void TownsMonthlyLoop()
 {
 	/* Roll the town growth tile maps over (cmclient port). */
-	RotateTownGrowthTiles();
+	if (_settings_game.jrpm_features.enable_town_zoning) RotateTownGrowthTiles();
 
 	for (Town *t : Town::Iterate()) {
 		/* Check for active town actions and decrement their counters. */

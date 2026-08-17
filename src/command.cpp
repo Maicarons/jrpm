@@ -8,6 +8,7 @@
 /** @file command.cpp Handling of commands. */
 
 #include "stdafx.h"
+#include "jrpm_watch_gui.h"
 #include "landscape.h"
 #include "error.h"
 #include "gui.h"
@@ -724,6 +725,7 @@ CommandCost DoCommandPInternal(Commands cmd, TileIndex tile, const CommandPayloa
 	if (tile != 0) {
 		Company *c = Company::GetIfValid(_current_company);
 		if (c != nullptr) c->last_build_coordinate = tile;
+		::UpdateWatching(_current_company, tile);
 	}
 
 	SubtractMoneyFromCompany(_current_company, res2);

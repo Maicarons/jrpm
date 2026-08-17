@@ -32,6 +32,7 @@
 #include "hotkeys.h"
 #include "toolbar_gui.h"
 #include "statusbar_gui.h"
+#include "cm_tooltips.hpp"
 #include "error.h"
 #include "game/game.hpp"
 #include "video/video_driver.hpp"
@@ -2171,7 +2172,13 @@ static EventState HandleMouseDragDrop()
 /** Report position of the mouse to the underlying window. */
 static void HandleMouseOver()
 {
-	Window *w = FindWindowFromPt(_cursor.pos.x, _cursor.pos.y);
+	/* cmclient parity: the citymania land-tooltip window follows the cursor,
+	 * so the topmost window under the cursor is the tooltip itself. Use the
+	 * hoverable-window resolver which skips the land-tooltip (and station-rating
+	 * tooltip) classes, otherwise the underlying viewport would stop receiving
+	 * OnMouseOver once the tooltip pops up and the tooltip would freeze / never
+	 * close. */
+	Window *w = citymania::FindHoverableWindowFromPt(_cursor.pos.x, _cursor.pos.y);
 
 	/* We changed window, put an OnMouseOver event to the last window */
 	if (_mouseover_last_w != nullptr && _mouseover_last_w != w) {

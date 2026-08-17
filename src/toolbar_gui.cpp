@@ -8,6 +8,8 @@
 /** @file toolbar_gui.cpp Code related to the (main) toolbar. */
 
 #include "stdafx.h"
+#include "jrpm_cargo_table.h"
+#include "jrpm_watch_gui.h"
 #include "core/geometry_func.hpp"
 #include "gui.h"
 #include "spritecache.h"
@@ -223,6 +225,32 @@ static void PopupMainCompanyToolbMenu(Window *w, WidgetID widget, CompanyMask gr
 
 	PopupMainToolbarMenu(w, widget, std::move(list), _local_company == COMPANY_SPECTATOR ? (widget == WID_TN_COMPANIES ? CTMN_CLIENT_LIST : CTMN_SPECTATOR) : _local_company.base());
 }
+
+static CallBackFunction ToolbarCargosClick(Window *w)
+{
+	PopupMainCompanyToolbMenu(w, WID_TN_CARGOS);
+	return CallBackFunction::None;
+}
+
+static CallBackFunction MenuClickCargos(int index)
+{
+	ShowCompanyCargos((CompanyID)index);
+	return CallBackFunction::None;
+}
+
+static CallBackFunction ToolbarWatchClick(Window *w)
+{
+	PopupMainCompanyToolbMenu(w, WID_TN_WATCH);
+	return CallBackFunction::None;
+}
+
+static CallBackFunction MenuClickWatch(int index)
+{
+	if (Company::IsValidID((CompanyID)index)) ShowWatchWindow((CompanyID)index);
+	else ShowWatchWindow(CompanyID::Invalid());
+	return CallBackFunction::None;
+}
+
 
 static ToolbarMode _toolbar_mode;
 
@@ -1569,9 +1597,11 @@ static MenuClickedProc * const _menu_clicked_procs[] = {
 	MenuClickSubsidies,   // 6
 	MenuClickStations,    // 7
 	MenuClickFinances,    // 8
+	MenuClickCargos,      // company cargo details
 	MenuClickCompany,     // 9
 	MenuClickStory,       // 10
 	MenuClickGoal,        // 11
+	MenuClickWatch,       // watch company actions
 	MenuClickGraphsOrLeague, // 12
 	MenuClickGraphsOrLeague, // 13
 	MenuClickIndustry,    // 14
@@ -2020,9 +2050,11 @@ class NWidgetMainToolbarContainer : public NWidgetToolbarContainer {
 			WID_TN_SUBSIDIES,
 			WID_TN_STATIONS,
 			WID_TN_FINANCES,
+			WID_TN_CARGOS,
 			WID_TN_COMPANIES,
 			WID_TN_STORY,
 			WID_TN_GOAL,
+			WID_TN_WATCH,
 			WID_TN_GRAPHS,
 			WID_TN_LEAGUE,
 			WID_TN_INDUSTRIES,
@@ -2198,9 +2230,11 @@ static ToolbarButtonProc * const _toolbar_button_procs[] = {
 	ToolbarSubsidiesClick,
 	ToolbarStationsClick,
 	ToolbarFinancesClick,
+	ToolbarCargosClick,
 	ToolbarCompaniesClick,
 	ToolbarStoryClick,
 	ToolbarGoalClick,
+	ToolbarWatchClick,
 	ToolbarGraphsClick,
 	ToolbarLeagueClick,
 	ToolbarIndustryClick,
@@ -2258,7 +2292,7 @@ struct MainToolbarWindow : Window {
 		 * Since enabled state is the default, just disable when needed */
 		this->SetWidgetsDisabledState(_local_company == COMPANY_SPECTATOR, WID_TN_RAILS, WID_TN_ROADS, WID_TN_TRAMS, WID_TN_WATER, WID_TN_AIR, WID_TN_LANDSCAPE);
 		/* disable company list drop downs, if there are no companies */
-		this->SetWidgetsDisabledState(Company::GetNumItems() == 0, WID_TN_STATIONS, WID_TN_FINANCES, WID_TN_TRAINS, WID_TN_ROADVEHS, WID_TN_SHIPS, WID_TN_AIRCRAFT);
+		this->SetWidgetsDisabledState(Company::GetNumItems() == 0, WID_TN_STATIONS, WID_TN_FINANCES, WID_TN_CARGOS, WID_TN_WATCH, WID_TN_TRAINS, WID_TN_ROADVEHS, WID_TN_SHIPS, WID_TN_AIRCRAFT);
 
 		this->SetWidgetDisabledState(WID_TN_GOAL, Goal::GetNumItems() == 0);
 		this->SetWidgetDisabledState(WID_TN_STORY, StoryPage::GetNumItems() == 0);
@@ -2456,9 +2490,11 @@ static constexpr std::tuple<WidgetID, WidgetType, SpriteID> _toolbar_button_spri
 	{WID_TN_SUBSIDIES,    WWT_IMGBTN,     SPR_IMG_SUBSIDIES},
 	{WID_TN_STATIONS,     WWT_IMGBTN,     SPR_IMG_COMPANY_LIST},
 	{WID_TN_FINANCES,     WWT_IMGBTN,     SPR_IMG_COMPANY_FINANCE},
+	{WID_TN_CARGOS,       WWT_IMGBTN,     SPR_IMG_CARGOFLOW},
 	{WID_TN_COMPANIES,    WWT_IMGBTN,     SPR_IMG_COMPANY_GENERAL},
 	{WID_TN_STORY,        WWT_IMGBTN,     SPR_IMG_STORY_BOOK},
 	{WID_TN_GOAL,         WWT_IMGBTN,     SPR_IMG_GOAL},
+	{WID_TN_WATCH,        WWT_IMGBTN,     SPR_CENTRE_VIEW_VEHICLE},
 	{WID_TN_GRAPHS,       WWT_IMGBTN,     SPR_IMG_GRAPHS},
 	{WID_TN_LEAGUE,       WWT_IMGBTN,     SPR_IMG_COMPANY_LEAGUE},
 	{WID_TN_INDUSTRIES,   WWT_IMGBTN,     SPR_IMG_INDUSTRY},

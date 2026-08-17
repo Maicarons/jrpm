@@ -554,12 +554,15 @@ struct MainWindow : Window
 
 	virtual void OnMouseOver(Point pt, WidgetID widget) override
 	{
-		if (pt.x != -1 && _game_mode != GameMode::Menu && IsViewportMouseHoverActive()) {
+		if (_game_mode != GameMode::Menu) {
 			/* cmclient-style land tooltips (house/industry/station details).
-			 * This replaces the built-in tooltip exactly like cmclient does. */
+			 * This replaces the built-in tooltip exactly like cmclient does.
+			 * Compute the tile from the cursor (not the widget-relative pt) and
+			 * always forward it, including INVALID_TILE when the cursor leaves
+			 * the viewport, so the tooltip refreshes live and auto-closes. */
 			const Point p = GetTileBelowCursor();
-			const TileIndex tile = TileVirtXY(p.x, p.y);
-			if (tile < Map::Size()) citymania::ShowLandTooltips(tile, this);
+			const TileIndex tile = (p.x == -1) ? INVALID_TILE : TileVirtXY(p.x, p.y);
+			citymania::ShowLandTooltips(tile, this);
 		}
 	}
 

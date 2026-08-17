@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "settings_type.h"
 
 #include "cm_blueprint.hpp"
 
@@ -30,12 +31,65 @@
 #include "tunnelbridge_map.h"
 #include "network/network.h"
 
+#include <algorithm>
 #include <map>
+#include <vector>
 
 extern TileHighlightData _thd;
 extern RailType _cur_railtype;
 
 extern StationPickerSelection _station_gui; ///< Settings of the station picker.
+
+/* Pending station sign builds: the 1x1 sign tile is posted first (with
+ * CommandCallback::BlueprintStation); when it completes, the station parts
+ * of the same blueprint item are posted joined to the newly created station,
+ * and the sign tile is removed if the original blueprint had no sign part.
+ * Mirrors cmclient's BuildBlueprint with_callback chain. */
+namespace citymania {
+struct PendingBlueprintStation {
+	sp<Blueprint> blueprint;
+	TileIndex start;
+	TileIndex sign_tile;
+	bool sign_part;
+	StationID sid;
+};
+static std::vector<PendingBlueprintStation> _pending_blueprint_stations;
+}  // namespace citymania
+
+/** Command callback for a blueprint station sign (BuildRailStation). */
+void CcBlueprintStation(const CommandCost &result, TileIndex tile, RailType railtype, Axis axis, uint8_t numtracks, uint8_t plat_len, StationClassID spec_class, uint16_t spec_index, StationID station_to_join, bool adjacent)
+{
+	using namespace citymania;
+
+	/* Find the pending blueprint station that owns this sign tile. */
+	auto it = std::find_if(_pending_blueprint_stations.begin(), _pending_blueprint_stations.end(), [tile](const PendingBlueprintStation &p) {
+		return p.sign_tile == tile;
+	});
+	if (it == _pending_blueprint_stations.end()) return;
+
+	PendingBlueprintStation pending = *it;
+	_pending_blueprint_stations.erase(it);
+
+	if (!result.Succeeded()) return;
+
+	/* The newly created station is the one which owns the sign tile. */
+	StationID station_id = GetStationIndex(tile);
+
+	/* Post all station parts of this blueprint joined to the new station. */
+	for (const auto &item : pending.blueprint->items) {
+		if (item.type != Blueprint::Item::Type::RAIL_STATION_PART) continue;
+		if (item.u.rail.station_part.id != pending.sid) continue;
+		Command<Commands::BuildRailStation>::Post(STR_ERROR_CAN_T_BUILD_RAILROAD_STATION, CommandCallback::None,
+			AddTileIndexDiffCWrap(pending.start, item.tdiff), _cur_railtype, item.u.rail.station_part.axis,
+			item.u.rail.station_part.numtracks, item.u.rail.station_part.plat_len,
+			_station_gui.sel_class, _station_gui.sel_type, station_id, true);
+	}
+
+	/* If the original station had no sign part, remove the sign tile. */
+	if (!pending.sign_part) {
+		Command<Commands::RemoveFromRailStation>::Post(tile, (TileIndex)0, false);
+	}
+}
 
 namespace citymania {
 extern ObjectHighlight _cm_active_object;
@@ -59,7 +113,12 @@ static void IterateStation(TileIndex tile, Axis axis, uint numtracks, uint plat_
 /* A blueprint item compiles to a jrpm command closure. */
 using BlueprintCmdClosure = std::function<void(TileIndex start)>;
 
-
+/* Signal position -> number of direction cycles (cmclient cm_blueprint.cpp). */
+static const uint SIGNAL_POS_NUM[] = {
+	1, 0, 1, 0,
+	0, 1, 0, 1,
+	0, 1, 0, 1,
+};
 
 std::pair<TileIndex, sp<Blueprint>> _active_blueprint = std::make_pair(INVALID_TILE, nullptr);
 const size_t MAX_BLUEPRINT_SLOTS = 16;
@@ -135,7 +194,7 @@ BlueprintCmdClosure GetBlueprintCommand(TileIndex start, const Blueprint::Item &
 					end_tile = new_tile;
 					tdir = NextTrackdir(tdir);
 				}
-				Command<Commands::BuildRailLong>::Post(end_tile, start_tile, _cur_railtype, TrackdirToTrack(item.u.rail.track.start_dir), BuildRailTrackFlags::None, false);
+				Command<Commands::BuildRailLong>::Post(end_tile, start_tile, _cur_railtype, TrackdirToTrack(item.u.rail.track.start_dir), BuildRailTrackFlags::AutoRemoveSignals, false);
 			};
 		case Blueprint::Item::Type::RAIL_DEPOT:
 			return [item, start](TileIndex) {
@@ -151,20 +210,61 @@ BlueprintCmdClosure GetBlueprintCommand(TileIndex start, const Blueprint::Item &
 			};
 		case Blueprint::Item::Type::RAIL_STATION:
 			return [item, start](TileIndex) {
-				Command<Commands::BuildRailStation>::Post(STR_ERROR_CAN_T_BUILD_RAILROAD_STATION, CommandCallback::None, AddTileIndexDiffCWrap(start, item.tdiff), _cur_railtype, Axis::X, 1, 1, _station_gui.sel_class, _station_gui.sel_type, StationID::Invalid(), false);
+				Command<Commands::BuildRailStation>::Post(STR_ERROR_CAN_T_BUILD_RAILROAD_STATION, CommandCallback::BlueprintStation, AddTileIndexDiffCWrap(start, item.tdiff), _cur_railtype, Axis::X, 1, 1, _station_gui.sel_class, _station_gui.sel_type, NEW_STATION, true);
 			};
 		case Blueprint::Item::Type::RAIL_STATION_PART:
 			return [item, start](TileIndex) {
-				Command<Commands::BuildRailStation>::Post(STR_ERROR_CAN_T_BUILD_RAILROAD_STATION, CommandCallback::None, AddTileIndexDiffCWrap(start, item.tdiff), _cur_railtype, item.u.rail.station_part.axis, item.u.rail.station_part.numtracks, item.u.rail.station_part.plat_len, _station_gui.sel_class, _station_gui.sel_type, StationID::Invalid(), false);
+				Command<Commands::BuildRailStation>::Post(STR_ERROR_CAN_T_BUILD_RAILROAD_STATION, CommandCallback::None, AddTileIndexDiffCWrap(start, item.tdiff), _cur_railtype, item.u.rail.station_part.axis, item.u.rail.station_part.numtracks, item.u.rail.station_part.plat_len, _station_gui.sel_class, _station_gui.sel_type, NEW_STATION, true);
 			};
 		case Blueprint::Item::Type::RAIL_SIGNAL:
 			return [item, start](TileIndex) {
-				BuildSignalFlags bf = BuildSignalFlags::SkipExisting;
-				if (!item.u.rail.signal.twoway) bf |= BuildSignalFlags::Convert;
 				Command<Commands::BuildSignal>::Post(STR_ERROR_CAN_T_BUILD_SIGNALS_HERE, CommandCallback::None,
 					AddTileIndexDiffCWrap(start, item.tdiff), SIGNAL_POS_TRACK[item.u.rail.signal.pos],
-					item.u.rail.signal.type, item.u.rail.signal.variant, 0, 0, bf, SCG_BLOCK, 1, 0);
+					item.u.rail.signal.type, item.u.rail.signal.variant, 0, 0,
+					BuildSignalFlags::SkipExisting, SCG_BLOCK,
+					SIGNAL_POS_NUM[item.u.rail.signal.pos] + (item.u.rail.signal.type <= SignalType::Combo && !item.u.rail.signal.twoway ? 1 : 0),
+					0);
 			};
+		default:
+			NOT_REACHED();
+	}
+	NOT_REACHED();
+}
+
+/* Test whether the command for a blueprint item would succeed at the given
+ * location, without executing it (cmclient parity: GetBlueprintCommand().test()). */
+static bool TestBlueprintCommand(TileIndex start, const Blueprint::Item &item) {
+	static const Track SIGNAL_POS_TRACK[] = {
+		TRACK_LEFT, TRACK_LEFT, TRACK_RIGHT, TRACK_RIGHT,
+		TRACK_UPPER, TRACK_UPPER, TRACK_LOWER, TRACK_LOWER,
+		TRACK_X, TRACK_X, TRACK_Y, TRACK_Y,
+	};
+
+	switch (item.type) {
+		case Blueprint::Item::Type::RAIL_TRACK: {
+			auto start_tile = AddTileIndexDiffCWrap(start, item.tdiff);
+			auto end_tile = start_tile;
+			auto tdir = item.u.rail.track.start_dir;
+			for (auto i = 1; i < item.u.rail.track.length; i++) {
+				auto new_tile = AddTileIndexDiffCWrap(end_tile, TileIndexDiffCByDiagDir(TrackdirToExitdir(tdir)));
+				if (new_tile == INVALID_TILE) break;
+				end_tile = new_tile;
+				tdir = NextTrackdir(tdir);
+			}
+			return Command<Commands::BuildRailLong>::Do(CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildRailLong>()) | DoCommandFlag::QueryCost, end_tile, start_tile, _cur_railtype, TrackdirToTrack(item.u.rail.track.start_dir), BuildRailTrackFlags::AutoRemoveSignals, false).Succeeded();
+		}
+		case Blueprint::Item::Type::RAIL_DEPOT:
+			return Command<Commands::BuildRailDepot>::Do(CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildRailDepot>()) | DoCommandFlag::QueryCost, AddTileIndexDiffCWrap(start, item.tdiff), _cur_railtype, item.u.rail.depot.ddir).Succeeded();
+		case Blueprint::Item::Type::RAIL_TUNNEL:
+			return Command<Commands::BuildTunnel>::Do(CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildTunnel>()) | DoCommandFlag::QueryCost, AddTileIndexDiffCWrap(start, item.tdiff), TRANSPORT_RAIL, to_underlying(_cur_railtype)).Succeeded();
+		case Blueprint::Item::Type::RAIL_BRIDGE:
+			return Command<Commands::BuildBridge>::Do(CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildBridge>()) | DoCommandFlag::QueryCost, AddTileIndexDiffCWrap(start, item.tdiff), AddTileIndexDiffCWrap(start, item.u.rail.bridge.other_end), TRANSPORT_RAIL, item.u.rail.bridge.type, to_underlying(_cur_railtype), BuildBridgeFlags::None).Succeeded();
+		case Blueprint::Item::Type::RAIL_STATION:
+			return Command<Commands::BuildRailStation>::Do(CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildRailStation>()) | DoCommandFlag::QueryCost, AddTileIndexDiffCWrap(start, item.tdiff), _cur_railtype, Axis::X, 1, 1, _station_gui.sel_class, _station_gui.sel_type, NEW_STATION, true).Succeeded();
+		case Blueprint::Item::Type::RAIL_STATION_PART:
+			return Command<Commands::BuildRailStation>::Do(CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildRailStation>()) | DoCommandFlag::QueryCost, AddTileIndexDiffCWrap(start, item.tdiff), _cur_railtype, item.u.rail.station_part.axis, item.u.rail.station_part.numtracks, item.u.rail.station_part.plat_len, _station_gui.sel_class, _station_gui.sel_type, NEW_STATION, true).Succeeded();
+		case Blueprint::Item::Type::RAIL_SIGNAL:
+			return true; /* Signals are placed on freshly built track; never flagged in the preview. */
 		default:
 			NOT_REACHED();
 	}
@@ -179,10 +279,20 @@ std::multimap<TileIndex, ObjectTileHighlight> Blueprint::GetTiles(TileIndex tile
         res.emplace(tile, ohl);
     };
 
+    /* Station parts whose sign (RAIL_STATION item) can be built are white;
+     * those whose sign cannot be built are orange (cmclient parity). */
+    std::set<StationID> can_build_station_sign;
+    for (auto &item : this->items) {
+        if (item.type != Item::Type::RAIL_STATION) continue;
+        if (TestBlueprintCommand(tile, item)) can_build_station_sign.insert(item.u.rail.station.id);
+    }
 
     for (auto &o: this->items) {
         auto otile = AddTileIndexDiffCWrap(tile, o.tdiff);
-        auto palette = PALETTE_TO_WHITE;
+        auto palette = CM_PALETTE_TINT_WHITE;
+        if (o.type != Item::Type::RAIL_SIGNAL && !TestBlueprintCommand(tile, o)) {
+            palette = CM_PALETTE_TINT_RED_DEEP;
+        }
 
         switch(o.type) {
             case Item::Type::RAIL_TRACK: {
@@ -213,6 +323,9 @@ std::multimap<TileIndex, ObjectTileHighlight> Blueprint::GetTiles(TileIndex tile
                 TileArea area{tile, o.u.rail.station_part.numtracks, o.u.rail.station_part.plat_len};
                 if (o.u.rail.station_part.axis == Axis::X) std::swap(area.w, area.h);
 
+                if (palette == CM_PALETTE_TINT_WHITE && can_build_station_sign.find(o.u.rail.station_part.id) == can_build_station_sign.end()) {
+                    palette = CM_PALETTE_TINT_ORANGE;
+                }
                 IterateStation(otile, o.u.rail.station_part.axis, o.u.rail.station_part.numtracks, o.u.rail.station_part.plat_len,
                     [&](TileIndex tile, int, int) {
                         add_tile(tile, ObjectTileHighlight::make_rail_station(palette, o.u.rail.station_part.axis, layout_idx++, STAT_CLASS_DFLT, 0, area));
@@ -221,9 +334,9 @@ std::multimap<TileIndex, ObjectTileHighlight> Blueprint::GetTiles(TileIndex tile
                 break;
             }
             case Item::Type::RAIL_SIGNAL:
-                add_tile(otile, ObjectTileHighlight::make_rail_signal(PALETTE_TO_WHITE, o.u.rail.signal.pos, o.u.rail.signal.type, o.u.rail.signal.variant));
+                add_tile(otile, ObjectTileHighlight::make_rail_signal(CM_PALETTE_TINT_WHITE, o.u.rail.signal.pos, o.u.rail.signal.type, o.u.rail.signal.variant));
                 if (o.u.rail.signal.twoway)
-                    add_tile(otile, ObjectTileHighlight::make_rail_signal(PALETTE_TO_WHITE, o.u.rail.signal.pos | 1, o.u.rail.signal.type, o.u.rail.signal.variant));
+                    add_tile(otile, ObjectTileHighlight::make_rail_signal(CM_PALETTE_TINT_WHITE, o.u.rail.signal.pos | 1, o.u.rail.signal.type, o.u.rail.signal.variant));
                 break;
             case Item::Type::RAIL_STATION:
                 break;
@@ -544,31 +657,45 @@ void SetBlueprintHighlight(const TileInfo *ti, TileHighlight &th) {
         return;
 
     if (_active_blueprint.second->HasSourceTile(ti->tile)) {
-        th.tint_all(PALETTE_TO_BLUE);
+        th.tint_all(CM_PALETTE_TINT_BLUE);
     }
 }
 
 void BuildBlueprint(sp<Blueprint> &blueprint, TileIndex start) {
+	bool has_rails = false;
+
 	/* First pass: tracks, depots, tunnels, bridges and stations. */
 	for (auto &item : blueprint->items) {
 		switch (item.type) {
 			case Blueprint::Item::Type::RAIL_TRACK:
+				has_rails = true;
+				[[fallthrough]];
 			case Blueprint::Item::Type::RAIL_DEPOT:
 			case Blueprint::Item::Type::RAIL_TUNNEL:
 			case Blueprint::Item::Type::RAIL_BRIDGE:
-			case Blueprint::Item::Type::RAIL_STATION:
-			case Blueprint::Item::Type::RAIL_STATION_PART:
 				GetBlueprintCommand(start, item)(start);
 				break;
+			case Blueprint::Item::Type::RAIL_STATION: {
+				/* Register the pending station build: the sign (1x1) is
+				 * posted with CommandCallback::BlueprintStation, which posts
+				 * the joined parts once the sign has been built. */
+				TileIndex sign_tile = AddTileIndexDiffCWrap(start, item.tdiff);
+				_pending_blueprint_stations.push_back({blueprint, start, sign_tile, item.u.rail.station.has_part, item.u.rail.station.id});
+				GetBlueprintCommand(start, item)(start);
+				break;
+			}
 			default:
 				break;
 		}
 	}
 
-	/* Second pass: signals go on top of the freshly built track. */
-	for (auto &item : blueprint->items) {
-		if (item.type == Blueprint::Item::Type::RAIL_SIGNAL) {
-			GetBlueprintCommand(start, item)(start);
+	/* Second pass: signals go on top of the freshly built track.
+	 * Signals are only posted if the blueprint contains rails (cmclient parity). */
+	if (has_rails) {
+		for (auto &item : blueprint->items) {
+			if (item.type == Blueprint::Item::Type::RAIL_SIGNAL) {
+				GetBlueprintCommand(start, item)(start);
+			}
 		}
 	}
 }
@@ -592,7 +719,7 @@ bool LoadBlueprint(uint slot) {
     if (slot >= MAX_BLUEPRINT_SLOTS) return false;
     _active_blueprint = {INVALID_TILE, _blueprint_slots[slot]};
     if (_active_blueprint.second == nullptr) {
-        ShowErrorMessage({}, {}, WarningLevel::Error);
+        ShowErrorMessage(GetEncodedString(CM_STR_NO_BLUEPRINT_IN_SLOT, slot), {}, WarningLevel::Error);
     }
     return _active_blueprint.second != nullptr;
 }
@@ -602,6 +729,10 @@ bool LoadBlueprint(uint slot) {
 
 static bool ConBlueprintCopy(std::span<std::string_view> argv)
 {
+	if (!_settings_game.jrpm_features.enable_blueprint) {
+		IConsolePrint(CC_ERROR, "The blueprint feature is disabled in the settings (jrpm feature toggles).");
+		return true;
+	}
 	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Copy the rail layout in the current tile selection to the blueprint buffer. Usage: 'blueprint_copy'.");
 		return true;
@@ -613,6 +744,10 @@ static bool ConBlueprintCopy(std::span<std::string_view> argv)
 
 static bool ConBlueprintBuild(std::span<std::string_view> argv)
 {
+	if (!_settings_game.jrpm_features.enable_blueprint) {
+		IConsolePrint(CC_ERROR, "The blueprint feature is disabled in the settings (jrpm feature toggles).");
+		return true;
+	}
 	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Build the active blueprint at the selected tile. Usage: 'blueprint_build'.");
 		return true;
@@ -624,6 +759,10 @@ static bool ConBlueprintBuild(std::span<std::string_view> argv)
 
 static bool ConBlueprintSave(std::span<std::string_view> argv)
 {
+	if (!_settings_game.jrpm_features.enable_blueprint) {
+		IConsolePrint(CC_ERROR, "The blueprint feature is disabled in the settings (jrpm feature toggles).");
+		return true;
+	}
 	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Save the active blueprint to a slot. Usage: 'blueprint_save <0-15>'.");
 		return true;
@@ -634,11 +773,17 @@ static bool ConBlueprintSave(std::span<std::string_view> argv)
 		return false;
 	}
 	SaveBlueprint(*r);
+	/* Leave blueprint placement mode (if active). */
+	ResetObjectToPlace();
 	return true;
 }
 
 static bool ConBlueprintLoad(std::span<std::string_view> argv)
 {
+	if (!_settings_game.jrpm_features.enable_blueprint) {
+		IConsolePrint(CC_ERROR, "The blueprint feature is disabled in the settings (jrpm feature toggles).");
+		return true;
+	}
 	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Load a blueprint from a slot. Usage: 'blueprint_load <0-15>'.");
 		return true;
@@ -648,12 +793,19 @@ static bool ConBlueprintLoad(std::span<std::string_view> argv)
 		IConsolePrint(CC_ERROR, "Invalid slot.");
 		return false;
 	}
-	LoadBlueprint(*r);
+	if (LoadBlueprint(*r)) {
+		/* Enter blueprint placement mode so the loaded blueprint can be placed immediately. */
+		ActivateRailBlueprintPlaceMode();
+	}
 	return true;
 }
 
 static bool ConBlueprintRotate(std::span<std::string_view> argv)
 {
+	if (!_settings_game.jrpm_features.enable_blueprint) {
+		IConsolePrint(CC_ERROR, "The blueprint feature is disabled in the settings (jrpm feature toggles).");
+		return true;
+	}
 	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Rotate the active blueprint 90 degrees. Usage: 'blueprint_rotate'.");
 		return true;

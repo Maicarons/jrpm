@@ -6036,3 +6036,37 @@ STR_BADGE_CONFIG_FILTERS                                        :{WHITE}筛选�
 STR_BADGE_CONFIG_PREVIEW                                        :预览图
 STR_BADGE_CONFIG_NAME                                           :名称
 STR_BADGE_FILTER_ANY_LABEL                                      :{STRING}：所有
+STR_CONFIG_SETTING_JRPM_FEATURES                                    :jrpm 功能开关
+STR_CONFIG_SETTING_JRPM_FEATURES_JRPM                               :jrpm 专属功能
+STR_CONFIG_SETTING_JRPM_FEATURES_MODDED                             :modded 移植
+STR_CONFIG_SETTING_JRPM_FEATURES_CMCLIENT                           :cmclient 借鉴
+STR_CONFIG_SETTING_JRPM_FEATURES_PULSEXLB                           :pulsexlb 合并
+STR_CONFIG_SETTING_JRPM_ENABLE_RESOURCE_DOWNLOAD                    :资源下载：多镜像 + 并行
+STR_CONFIG_SETTING_JRPM_ENABLE_RESOURCE_DOWNLOAD_HELPTEXT           :启用增强的内容下载器（多镜像 + 并行下载）。关闭后回退为原版单服务器串行下载。
+STR_CONFIG_SETTING_JRPM_ENABLE_VEHICLE_AUTOGROUP                    :车辆自动分组
+STR_CONFIG_SETTING_JRPM_ENABLE_VEHICLE_AUTOGROUP_HELPTEXT           :新造车辆自动归入分组。关闭后所有车辆保持未分组。
+STR_CONFIG_SETTING_JRPM_ENABLE_GLOBAL_AI                           :整局感知 AI（GlobalAI）
+STR_CONFIG_SETTING_JRPM_ENABLE_GLOBAL_AI_HELPTEXT                  :允许 AI 使用整局感知全局 API。关闭后阻止 GlobalAI 脚本。
+STR_CONFIG_SETTING_JRPM_ENABLE_TRIP_HISTORY                        :车辆行程历史
+STR_CONFIG_SETTING_JRPM_ENABLE_TRIP_HISTORY_HELPTEXT               :记录并展示车辆近期行程历史。关闭后隐藏行程历史面板。
+STR_CONFIG_SETTING_JRPM_ENABLE_PLANE_TAXI_SPEED                    :飞机滑行速度可调
+STR_CONFIG_SETTING_JRPM_ENABLE_PLANE_TAXI_SPEED_HELPTEXT           :允许自定义飞机滑行速度。关闭后始终使用默认滑行速度。
+STR_CONFIG_SETTING_JRPM_ENABLE_LOCATION_BOOKMARKS                  :位置书签
+STR_CONFIG_SETTING_JRPM_ENABLE_LOCATION_BOOKMARKS_HELPTEXT         :启用地图位置书签的保存与跳转（savelocation / gotolocation）。
+STR_CONFIG_SETTING_JRPM_ENABLE_CARGO_DETAILS                       :公司货运明细
+STR_CONFIG_SETTING_JRPM_ENABLE_CARGO_DETAILS_HELPTEXT              :显示公司级货运明细窗口。
+STR_CONFIG_SETTING_JRPM_ENABLE_SPECTATE                            :观战公司
+STR_CONFIG_SETTING_JRPM_ENABLE_SPECTATE_HELPTEXT                   :允许观战其他公司的视角。
+STR_CONFIG_SETTING_JRPM_ENABLE_HIGHLIGHT                           :对象级高亮系统
+STR_CONFIG_SETTING_JRPM_ENABLE_HIGHLIGHT_HELPTEXT                  :启用 cmclient 对象高亮与覆盖层系统。关闭后仅使用原版选中态。
+STR_CONFIG_SETTING_JRPM_ENABLE_BLUEPRINT                           :蓝图系统
+STR_CONFIG_SETTING_JRPM_ENABLE_BLUEPRINT_HELPTEXT                  :启用蓝图的复制 / 旋转 / 保存 / 加载 / 重建。
+STR_CONFIG_SETTING_JRPM_ENABLE_TOWN_ZONING                         :城镇分区
+STR_CONFIG_SETTING_JRPM_ENABLE_TOWN_ZONING_HELPTEXT                :启用城镇分区显示与 growth_tiles 存档。
+STR_CONFIG_SETTING_JRPM_ENABLE_COMMAND_REPLAY                      :命令记录与重放
+STR_CONFIG_SETTING_JRPM_ENABLE_COMMAND_REPLAY_HELPTEXT             :启用命令的记录与重放。
+STR_CONFIG_SETTING_JRPM_ENABLE_DECOUPLE                            :机车换挂
+STR_CONFIG_SETTING_JRPM_ENABLE_DECOUPLE_HELPTEXT                   :启用机车 / 车厢的解挂与挂载。
+STR_CONFIG_SETTING_JRPM_ENABLE_MODULAR_AIRPORT                     :模块化机场
+STR_CONFIG_SETTING_JRPM_ENABLE_MODULAR_AIRPORT_HELPTEXT            :启用多格模块化机场建造。关闭后仅使用标准机场。
+STR_JRPM_FEATURE_DISABLED :{WHITE}{STRING} 已在设置中关闭（jrpm 功能开关）。

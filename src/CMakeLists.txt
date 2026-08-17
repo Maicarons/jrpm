@@ -667,6 +667,8 @@ add_files(
     jrpm_locations.h
     jrpm_cargo_table.cpp
     jrpm_cargo_table.h
+    jrpm_watch_gui.cpp
+    jrpm_watch_gui.h
     jrpm_console_commands.cpp
     jrpm_console_commands.h
     cm_blueprint.cpp

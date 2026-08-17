@@ -7,6 +7,7 @@
 #include "stdafx.h"
 #include "triphistory.h"
 #include "strings_func.h"
+#include "error.h"
 #include "window_func.h"
 #include "gfx_func.h"
 #include "date_func.h"
@@ -202,6 +203,10 @@ static WindowDesc _vehicle_trip_history_desc(__FILE__, __LINE__,
 
 void ShowTripHistoryWindow(const Vehicle *v)
 {
+	if (!_settings_game.jrpm_features.enable_trip_history) {
+		ShowErrorMessage(GetEncodedString(STR_JRPM_FEATURE_DISABLED, STR_CONFIG_SETTING_JRPM_ENABLE_TRIP_HISTORY), {}, WarningLevel::Error);
+		return;
+	}
 	if (!BringWindowToFrontById(WindowClass::VehicleTripHistory, v->index)) {
 		AllocateWindowDescFront<VehicleTripHistoryWindow>(_vehicle_trip_history_desc, v->index);
 	}

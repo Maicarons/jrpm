@@ -472,6 +472,12 @@ inline SpriteID TileZoneDebugAnimatedTile(TileIndex tile)
  */
 SpriteID TileZoningSpriteEvaluation(TileIndex tile, Owner owner, ZoningEvaluationMode ev_mode)
 {
+	/* jrpm: town-zoning feature toggle — disable the town-specific zoning modes. */
+	if (!_settings_game.jrpm_features.enable_town_zoning &&
+			(ev_mode == ZEM_TOWN_ZONES || ev_mode == ZEM_TOWN_GROWTH_TILES)) {
+		return ZONING_INVALID_SPRITE_ID;
+	}
+
 	switch (ev_mode) {
 		case ZEM_CAN_BUILD:     return TileZoneCheckBuildEvaluation(tile, owner);
 		case ZEM_AUTHORITY:     return TileZoneCheckOpinionEvaluation(tile, owner);

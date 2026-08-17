@@ -1692,6 +1692,10 @@ static bool ConListGame(std::span<std::string_view> argv)
 /** Start a new AI. @copydoc IConsoleCmdProc */
 static bool ConStartAI(std::span<std::string_view> argv)
 {
+	if (!_settings_game.jrpm_features.enable_global_ai) {
+		IConsolePrint(CC_ERROR, "The whole-game-aware AI (GlobalAI) feature is disabled in the settings (jrpm feature toggles).");
+		return true;
+	}
 	if (argv.empty() || argv.size() > 3) {
 		IConsolePrint(CC_HELP, "Start a new AI. Usage: 'start_ai [<AI>] [<settings>]'.");
 		IConsolePrint(CC_HELP, "Start a new AI. If <AI> is given, it starts that specific AI (if found).");
@@ -4450,6 +4454,10 @@ static bool ConDumpInfo(std::span<std::string_view> argv)
  */
 static bool ConAutoGroup(std::span<std::string_view> argv)
 {
+	if (!_settings_game.jrpm_features.enable_vehicle_autogroup) {
+		IConsolePrint(CC_ERROR, "The vehicle auto-grouping feature is disabled in the settings (jrpm feature toggles).");
+		return true;
+	}
 	auto do_type = [](VehicleType vt) {
 		Command<Commands::AutoGroupSharedOrders>::Post(STR_ERROR_GROUP_CAN_T_CREATE, vt);
 	};

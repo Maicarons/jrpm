@@ -1365,6 +1365,11 @@ static Money DeliverGoods(int num_pieces, CargoType cargo_type, StationID dest, 
 		}
 	}
 
+	/* Track per-cargo income (cmclient port: CargoAccepted event). */
+	if (accepted_total > 0) {
+		company->cur_economy.cargo_income[cargo_type] += profit;
+	}
+
 	return profit;
 }
 
@@ -1422,10 +1427,12 @@ CargoPayment::~CargoPayment()
 	this->front->cargo_payment = nullptr;
 
 	/* Record this trip in the vehicle's trip history. */
-	Station *st_last = Station::GetIfValid(this->front->last_loading_station);
-	Station *st_curr = Station::GetIfValid(this->current_station);
-	this->front->trip_history.AddValue(this->route_profit, EconTime::CurDate(), this->front->trip_occupancy, st_last != nullptr && st_curr != nullptr ? DistanceManhattan(st_last->xy, st_curr->xy) : 0);
-	InvalidateWindowData(WindowClass::VehicleTripHistory, this->front->index);
+	if (_settings_game.jrpm_features.enable_trip_history) {
+		Station *st_last = Station::GetIfValid(this->front->last_loading_station);
+		Station *st_curr = Station::GetIfValid(this->current_station);
+		this->front->trip_history.AddValue(this->route_profit, EconTime::CurDate(), this->front->trip_occupancy, st_last != nullptr && st_curr != nullptr ? DistanceManhattan(st_last->xy, st_curr->xy) : 0);
+		InvalidateWindowData(WindowClass::VehicleTripHistory, this->front->index);
+	}
 
 	if (this->visual_profit == 0 && this->visual_transfer == 0) return;
 

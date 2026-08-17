@@ -3327,7 +3327,11 @@ static void DrawTile_Airport(TileInfo *ti)
 	if (IsRunway(ti->tile)) image = ati->base_sprites.runways[GetAirOffset(ti->tile)];
 	if (IsSimpleTrack(ti->tile)) {
 		uint8_t index = GetTileAirportGfx(ti->tile);
-		assert(index <= 21);
+		/* base_sprites.ground has 20 elements, so the usable indices are 0..19
+		 * (accessed as index-1 when index > 0). Some airport modifications can
+		 * leave a simple-track tile with an out-of-range gfx value. Avoid a
+		 * crash by falling back to the automatic track-based ground sprite. */
+		if (index >= 21) index = 0;
 		if (index == 0) {
 			if (GetAirportGround(ti->tile) != AG_AIRTYPE) {
 				TrackBits tracks = GetAirportTileTracks(ti->tile);

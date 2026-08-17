@@ -16,6 +16,7 @@
 #include "table/sprites.h"
 #include "table/strings.h"
 #include "strings_func.h"
+#include "error.h"
 #include "gfx_func.h"
 #include "core/geometry_func.hpp"
 #include "zoning.h"
@@ -133,16 +134,26 @@ struct ZoningWindow : public Window {
 	{
 		bool outer = true;
 		bool deselect = false;
+		ZoningEvaluationMode mode = ZEM_NOTHING;
 		if (widget >= ZTW_OUTER_FIRST && widget < ZTW_INNER_FIRST) {
 			int idx = widget - ZTW_OUTER_FIRST;
+			mode = ZONES[idx];
 			deselect = _zoning.outer == ZONES[idx];
 			_zoning.outer = deselect ? ZEM_NOTHING : ZONES[idx];
 		} else if (widget >= ZTW_INNER_FIRST && widget < ZTW_INNER_END) {
 			outer = false;
 			int idx = widget - ZTW_INNER_FIRST;
+			mode = ZONES[idx];
 			deselect = _zoning.inner == ZONES[idx];
 			_zoning.inner = deselect ? ZEM_NOTHING : ZONES[idx];
 		} else return;
+
+		/* jrpm: town-zoning feature toggle — ignore town-specific modes when disabled. */
+		if (!_settings_game.jrpm_features.enable_town_zoning &&
+				(mode == ZEM_TOWN_ZONES || mode == ZEM_TOWN_GROWTH_TILES)) {
+			ShowErrorMessage(GetEncodedString(STR_JRPM_FEATURE_DISABLED, STR_CONFIG_SETTING_JRPM_ENABLE_TOWN_ZONING), {}, WarningLevel::Error);
+			return;
+		}
 
 		this->RaiseColumn(outer);
 		if (!deselect) this->ToggleWidgetLoweredState(widget);

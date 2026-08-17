@@ -5715,7 +5715,8 @@ static void TrainEnterStation(Train *consist, StationID station)
 
 	Train *u = nullptr;
 	uint8_t load_trains = DECOUPLE_NO_LOAD;
-	bool want_decouple = consist->current_order.GetDestination() == station && consist->current_order.GetDecouple() == ODF_DECOUPLE;
+	bool want_decouple = _settings_game.jrpm_features.enable_decouple &&
+			consist->current_order.GetDestination() == station && consist->current_order.GetDecouple() == ODF_DECOUPLE;
 	Debug(desync, 1, "TrainEnterStation: veh={} st={} tile=({},{}) want_decouple={} ordertype={}", consist->index, station, TileX(consist->tile), TileY(consist->tile), want_decouple, (int)consist->current_order.GetType());
 	if (want_decouple) {
 		u = DecoupleTrain(consist);

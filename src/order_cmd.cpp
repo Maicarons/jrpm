@@ -2828,6 +2828,7 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, VehicleID veh, VehicleOrderID s
 				break;
 
 			case MOF_DECOUPLE: {
+				if (!_settings_game.jrpm_features.enable_decouple) return CommandCost();
 				OrderDecoupleFlags decouple_flags = order->GetDecouple();
 				order->SetDecouple(data);
 				if (decouple_flags == ODF_DECOUPLE && order->GetDecouple() == ODF_NOTHING) {

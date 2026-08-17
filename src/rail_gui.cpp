@@ -552,6 +552,15 @@ struct BuildRailToolbarWindow : Window {
 		if (_settings_client.gui.link_terraform_toolbar) ShowTerraformToolbar(this);
 	}
 
+	/** Enter blueprint placement mode, e.g. after loading a blueprint from a slot. */
+	void ActivateBlueprintPlaceMode()
+	{
+		ResetObjectToPlace();
+		SetObjectToPlace(SPR_CURSOR_RAIL_STATION, PAL_NONE, HT_BLUEPRINT_PLACE, this->window_class, this->window_number);
+		this->last_user_action = WID_RAT_BLUEPRINT;
+		this->SetDirty();
+	}
+
 	void Close([[maybe_unused]] int data = 0) override
 	{
 		if (this->IsWidgetLowered(WID_RAT_BUILD_STATION)) SetViewportCatchmentStation(nullptr, true);
@@ -915,7 +924,14 @@ struct BuildRailToolbarWindow : Window {
 				break;
 
 			case WID_RAT_BLUEPRINT:
-				VpStartPlaceSizing(tile, VPM_X_AND_Y, DDSP_CM_BLUEPRINT_AREA);
+				if (_thd.place_mode == HT_BLUEPRINT_PLACE) {
+					/* Blueprint already copied: place it at the clicked tile. */
+					citymania::BuildActiveBlueprint(tile);
+					ResetObjectToPlace();
+				} else {
+					/* First click: start selecting the area to copy. */
+					VpStartPlaceSizing(tile, VPM_X_AND_Y, DDSP_CM_BLUEPRINT_AREA);
+				}
 				break;
 
 			case WID_RAT_BUILD_SIGNALS:
@@ -1199,6 +1215,20 @@ Window *ShowBuildRailToolbar(RailType railtype)
 	_cur_railtype = railtype;
 	_remove_button_clicked = false;
 	return new BuildRailToolbarWindow(_build_rail_desc, railtype);
+}
+
+/**
+ * Activate blueprint placement mode on the rail toolbar, if it is open.
+ *
+ * Used by the blueprint_load console command so a blueprint loaded from a
+ * slot can be placed immediately.
+ */
+void ActivateRailBlueprintPlaceMode()
+{
+	Window *w = FindWindowById(WindowClass::BuildToolbar, TRANSPORT_RAIL);
+	if (w != nullptr) {
+		static_cast<BuildRailToolbarWindow *>(w)->ActivateBlueprintPlaceMode();
+	}
 }
 
 /* TODO: For custom stations, respect their allowed platforms/lengths bitmasks!

@@ -1020,57 +1020,6 @@ void ShowOperatingProfitGraph()
 }
 
 
-/****************/
-/* INCOME GRAPH */
-/****************/
-
-struct IncomeGraphWindow : BaseCompanyGraphWindow {
-	IncomeGraphWindow(WindowDesc &desc, WindowNumber window_number) :
-			BaseCompanyGraphWindow(desc, STR_JUST_CURRENCY_SHORT)
-	{
-		this->num_on_x_axis = GRAPH_NUM_MONTHS;
-		this->num_vert_lines = GRAPH_NUM_MONTHS;
-		this->draw_dates = !EconTime::UsingWallclockUnits();
-
-		this->InitializeWindow(window_number);
-	}
-
-	OverflowSafeInt64 GetGraphData(const Company *c, int j) override
-	{
-		return c->old_economy[j].income;
-	}
-};
-
-static constexpr std::initializer_list<NWidgetPart> _nested_income_graph_widgets = {
-	NWidget(NWID_HORIZONTAL),
-		NWidget(WWT_CLOSEBOX, Colours::Brown),
-		NWidget(WWT_CAPTION, Colours::Brown), SetStringTip(STR_GRAPH_INCOME_CAPTION, STR_TOOLTIP_WINDOW_TITLE_DRAG_THIS),
-		NWidget(WWT_PUSHTXTBTN, Colours::Brown, WID_GRAPH_KEY_BUTTON), SetMinimalSize(50, 0), SetStringTip(STR_GRAPH_KEY_BUTTON, STR_GRAPH_KEY_TOOLTIP),
-		NWidget(WWT_SHADEBOX, Colours::Brown),
-		NWidget(WWT_DEFSIZEBOX, Colours::Brown),
-		NWidget(WWT_STICKYBOX, Colours::Brown),
-	EndContainer(),
-	NWidget(WWT_PANEL, Colours::Brown, WID_GRAPH_BACKGROUND),
-		NWidget(WWT_EMPTY, Colours::Invalid, WID_GRAPH_GRAPH), SetMinimalSize(576, 128), SetFill(1, 1), SetResize(1, 1),
-		NWidget(NWID_HORIZONTAL),
-			NWidget(WWT_TEXT, Colours::Invalid, WID_GRAPH_FOOTER), SetFill(1, 0), SetResize(1, 0), SetPadding(2, 0, 2, 0), SetTextStyle(TextColour::Black, FontSize::Small), SetAlignment(SA_CENTER),
-			NWidget(WWT_RESIZEBOX, Colours::Brown, WID_GRAPH_RESIZE), SetResizeWidgetTypeTip(ResizeWidgetType::HideBevel, STR_TOOLTIP_RESIZE),
-		EndContainer(),
-	EndContainer(),
-};
-
-static WindowDesc _income_graph_desc(__FILE__, __LINE__,
-	WindowPosition::Automatic, "graph_income", 0, 0,
-	WindowClass::IncomeGraph, WindowClass::None,
-	{},
-	_nested_income_graph_widgets
-);
-
-void ShowIncomeGraph()
-{
-	AllocateWindowDescFront<IncomeGraphWindow>(_income_graph_desc, 0);
-}
-
 /*******************/
 /* DELIVERED CARGO */
 /*******************/
@@ -1417,6 +1366,90 @@ static WindowDesc _delivered_cargo_graph_desc(__FILE__, __LINE__,
 void ShowDeliveredCargoGraph()
 {
 	AllocateWindowDescFront<DeliveredCargoGraphWindow>(_delivered_cargo_graph_desc, 0);
+}
+
+/****************/
+/* INCOME GRAPH */
+/****************/
+
+struct IncomeGraphWindow : ExcludingCargoBaseGraphWindow {
+	IncomeGraphWindow(WindowDesc &desc, WindowNumber window_number) :
+			ExcludingCargoBaseGraphWindow(desc, STR_JUST_CURRENCY_SHORT)
+	{
+		this->num_on_x_axis = GRAPH_NUM_MONTHS;
+		this->num_vert_lines = GRAPH_NUM_MONTHS;
+		this->draw_dates = !EconTime::UsingWallclockUnits();
+		this->dataset_mouseover_widget = WID_ECBG_MATRIX;
+
+		this->CreateNestedTree();
+		this->vscroll = this->GetScrollbar(WID_ECBG_MATRIX_SCROLLBAR);
+		this->vscroll->SetCount(_sorted_standard_cargo_specs.size());
+		this->UpdateStatistics(true);
+
+		this->FinishInitNested(window_number);
+	}
+
+	/* Per-cargo income (cmclient port): when some cargoes are excluded,
+	 * the graph shows the sum of the per-cargo income of the remaining
+	 * cargoes; otherwise the total income is shown. */
+	OverflowSafeInt64 GetGraphData(const Company *c, int j) override
+	{
+		if (this->excluded_cargo_types.None()) {
+			return c->old_economy[j].income;
+		}
+		OverflowSafeInt64 total_income = 0;
+		for (const CargoSpec *cs : _sorted_standard_cargo_specs) {
+			if (!this->excluded_cargo_types.Test(cs->Index())) {
+				total_income += c->old_economy[j].cargo_income[cs->Index()];
+			}
+		}
+		return total_income;
+	}
+};
+
+static constexpr std::initializer_list<NWidgetPart> _nested_income_graph_widgets = {
+	NWidget(NWID_HORIZONTAL),
+		NWidget(WWT_CLOSEBOX, Colours::Brown),
+		NWidget(WWT_CAPTION, Colours::Brown), SetStringTip(STR_GRAPH_INCOME_CAPTION, STR_TOOLTIP_WINDOW_TITLE_DRAG_THIS),
+		NWidget(WWT_PUSHTXTBTN, Colours::Brown, WID_GRAPH_KEY_BUTTON), SetMinimalSize(50, 0), SetStringTip(STR_GRAPH_KEY_BUTTON, STR_GRAPH_KEY_TOOLTIP),
+		NWidget(WWT_SHADEBOX, Colours::Brown),
+		NWidget(WWT_DEFSIZEBOX, Colours::Brown),
+		NWidget(WWT_STICKYBOX, Colours::Brown),
+	EndContainer(),
+	NWidget(WWT_PANEL, Colours::Brown, WID_GRAPH_BACKGROUND),
+		NWidget(NWID_HORIZONTAL),
+			NWidget(NWID_VERTICAL),
+				NWidget(WWT_EMPTY, Colours::Invalid, WID_GRAPH_GRAPH), SetMinimalSize(576, 128), SetFill(1, 1), SetResize(1, 1),
+				NWidget(NWID_SPACER), SetMinimalSize(0, 4),
+				NWidget(NWID_HORIZONTAL),
+					NWidget(WWT_TEXT, Colours::Invalid, WID_GRAPH_FOOTER), SetFill(1, 0), SetResize(1, 0), SetPadding(2, 0, 2, 0), SetTextStyle(TextColour::Black, FontSize::Small), SetAlignment(SA_CENTER),
+					NWidget(WWT_RESIZEBOX, Colours::Brown, WID_GRAPH_RESIZE), SetResizeWidgetTypeTip(ResizeWidgetType::HideBevel, STR_TOOLTIP_RESIZE),
+				EndContainer(),
+			EndContainer(),
+			NWidget(NWID_VERTICAL),
+				NWidget(NWID_SPACER), SetMinimalSize(0, 4), SetFill(0, 0),
+				NWidget(WWT_PUSHTXTBTN, Colours::Brown, WID_ECBG_ENABLE_CARGOES), SetStringTip(STR_GRAPH_CARGO_ENABLE_ALL, STR_GRAPH_CARGO_TOOLTIP_ENABLE_ALL), SetFill(1, 0),
+				NWidget(WWT_PUSHTXTBTN, Colours::Brown, WID_ECBG_DISABLE_CARGOES), SetStringTip(STR_GRAPH_CARGO_DISABLE_ALL, STR_GRAPH_CARGO_TOOLTIP_DISABLE_ALL), SetFill(1, 0),
+				NWidget(NWID_SPACER), SetMinimalSize(0, 4),
+				NWidget(NWID_HORIZONTAL),
+					NWidget(WWT_MATRIX, Colours::Brown, WID_ECBG_MATRIX), SetFill(0, 2), SetResize(0, 2), SetMatrixDataTip(1, 0, STR_GRAPH_CARGO_PAYMENT_TOGGLE_CARGO), SetScrollbar(WID_ECBG_MATRIX_SCROLLBAR),
+					NWidget(NWID_VSCROLLBAR, Colours::Brown, WID_ECBG_MATRIX_SCROLLBAR),
+				EndContainer(),
+			EndContainer(),
+		EndContainer(),
+	EndContainer(),
+};
+
+static WindowDesc _income_graph_desc(__FILE__, __LINE__,
+	WindowPosition::Automatic, "graph_income", 0, 0,
+	WindowClass::IncomeGraph, WindowClass::None,
+	{},
+	_nested_income_graph_widgets
+);
+
+void ShowIncomeGraph()
+{
+	AllocateWindowDescFront<IncomeGraphWindow>(_income_graph_desc, 0);
 }
 
 /***********************/

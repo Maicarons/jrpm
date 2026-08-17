@@ -20,7 +20,7 @@ title: 模块化机场（multitile-airport）
 
 | 能力 | 说明 |
 |---|---|
-| 机场布局改造 | `station.allow_modify_airports`（默认关闭；开启后可改已有机场） |
+| 机场布局改造 | `station.allow_modify_airports`（**默认开启**；开启后可改已有机场） |
 | 默认航空类型 | `gui.default_air_type` |
 | 多格机场精灵 | 重新构建的 openttd.grf（air type sprites）、透明精灵修复 |
 | 飞机行为 | 跑道占用、滑行转向、起飞/降落排队、直升机坪、航天器绘制 |

@@ -18,21 +18,6 @@
 
 extern void GetStationLayout(uint8_t *layout, uint numtracks, uint plat_len, const struct StationSpec *statspec);
 
-/* cmclient used custom NewGRF sprites for zoning palettes; map them to the
- * built-in recolour palettes jrpm provides. */
-#define CM_SPR_PALETTE_ZONING_RED PALETTE_TO_RED
-#define CM_SPR_PALETTE_ZONING_ORANGE PALETTE_TO_ORANGE
-#define CM_SPR_PALETTE_ZONING_GREEN PALETTE_TO_GREEN
-#define CM_SPR_PALETTE_ZONING_LIGHT_BLUE PALETTE_TO_LIGHT_BLUE
-#define CM_SPR_PALETTE_ZONING_YELLOW PALETTE_TO_YELLOW
-#define CM_SPR_PALETTE_ZONING_WHITE PALETTE_TO_WHITE
-#define CM_PALETTE_TINT_BASE PALETTE_TO_RED
-/* cmclient station highlight palette tints (cm_station_gui.cpp). */
-#define CM_PALETTE_TINT_WHITE   PALETTE_TO_WHITE
-#define CM_PALETTE_TINT_CYAN    PALETTE_TO_CYAN
-#define CM_PALETTE_TINT_BLUE    PALETTE_TO_BLUE
-#define CM_PALETTE_TINT_RED_DEEP PALETTE_TO_RED
-#define CM_PALETTE_TINT_YELLOW  PALETTE_TO_YELLOW
 /* cmclient's extra select-proc values are now part of jrpm's
  * ViewportDragDropSelectionProcess enum (viewport_type.h). */
 #include "house.h"
@@ -591,7 +576,7 @@ void ObjectHighlight::PlaceExtraDepotRail(TileIndex tile, DiagDirection dir, Tra
     if (GetRailTileType(tile) != RailTileType::Normal) return;
     if ((GetTrackBits(tile) & DiagdirReachesTracks(dir)) == 0) return;
 
-    this->AddTile(tile, ObjectTileHighlight::make_rail_track(PALETTE_TO_WHITE, track));
+    this->AddTile(tile, ObjectTileHighlight::make_rail_track(CM_PALETTE_TINT_WHITE, track));
 }
 
 /** Additional pieces of track to add at the entrance of a depot. */
@@ -657,7 +642,7 @@ void ObjectHighlight::UpdateTiles() {
             auto dir = this->ddir;
 
             this->cost = CMD_ERROR;
-            auto palette = (cost.Succeeded() ? PALETTE_TO_WHITE : PALETTE_TO_RED);
+            auto palette = (cost.Succeeded() ? CM_PALETTE_TINT_WHITE : CM_PALETTE_TINT_RED_DEEP);
 
             this->tiles.insert(std::make_pair(this->tile, ObjectTileHighlight::make_rail_depot(palette, dir)));
             auto tile = AddTileIndexDiffCWrap(this->tile, TileIndexDiffCByDiagDir(dir));
@@ -676,7 +661,7 @@ void ObjectHighlight::UpdateTiles() {
             if (this->axis == Axis::X) std::swap(numtracks, plat_len);
 
             this->cost = CMD_ERROR;
-            auto palette = (this->cost.Succeeded() ? PALETTE_TO_WHITE : PALETTE_TO_RED);
+            auto palette = (this->cost.Succeeded() ? CM_PALETTE_TINT_WHITE : CM_PALETTE_TINT_RED_DEEP);
 
             ta = ClampToVisibleMap(ta);
             /* Note: since ta is clamped to map preview may not be accurate, but it's even worse with wrapping. */
@@ -699,7 +684,7 @@ void ObjectHighlight::UpdateTiles() {
         case Type::ROAD_STOP: {
             auto ta = OrthogonalTileArea(this->tile, this->w, this->h);
             this->cost = CMD_ERROR;
-            auto palette = (this->cost.Succeeded() ? PALETTE_TO_WHITE : PALETTE_TO_RED);
+            auto palette = (this->cost.Succeeded() ? CM_PALETTE_TINT_WHITE : CM_PALETTE_TINT_RED_DEEP);
             ta = ClampToVisibleMap(ta);
             for (TileIndex tile : ta) {
                 this->AddTile(tile, ObjectTileHighlight::make_road_stop(palette, this->roadtype, this->ddir, this->is_truck, this->road_stop_spec_class, this->road_stop_spec_index));
@@ -709,14 +694,14 @@ void ObjectHighlight::UpdateTiles() {
 
         case Type::ROAD_DEPOT: {
             this->cost = CMD_ERROR;
-            auto palette = (this->cost.Succeeded() ? PALETTE_TO_WHITE : PALETTE_TO_RED);
+            auto palette = (this->cost.Succeeded() ? CM_PALETTE_TINT_WHITE : CM_PALETTE_TINT_RED_DEEP);
             this->AddTile(this->tile, ObjectTileHighlight::make_road_depot(palette, this->roadtype, this->ddir));
             break;
         }
 
         case Type::AIRPORT: {
             this->cost = CMD_ERROR;
-            auto palette = (this->cost.Succeeded() ? PALETTE_TO_WHITE : PALETTE_TO_RED);
+            auto palette = (this->cost.Succeeded() ? CM_PALETTE_TINT_WHITE : CM_PALETTE_TINT_RED_DEEP);
 
                         const AirportSpec *as = AirportSpec::Get(this->airport_type);
             if (!as->IsAvailable() || this->airport_layout >= as->layouts.size()) break;
@@ -774,9 +759,9 @@ void ObjectHighlight::UpdateTiles() {
                 default:
                     break;
             }
-            this->AddTile(point1, ObjectTileHighlight::make_point(PALETTE_TO_WHITE));
+            this->AddTile(point1, ObjectTileHighlight::make_point(CM_PALETTE_TINT_WHITE));
             if (point2 != INVALID_TILE)
-                this->AddTile(point2, ObjectTileHighlight::make_point(PALETTE_TO_WHITE));
+                this->AddTile(point2, ObjectTileHighlight::make_point(CM_PALETTE_TINT_WHITE));
             auto z = TileHeight(point1);
 
             auto add_track = [this, z](TileIndex tile, TileIndex end_tile, Trackdir trackdir, SpriteID palette, TileIndex point1, TileIndex point2) {
@@ -791,11 +776,11 @@ void ObjectHighlight::UpdateTiles() {
                     // this->AddTile(tile, std::move(ObjectTileHighlight::make_rail_track(palette, TrackdirToTrack(trackdir)).set_z(z)));
                     if (point1 != INVALID_TILE) {
                         point1 += ToTileIndexDiff(_trackdelta[trackdir]);
-                        this->AddTile(point1, ObjectTileHighlight::make_point(PALETTE_TO_WHITE));
+                        this->AddTile(point1, ObjectTileHighlight::make_point(CM_PALETTE_TINT_WHITE));
                     }
                     if (point2 != INVALID_TILE) {
                         point2 += ToTileIndexDiff(_trackdelta[trackdir]);
-                        this->AddTile(point2, ObjectTileHighlight::make_point(PALETTE_TO_WHITE));
+                        this->AddTile(point2, ObjectTileHighlight::make_point(CM_PALETTE_TINT_WHITE));
                     }
 
                     if (tile == end_tile) break;
@@ -807,11 +792,11 @@ void ObjectHighlight::UpdateTiles() {
                 if (!IsDiagonalTrackdir(trackdir) && point1 != INVALID_TILE) {
                     ToggleBit(trackdir, 0);
                     point1 += ToTileIndexDiff(_trackdelta[trackdir]);
-                    this->AddTile(point1, ObjectTileHighlight::make_point(PALETTE_TO_WHITE));
+                    this->AddTile(point1, ObjectTileHighlight::make_point(CM_PALETTE_TINT_WHITE));
                 }
             };
-            add_track(this->tile, this->end_tile, this->trackdir, PALETTE_TO_YELLOW, point1, point2);
-            add_track(this->tile2, this->end_tile2, this->trackdir2, PALETTE_SEL_TILE_BLUE, INVALID_TILE, INVALID_TILE);
+            add_track(this->tile, this->end_tile, this->trackdir, CM_PALETTE_TINT_YELLOW, point1, point2);
+            add_track(this->tile2, this->end_tile2, this->trackdir2, CM_PALETTE_TINT_CYAN, INVALID_TILE, INVALID_TILE);
             break;
         }
         case Type::INDUSTRY: {
@@ -830,7 +815,7 @@ void ObjectHighlight::UpdateTiles() {
                     this->AddTile(
                         cur_tile,
                         ObjectTileHighlight::make_industry_tile(
-                            PALETTE_TO_WHITE,
+                            CM_PALETTE_TINT_WHITE,
                             this->ind_type,
                             this->ind_layout,
                             tile_diff,
@@ -845,7 +830,7 @@ void ObjectHighlight::UpdateTiles() {
         }
         case Type::DOCK: {
             this->cost = CMD_ERROR;
-            auto palette = (cost.Succeeded() ? PALETTE_TO_WHITE : PALETTE_TO_RED);
+            auto palette = (cost.Succeeded() ? CM_PALETTE_TINT_WHITE : CM_PALETTE_TINT_RED_DEEP);
             this->AddTile(this->tile, ObjectTileHighlight::make_dock_slope(palette, this->ddir));
             if (this->ddir != DiagDirection::Invalid) {
                 TileIndex tile_to = TileAddByDiagDir(this->tile, this->ddir);
@@ -1007,40 +992,40 @@ void HighlightMap::AddTilesBorder(const std::set<TileIndex> &tiles, SpriteID pal
 }
 
 SpriteID MixTints(SpriteID bottom, SpriteID top) {
-    /* jrpm does not ship the custom tint sprite table cmclient used;
-     * stacking falls back to the bottom tint. */
+    /* jrpm uses JGRPP's built-in inner-highlight tint sprites, which have
+     * no pre-mixed combinations; stacking falls back to the top tint. */
     if (top == PAL_NONE) return bottom;
     if (bottom == PAL_NONE) return top;
-    return bottom;
+    return top;
 }
 
 SpriteID GetTintBySelectionColour(SpriteID colour, bool deep=false) {
     switch(colour) {
-        case CM_SPR_PALETTE_ZONING_RED: return (deep ? PALETTE_TO_RED : PALETTE_TO_RED);
-        case CM_SPR_PALETTE_ZONING_ORANGE: return (deep ? PALETTE_TO_ORANGE : PALETTE_TO_ORANGE);
-        case CM_SPR_PALETTE_ZONING_GREEN: return PALETTE_TO_GREEN;
-        case CM_SPR_PALETTE_ZONING_LIGHT_BLUE: return PALETTE_TO_LIGHT_BLUE;
-        case CM_SPR_PALETTE_ZONING_YELLOW: return PALETTE_TO_YELLOW;
-        // case SPR_PALETTE_ZONING__: return PALETTE_TINT_YELLOW_WHITE;
-        case CM_SPR_PALETTE_ZONING_WHITE: return PALETTE_TO_WHITE;
+        case CM_SPR_PALETTE_ZONING_RED: return CM_PALETTE_TINT_RED;
+        case CM_SPR_PALETTE_ZONING_ORANGE: return CM_PALETTE_TINT_ORANGE;
+        case CM_SPR_PALETTE_ZONING_GREEN: return CM_PALETTE_TINT_GREEN;
+        case CM_SPR_PALETTE_ZONING_LIGHT_BLUE: return CM_PALETTE_TINT_CYAN;
+        case CM_SPR_PALETTE_ZONING_YELLOW: return CM_PALETTE_TINT_YELLOW;
+        case CM_SPR_PALETTE_ZONING_WHITE: return CM_PALETTE_TINT_WHITE;
+        case CM_SPR_PALETTE_ZONING_BLACK: return PAL_NONE;
+        case CM_SPR_PALETTE_ZONING_PURPLE: return PAL_NONE;
         default: return PAL_NONE;
     }
 }
 
 SpriteID GetSelectionColourByTint(SpriteID colour) {
     switch(colour) {
-        case PALETTE_TO_RED:
+        case CM_PALETTE_TINT_RED: /* also covers CM_PALETTE_TINT_RED_DEEP */
             return CM_SPR_PALETTE_ZONING_RED;
-        case PALETTE_TO_ORANGE:
+        case CM_PALETTE_TINT_ORANGE:
             return CM_SPR_PALETTE_ZONING_ORANGE;
-        case PALETTE_TO_GREEN:
+        case CM_PALETTE_TINT_GREEN:
             return CM_SPR_PALETTE_ZONING_GREEN;
-        case PALETTE_TO_LIGHT_BLUE:
+        case CM_PALETTE_TINT_CYAN:
             return CM_SPR_PALETTE_ZONING_LIGHT_BLUE;
-        case PALETTE_TO_YELLOW:
+        case CM_PALETTE_TINT_YELLOW:
             return CM_SPR_PALETTE_ZONING_YELLOW;
-        // returnase SPR_PALETTE_ZONING__: return PALETTE_TINT_YELLOW_WHITE;
-        case PALETTE_TO_WHITE:
+        case CM_PALETTE_TINT_WHITE:
             return CM_SPR_PALETTE_ZONING_WHITE;
         default: return PAL_NONE;
     }
@@ -1966,6 +1951,26 @@ static void DrawObjectTileHighlight(const TileInfo *ti, const ObjectTileHighligh
             DrawBorderSprites(ti, oth.u.border, oth.palette);
             break;
         }
+        case ObjectTileHighlight::Type::TINT:
+        case ObjectTileHighlight::Type::STRUCT_TINT: {
+            /* Semi-transparent tint overlay (cmclient parity): draw the
+             * JGRPP inner-highlight overlay sprite with the tint colour as
+             * its palette, exactly like the zoning inner highlight. */
+            SpriteID sprite = SPR_ZONING_INNER_HIGHLIGHT_BASE;
+            if (IsHalftileSlope(ti->tileh)) {
+                static const SubSprite sub_sprites[4] = {
+                    { -1000, -1000, 32 - 33, 1000 }, // CORNER_W
+                    { -1000,  0 + 22, 1000, 1000 },  // CORNER_S
+                    { -31 + 34, -1000, 1000, 1000 }, // CORNER_E
+                    { -1000, -1000, 1000, 30 - 8 }   // CORNER_N
+                };
+                DrawSelectionSprite(sprite, oth.palette, ti, 7 + TILE_HEIGHT, FOUNDATION_PART_HALFTILE, 0, 0, &(sub_sprites[GetHalftileSlopeCorner(ti->tileh)]));
+            } else {
+                sprite += SlopeToSpriteOffset(ti->tileh);
+                DrawSelectionSprite(sprite, oth.palette, ti, 7, FOUNDATION_PART_NORMAL);
+            }
+            break;
+        }
         default:
             break;
     }
@@ -2066,7 +2071,7 @@ SpriteID GetIndustryZoningPalette(TileIndex tile) {
             n_serviced++;
     }
     if (n_serviced < n_produced)
-        return (n_serviced == 0 ? PALETTE_TO_RED : PALETTE_TO_ORANGE);
+        return (n_serviced == 0 ? CM_PALETTE_TINT_RED : CM_PALETTE_TINT_ORANGE);
     return PAL_NONE;
 }
 
@@ -2088,8 +2093,8 @@ static void SetStationSelectionHighlight(const TileInfo *ti, TileHighlight &th) 
         }
         if (IsInsideSelectedRectangle(TileX(ti->tile) * TILE_SIZE, TileY(ti->tile) * TILE_SIZE)) {
             if (_thd.redsq != INVALID_TILE) {
-                th.tint_ground(PALETTE_TO_RED);
-                th.set_structure(PALETTE_TO_RED);
+                th.tint_ground(CM_PALETTE_TINT_RED);
+                th.set_structure(CM_PALETTE_TINT_RED);
             } else {
                 th.hide_structure();
             }
@@ -2109,7 +2114,7 @@ static void SetStationSelectionHighlight(const TileInfo *ti, TileHighlight &th) 
     if (b.second) {
         const SpriteID pal[] = {PAL_NONE, CM_SPR_PALETTE_ZONING_WHITE, PAL_NONE};
         th.add_border(b.first, pal[b.second]);
-        const SpriteID pal2[] = {PAL_NONE, PALETTE_TO_WHITE, PALETTE_TO_BLUE};
+        const SpriteID pal2[] = {PAL_NONE, CM_PALETTE_TINT_WHITE, CM_PALETTE_TINT_CYAN};
         th.tint_all(pal2[b.second]);
     }
 }
@@ -2274,7 +2279,32 @@ DiagDirection AddAutodetectionRotation(DiagDirection ddir) {
 }
 
 HighLightStyle UpdateTileSelection(HighLightStyle new_drawstyle) {
+    /* jrpm: master toggle for the object-level highlight / overlay system.
+     * When disabled, fall back to the vanilla tile selection only: reset all
+     * cmclient state and clear any previously drawn highlight/overlay tiles. */
+    if (!_settings_game.jrpm_features.enable_highlight) {
+        _cm_active_object = ObjectHighlight(ObjectHighlight::Type::NONE);
+        _cm_gui_active = false;
+        _cm_gui_info = {};
+        if (_cm_prev_object != _cm_active_object) {
+            _cm_prev_object.MarkDirty();
+            _cm_prev_object = _cm_active_object;
+            _cm_prev_object.UpdateTiles();
+            _cm_prev_object.MarkDirty();
+        }
+        return new_drawstyle;
+    }
     _cm_active_object = ObjectHighlight(ObjectHighlight::Type::NONE);
+    /* jrpm: reset the cached build-info overlay every frame so it never
+     * survives an exit from the station/road-stop placement. Without
+     * this, once the player leaves placement mode the stale overlay was
+     * re-shown every tick by UpdateActiveTool(), keeping the "New
+     * station / Cost / Supplies / Accepts / Town / Size" tooltip AND the
+     * old coverage-tint HighlightMap on screen until the next build
+     * mode entry. The station branch below re-populates them when
+     * applicable. */
+    _cm_gui_active = false;
+    _cm_gui_info = {};
     auto pt = GetTileBelowCursor();
     auto tile = (pt.x == -1 ? INVALID_TILE : TileVirtXY(pt.x, pt.y));
     bool force_new = false;
@@ -2337,35 +2367,67 @@ HighLightStyle UpdateTileSelection(HighLightStyle new_drawstyle) {
 
             /* Extended preview: coverage area + cost overlay (cmclient port of
              * cm_station_gui.cpp::PlacementAction::PrepareGUIInfo). */
-            if (_thd.select_proc == DDSP_BUILD_STATION) {
+            if (_thd.select_proc == DDSP_BUILD_STATION || _thd.select_proc == DDSP_BUILD_BUSSTOP
+                || _thd.select_proc == DDSP_BUILD_TRUCKSTOP) {
+                const bool is_rail_station = (_thd.select_proc == DDSP_BUILD_STATION);
+                const bool is_truck_stop = (_thd.select_proc == DDSP_BUILD_TRUCKSTOP);
+
+                /* StationCoverageType + catchment radius, mirroring cmclient's
+                 * SizedPlacementAction/DragNDropPlacementAction::GetCatchmentParams. */
+                StationCoverageType sct = is_rail_station ? SCT_ALL : (is_truck_stop ? SCT_NON_PASSENGERS_ONLY : SCT_PASSENGERS_ONLY);
+                uint base_rad = is_rail_station ? CA_TRAIN : CA_BUS;
+
                 BuildInfoOverlayData overlay;
                 HighlightMap hlmap;
                 CommandCost cc;
-                int rad = (int)CA_UNMODIFIED + _settings_game.station.catchment_increase;
+                int rad = (int)base_rad + _settings_game.station.catchment_increase;
                 if (_settings_game.station.modified_catchment) rad = _settings_game.station.catchment_increase;
                 TileArea rad_area = ta;
                 rad_area.Expand(rad);
                 rad_area = ClampToVisibleMap(rad_area);
 
                 /* Cost via DoCommandFlag::QueryCost. */
-                cc = Command<Commands::BuildRailStation>::Do(
-                    CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildRailStation>()) | DoCommandFlag::QueryCost,
-                    start_tile, _cur_railtype, _station_gui.axis,
-                    (uint8_t)ta.w, (uint8_t)ta.h,
-                    _station_gui.sel_class, _station_gui.sel_type,
-                    StationID::Invalid(), false);
-
-                /* Coverage tint (catchment area). */
-                for (auto t : rad_area) {
-                    hlmap.Add(t, ObjectTileHighlight::make_tint(CM_PALETTE_TINT_WHITE));
+                if (is_rail_station) {
+                    cc = Command<Commands::BuildRailStation>::Do(
+                        CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildRailStation>()) | DoCommandFlag::QueryCost,
+                        start_tile, _cur_railtype, _station_gui.axis,
+                        (uint8_t)ta.w, (uint8_t)ta.h,
+                        _station_gui.sel_class, _station_gui.sel_type,
+                        StationID::Invalid(), false);
+                } else {
+                    auto ddir = _roadstop_gui.orientation;
+                    if (pt.x != -1 && ddir == DiagDirection::Invalid) ddir = DiagDirection::NE;
+                    bool drive_through = ddir >= DiagDirection::End;
+                    if (drive_through) ddir = ddir - DiagDirection::End; // Adjust picker result to actual direction.
+                    cc = Command<Commands::BuildRoadStop>::Do(
+                        CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildRoadStop>()) | DoCommandFlag::QueryCost,
+                        start_tile, (uint8_t)ta.w, (uint8_t)ta.h,
+                        is_truck_stop ? RoadStopType::Truck : RoadStopType::Bus,
+                        drive_through, ddir,
+                        _cur_roadtype, _roadstop_gui.sel_class, _roadstop_gui.sel_type,
+                        StationID::Invalid(), false);
                 }
-                {
-                    std::set<TileIndex> cov_set;
-                    for (auto t : rad_area) cov_set.insert(t);
-                    hlmap.AddTilesBorder(cov_set, CM_PALETTE_TINT_WHITE);
+
+                /* The highlight tint is red when the build command would fail
+                 * (cmclient parity: palette = cost.Succeeded() ? WHITE : RED_DEEP). */
+                const SpriteID build_palette = cc.Succeeded() ? CM_PALETTE_TINT_WHITE : CM_PALETTE_TINT_RED_DEEP;
+
+                /* Coverage tint (catchment area), only when coverage is shown. */
+                if (_settings_client.gui.station_show_coverage) {
+                    for (auto t : rad_area) {
+                        hlmap.Add(t, ObjectTileHighlight::make_tint(build_palette));
+                    }
+                    {
+                        std::set<TileIndex> cov_set;
+                        for (auto t : rad_area) cov_set.insert(t);
+                        hlmap.AddTilesBorder(cov_set, build_palette);
+                    }
                 }
                 /* Station building sprite preview on top of the white frame. */
-                _cm_active_object.AddToHighlightMap(hlmap, CM_PALETTE_TINT_WHITE);
+                _cm_active_object.AddToHighlightMap(hlmap, build_palette);
+
+                /* New station line (cmclient parity). */
+                overlay.emplace_back(0, PAL_NONE, GetString(CM_STR_BULID_INFO_OVERLAY_NEW_STATION));
 
                 /* Cost overlay line. */
                 if (cc.GetCost() != 0) {
@@ -2379,12 +2441,18 @@ HighLightStyle UpdateTileSelection(HighLightStyle new_drawstyle) {
                     }
                 }
 
-                /* Supplies (cmclient port). */
+                /* Supplies (cmclient port), filtered by StationCoverageType. */
                 {
                     auto production = GetProductionAroundTiles(ta.tile, (int)ta.w, (int)ta.h, rad);
                     bool has_header = false;
                     for (CargoType i : EnumRange(NUM_CARGO)) {
                         if (production[i] == 0) continue;
+                        switch (sct) {
+                            case SCT_PASSENGERS_ONLY: if (!IsCargoInClass(i, CargoClass::Passengers)) continue; break;
+                            case SCT_NON_PASSENGERS_ONLY: if (IsCargoInClass(i, CargoClass::Passengers)) continue; break;
+                            case SCT_ALL: break;
+                            default: NOT_REACHED();
+                        }
                         const CargoSpec *cs = CargoSpec::Get(i);
                         if (cs == nullptr) continue;
                         if (!has_header) {
@@ -2395,12 +2463,17 @@ HighLightStyle UpdateTileSelection(HighLightStyle new_drawstyle) {
                     }
                 }
 
-                /* Accepts (cmclient port). */
+                /* Accepts (cmclient port), filtered by StationCoverageType. */
                 {
-                    CargoTypes always_accepted;
-                    CargoArray cargoes = GetAcceptanceAroundTiles(ta.tile, (int)ta.w, (int)ta.h, rad).first;
+                    auto [cargoes, always_accepted] = GetAcceptanceAroundTiles(ta.tile, (int)ta.w, (int)ta.h, rad);
                     std::vector<std::pair<uint, std::string>> cargostr;
                     for (CargoType i : EnumRange(NUM_CARGO)) {
+                        switch (sct) {
+                            case SCT_PASSENGERS_ONLY: if (!IsCargoInClass(i, CargoClass::Passengers)) continue; break;
+                            case SCT_NON_PASSENGERS_ONLY: if (IsCargoInClass(i, CargoClass::Passengers)) continue; break;
+                            case SCT_ALL: break;
+                            default: NOT_REACHED();
+                        }
                         if (cargoes[i] > 0) {
                             if (cargoes[i] < 8) {
                                 cargostr.emplace_back(2, GetString(CM_STR_BULID_INFO_OVERLAY_ACCEPTS_CARGO_PARTIAL, CargoTypes{}.Set(i), cargoes[i]));

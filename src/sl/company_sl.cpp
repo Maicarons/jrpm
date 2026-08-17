@@ -206,6 +206,7 @@ static const NamedSaveLoad _company_economy_desc[] = {
 	NSL("",                    SLE_CONDVAR(CompanyEconomyEntry, delivered_cargo[NUM_CARGO - 1], SLE_INT32,       SL_MIN_VERSION, SLV_170)),
 	NSL("delivered_cargo",     SLE_CONDARR(CompanyEconomyEntry, delivered_cargo,     SLE_UINT32, 32,           SLV_170, SLV_EXTEND_CARGOTYPES)),
 	NSL("delivered_cargo",     SLE_CONDARR(CompanyEconomyEntry, delivered_cargo,     SLE_UINT32, NUM_CARGO,    SLV_EXTEND_CARGOTYPES, SL_MAX_VERSION)),
+	NSL("cargo_income",     SLE_CONDARR_X(CompanyEconomyEntry, cargo_income,     SLE_INT64, NUM_CARGO,    SL_MIN_VERSION, SL_MAX_VERSION, SlXvFeatureTest(XSLFTO_AND, XSLFI_COMPANY_CARGO_INCOME))),
 	NSL("performance_history",     SLE_VAR(CompanyEconomyEntry, performance_history, SLE_INT32)),
 };
 

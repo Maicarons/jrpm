@@ -27,6 +27,7 @@ struct CompanyEconomyEntry {
 	Money income = 0;                 ///< The amount of income.
 	Money expenses = 0;               ///< The amount of expenses.
 	CargoArray delivered_cargo{};     ///< The amount of delivered cargo.
+	std::array<Money, NUM_CARGO> cargo_income{}; ///< Cargo income from each cargo type (cmclient port).
 	int32_t performance_history = 0;  ///< Company score (scale 0-1000)
 	Money company_value = 0;          ///< The value of the company.
 };

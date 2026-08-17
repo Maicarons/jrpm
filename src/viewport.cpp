@@ -5463,7 +5463,7 @@ HandleViewportClickedResult HandleViewportClicked(const Viewport *vp, int x, int
 	}
 
 	/* Vehicle placement mode already handled above. */
-	if ((_thd.place_mode & HT_DRAG_MASK) != HT_NONE) {
+	if ((_thd.place_mode & HT_DRAG_MASK) != HT_NONE || _thd.place_mode == HT_BLUEPRINT_PLACE) {
 		if (_thd.place_mode & HT_POLY) {
 			/* In polyline mode double-clicking on a single white line, finishes current polyline.
 			 * If however the user double-clicks on a line that has a white and a blue section,

@@ -69,6 +69,17 @@ int GetAircraftFlightLevel(T *v, bool takeoff = false);
 struct AircraftCache {
 	uint32_t cached_max_range_sqr;   ///< Cached squared maximum range.
 	uint16_t cached_max_range;       ///< Cached maximum range.
+	/* jrpm: design max speed for GUI display, in km-ish/h. Computed once
+	 * per aircraft by UpdateAircraftCache() via Engine::GetDisplayMaxSpeed,
+	 * which asks cb36 PROP_AIRCRAFT_SPEED in engine context. NewGRF planes
+	 * that override the engine entry via cb36 (AeroLinersSet etc.) return
+	 * their stated design max there (e.g. 68 -> 870 for BAC 1-11-200),
+	 * matching the buy window. We deliberately do NOT read
+	 * vcache.cached_max_speed here because that cache is filled from cb36
+	 * in vehicle context, where NewGRF returns per-state values (cruise
+	 * 35, approach 7, takeoff 68) and would drop the displayed max
+	 * artificially during flight. */
+	uint16_t cached_design_max = 0;
 
 	bool operator==(const AircraftCache &) const = default;
 };
@@ -238,9 +249,20 @@ struct Aircraft final : public SpecializedVehicle<Aircraft, VehicleType::Aircraf
 	bool IsPrimaryVehicle() const override                  { return this->IsNormalAircraft(); }
 	void GetImage(Direction direction, EngineImageType image_type, VehicleSpriteSeq *result) const override;
 	int GetDisplaySpeed() const override    { return this->cur_speed; }
-	int GetDisplayMaxSpeed() const override { return this->vcache.cached_max_speed; }
-	int GetSpeedOldUnits() const            { return this->vcache.cached_max_speed * 10 / 128; }
+	/* GUI "max speed" field: returns the engine's design max speed
+	 * (cached in acache.cached_design_max via Engine::GetDisplayMaxSpeed,
+	 * which asks cb36 PROP_AIRCRAFT_SPEED in engine context). This matches
+	 * the buy window value and stays constant regardless of flight state.
+	 * The per-state cb36 value (different at taxi/cruise/approach) lives in
+	 * GetLiveMaxSpeed() and is used only for the runtime speed limiter. */
+	int GetDisplayMaxSpeed() const override;
+	int GetSpeedOldUnits() const            { return this->GetDisplayMaxSpeed() * 10 / 128; }
 	int GetCurrentMaxSpeed() const override { return this->GetSpeedOldUnits(); }
+	/* Runtime speed cap for UpdateAircraftSpeed: same precedence as
+	 * GetDisplayMaxSpeed — engine static max when available, otherwise
+	 * cb36 per-state (re-evaluated each access). Bypasses the stale
+	 * vcache.cached_max_speed left by the cmclient state-machine rewrite. */
+	int GetLiveMaxSpeed() const;
 	Money GetRunningCost() const override;
 
 	bool IsInDepot() const override

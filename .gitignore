@@ -15,3 +15,6 @@ docs/source/*
 .deps/
 grfcodec/
 openttd.new
+
+# Local reference material (not part of the project)
+/_refs/

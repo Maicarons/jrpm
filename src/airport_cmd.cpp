@@ -309,7 +309,7 @@ void UpdateNoiseForTowns(Town *pre_nearest, Town *post_nearest, const uint pre_n
 
 CommandCost inline CheckSettingBuildByTile()
 {
-	if (!_settings_game.station.allow_modify_airports) return CommandCost(STR_ERROR_AIRPORT_DISABLED_BY_TILE);
+	if (!(_settings_game.station.allow_modify_airports && _settings_game.jrpm_features.enable_modular_airport)) return CommandCost(STR_ERROR_AIRPORT_DISABLED_BY_TILE);
 	return CommandCost();
 }
 
@@ -746,7 +746,7 @@ CommandCost CmdChangeAirportTiles(DoCommandFlags flags, TileIndex start_tile, Ti
 		case ATT_HANGAR_STANDARD:
 		case ATT_HANGAR_EXTENDED:
 			if (adding && Company::IsValidHumanID(_current_company) &&
-					!_settings_game.station.allow_modify_airports) {
+					!(_settings_game.station.allow_modify_airports && _settings_game.jrpm_features.enable_modular_airport)) {
 				return CommandCost(STR_ERROR_CAN_T_DO_THIS);
 			}
 			break;
@@ -904,17 +904,18 @@ CommandCost CmdChangeAirportTiles(DoCommandFlags flags, TileIndex start_tile, Ti
 			if (flags.Test(DoCommandFlag::Execute)) {
 				switch (air_tile_type) {
 					default: NOT_REACHED();
-					case ATT_INFRASTRUCTURE_WITH_CATCH:
-					case ATT_INFRASTRUCTURE_NO_CATCH:
-					case ATT_APRON_NORMAL:
-					case ATT_APRON_HELIPAD:
-					case ATT_APRON_HELIPORT:
-					case ATT_HANGAR_STANDARD:
-					case ATT_HANGAR_EXTENDED:
-						tile_iter.m8() = 0;
-						SetAirportTileType(tile_iter, ATT_SIMPLE_TRACK);
-						SetAirGfxType(tile_iter, true);
-						break;
+				case ATT_INFRASTRUCTURE_WITH_CATCH:
+				case ATT_INFRASTRUCTURE_NO_CATCH:
+				case ATT_APRON_NORMAL:
+				case ATT_APRON_HELIPAD:
+				case ATT_APRON_HELIPORT:
+				case ATT_HANGAR_STANDARD:
+				case ATT_HANGAR_EXTENDED:
+					tile_iter.m8() = 0;
+					SetAirportTileType(tile_iter, ATT_SIMPLE_TRACK);
+					SetAirGfxType(tile_iter, true);
+					SetTileAirportGfx(tile_iter, ATTG_DEFAULT_GFX);
+					break;
 				}
 				SetAirportTileTracks(tile_iter, tracks);
 				SetAirportTracksReservation(tile_iter, reserved_tracks);
@@ -1179,6 +1180,11 @@ CommandCost CmdAirportChangeTrackGFX(DoCommandFlags flags, TileIndex start_tile,
 	if (!ValParamAirType(air_type)) return CommandCost(STR_ERROR_AIRPORT_INCORRECT_AIRTYPE);
 	const AirTypeInfo *ati = GetAirTypeInfo(air_type);
 	assert(!ati->build_on_water);
+
+	/* The simple-track ground sprite array has 20 entries, so the stored index
+	 * must be in the range 0..20 (index 0 is automatic, index > 0 accesses
+	 * ground[index - 1]). Reject values that would write an out-of-range index. */
+	if (gfx_index > 21) return CMD_ERROR;
 
 	std::unique_ptr<TileIterator> iter;
 	if (diagonal) {
@@ -1633,7 +1639,7 @@ CommandCost CmdBuildAirport(DoCommandFlags flags, TileIndex tile, uint8_t airpor
 	const AirportSpec *as = AirportSpec::Get(airport_type);
 	if (air_type == INVALID_AIRTYPE) air_type = as->airtype;
 
-	if (_settings_game.station.allow_modify_airports &&
+	if (_settings_game.station.allow_modify_airports && _settings_game.jrpm_features.enable_modular_airport &&
 			as->min_runway_length > 0 &&
 			as->min_runway_length < GetAirTypeInfo(air_type)->min_runway_length)
 		return CommandCost(STR_ERROR_AIRPORT_RUNWAY_TOO_SHORT);
@@ -1680,7 +1686,7 @@ CommandCost CmdBuildAirport(DoCommandFlags flags, TileIndex tile, uint8_t airpor
 	ret = CheckTownAuthorityForAirports(tile, st, new_airport_tiles, &pre_town, &post_town, pre_noise, post_noise);
 	if (ret.Failed()) return ret;
 
-	if (st != nullptr && st->facilities.Test(StationFacility::Airport) && !_settings_game.station.allow_modify_airports) {
+	if (st != nullptr && st->facilities.Test(StationFacility::Airport) && !(_settings_game.station.allow_modify_airports && _settings_game.jrpm_features.enable_modular_airport)) {
 		return CommandCost(STR_ERROR_TOO_CLOSE_TO_ANOTHER_AIRPORT);
 	}
 

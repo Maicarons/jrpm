@@ -392,9 +392,11 @@ STR_TOOLBAR_TOOLTIP_DISPLAY_TOWN_DIRECTORY                      :{BLACK}Open tow
 STR_TOOLBAR_TOOLTIP_DISPLAY_SUBSIDIES                           :{BLACK}Open subsidy list
 STR_TOOLBAR_TOOLTIP_DISPLAY_LIST_OF_COMPANY_STATIONS            :{BLACK}Open list of company's stations
 STR_TOOLBAR_TOOLTIP_DISPLAY_COMPANY_FINANCES                    :{BLACK}Open company finances information
+STR_TOOLBAR_TOOLTIP_DISPLAY_COMPANY_CARGOS                      :{BLACK}Display company cargos information
 STR_TOOLBAR_TOOLTIP_DISPLAY_COMPANY_GENERAL                     :{BLACK}Open general company information
 STR_TOOLBAR_TOOLTIP_DISPLAY_STORY_BOOK                          :{BLACK}Open story book
 STR_TOOLBAR_TOOLTIP_DISPLAY_GOALS_LIST                          :{BLACK}Open goal list
+STR_TOOLBAR_TOOLTIP_DISPLAY_WATCH                              :{BLACK}Watch company's actions
 STR_TOOLBAR_TOOLTIP_DISPLAY_GRAPHS                              :{BLACK}Open company graphs and cargo payment rates
 STR_TOOLBAR_TOOLTIP_DISPLAY_COMPANY_LEAGUE                      :{BLACK}Open company league table
 STR_TOOLBAR_TOOLTIP_FUND_CONSTRUCTION_OF_NEW                    :{BLACK}Open industry directory, industry chain, or fund construction of a new industry
@@ -4733,9 +4735,16 @@ STR_JRPM_CARGOS_HEADER_CARGO                                     :{BLACK}Cargo
 STR_JRPM_CARGOS_HEADER_CARGO_TIP                                 :{BLACK}Click to switch between total and last month
 STR_JRPM_CARGOS_HEADER_TOTAL                                     :{BLACK}Total
 STR_JRPM_CARGOS_HEADER_MONTH                                     :{BLACK}Last month
+STR_JRPM_CARGOS_HEADER_TOTAL_MONTH                               :{BLACK}Total/Last month
+STR_JRPM_CARGOS_HEADER_INCOME                                    :{BLACK}Income
 STR_JRPM_CARGOS_NAME                                             :{BLACK}{STRING}
 STR_JRPM_CARGOS_UNITS                                            :{BLACK}{NUM} units
 STR_JRPM_CARGOS_UNITS_TOTAL                                      :{BLACK}Total: {NUM} units
+
+STR_JRPM_WATCH_CLICK_TO_WATCH                                 :{BLACK}Click here to watch company building
+STR_JRPM_WATCH_LOCATION_TOOLTIP                              :{BLACK}Centre the main view on the location. Ctrl+Click opens a new viewport on the location
+STR_JRPM_WATCH_CAPTION_COMPANY                               :{WHITE}{COMPANY}
+STR_JRPM_WATCH_CAPTION_NONE                                  :{WHITE}Watch
 
 ###length VEHICLE_TYPES
 STR_VEHICLE_DETAILS_TRAIN_RENAME                                :{BLACK}Name train
@@ -6235,3 +6244,37 @@ STR_BADGE_CONFIG_FILTERS                                        :{WHITE}Badge Fi
 STR_BADGE_CONFIG_PREVIEW                                        :Preview Image
 STR_BADGE_CONFIG_NAME                                           :Name
 STR_BADGE_FILTER_ANY_LABEL                                      :Any {STRING}
+STR_CONFIG_SETTING_JRPM_FEATURES                                    :jrpm feature toggles
+STR_CONFIG_SETTING_JRPM_FEATURES_JRPM                               :jrpm-exclusive features
+STR_CONFIG_SETTING_JRPM_FEATURES_MODDED                             :modded ports
+STR_CONFIG_SETTING_JRPM_FEATURES_CMCLIENT                           :cmclient-inspired
+STR_CONFIG_SETTING_JRPM_FEATURES_PULSEXLB                           :pulsexlb merges
+STR_CONFIG_SETTING_JRPM_ENABLE_RESOURCE_DOWNLOAD                    :Resource download: multi-mirror + parallel
+STR_CONFIG_SETTING_JRPM_ENABLE_RESOURCE_DOWNLOAD_HELPTEXT           :Enable the enhanced content downloader with multiple mirrors and parallel downloads. Disable to fall back to the vanilla single-server serial download.
+STR_CONFIG_SETTING_JRPM_ENABLE_VEHICLE_AUTOGROUP                    :Vehicle auto-grouping
+STR_CONFIG_SETTING_JRPM_ENABLE_VEHICLE_AUTOGROUP_HELPTEXT           :Automatically assign newly built vehicles to groups. Disable to keep all vehicles ungrouped.
+STR_CONFIG_SETTING_JRPM_ENABLE_GLOBAL_AI                           :Whole-game-aware AI (GlobalAI)
+STR_CONFIG_SETTING_JRPM_ENABLE_GLOBAL_AI_HELPTEXT                  :Allow AIs to use the whole-game Global API. Disable to block GlobalAI scripts.
+STR_CONFIG_SETTING_JRPM_ENABLE_TRIP_HISTORY                        :Vehicle trip history
+STR_CONFIG_SETTING_JRPM_ENABLE_TRIP_HISTORY_HELPTEXT               :Record and show a vehicle's recent trip history. Disable to hide the trip history panel.
+STR_CONFIG_SETTING_JRPM_ENABLE_PLANE_TAXI_SPEED                    :Adjustable plane taxiing speed
+STR_CONFIG_SETTING_JRPM_ENABLE_PLANE_TAXI_SPEED_HELPTEXT           :Allow a custom plane taxiing speed. Disable to always use the default taxiing speed.
+STR_CONFIG_SETTING_JRPM_ENABLE_LOCATION_BOOKMARKS                  :Location bookmarks
+STR_CONFIG_SETTING_JRPM_ENABLE_LOCATION_BOOKMARKS_HELPTEXT         :Enable save/recall of map location bookmarks (savelocation / gotolocation).
+STR_CONFIG_SETTING_JRPM_ENABLE_CARGO_DETAILS                       :Company cargo details
+STR_CONFIG_SETTING_JRPM_ENABLE_CARGO_DETAILS_HELPTEXT              :Show the per-company cargo details window.
+STR_CONFIG_SETTING_JRPM_ENABLE_SPECTATE                            :Spectate a company
+STR_CONFIG_SETTING_JRPM_ENABLE_SPECTATE_HELPTEXT                   :Allow spectating another company's view.
+STR_CONFIG_SETTING_JRPM_ENABLE_HIGHLIGHT                           :Object-level highlight / overlay
+STR_CONFIG_SETTING_JRPM_ENABLE_HIGHLIGHT_HELPTEXT                  :Enable the cmclient object highlight and overlay system. Disable to use the vanilla selection only.
+STR_CONFIG_SETTING_JRPM_ENABLE_BLUEPRINT                           :Blueprint system
+STR_CONFIG_SETTING_JRPM_ENABLE_BLUEPRINT_HELPTEXT                  :Enable copy / rotate / save / load / rebuild blueprints.
+STR_CONFIG_SETTING_JRPM_ENABLE_TOWN_ZONING                         :Town zoning
+STR_CONFIG_SETTING_JRPM_ENABLE_TOWN_ZONING_HELPTEXT                :Enable town zoning display and growth_tiles saving.
+STR_CONFIG_SETTING_JRPM_ENABLE_COMMAND_REPLAY                      :Command record & replay
+STR_CONFIG_SETTING_JRPM_ENABLE_COMMAND_REPLAY_HELPTEXT             :Enable recording and replaying of commands.
+STR_CONFIG_SETTING_JRPM_ENABLE_DECOUPLE                            :Train decouple / recouple
+STR_CONFIG_SETTING_JRPM_ENABLE_DECOUPLE_HELPTEXT                   :Enable detaching and re-attaching train locomotives and cars.
+STR_CONFIG_SETTING_JRPM_ENABLE_MODULAR_AIRPORT                     :Modular airports
+STR_CONFIG_SETTING_JRPM_ENABLE_MODULAR_AIRPORT_HELPTEXT            :Enable multi-tile modular airport construction. Disable to use standard airports only.
+STR_JRPM_FEATURE_DISABLED :{WHITE}{STRING} is disabled in the settings (jrpm feature toggles).

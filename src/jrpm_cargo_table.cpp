@@ -1,9 +1,8 @@
 /** @file jrpm_cargo_table.cpp
- * Company cargo details window: per-cargo delivered amounts (total /
- * current month) for a company.
+ * Company cargo details window: per-cargo delivered amounts and income
+ * (total / current month) for a company.
  *
- * Adapted from citymania-org/cmclient (cm_cargo_table_gui), amount column
- * only (jrpm does not track per-cargo income without a savegame change).
+ * Adapted from citymania-org/cmclient (cm_cargo_table_gui).
  */
 
 #include "stdafx.h"
@@ -30,8 +29,10 @@ enum CompanyCargosWidgets : WidgetID {
 	WID_CT_CAPTION,        ///< Caption.
 	WID_CT_HEADER_CARGO,   ///< Header: cargo names (click to toggle period).
 	WID_CT_HEADER_AMOUNT,  ///< Header: amount.
+	WID_CT_HEADER_INCOME,  ///< Header: income.
 	WID_CT_LIST,           ///< Cargo names list.
 	WID_CT_AMOUNT,         ///< Delivered amounts list.
+	WID_CT_INCOME,         ///< Income list.
 };
 
 /** Which period the amounts show. */
@@ -39,6 +40,11 @@ enum CargoPeriod {
 	CP_TOTAL,  ///< Total delivered (current quarter economy).
 	CP_MONTH,  ///< Last month delivered.
 };
+
+static void DrawPrice(Money amount, int left, int right, int top)
+{
+	DrawString(left, right, top, GetString(STR_FINANCES_POSITIVE_INCOME, amount), TextColour::FromString, SA_RIGHT);
+}
 
 struct CompanyCargosWindow : Window {
 	CargoPeriod period = CP_TOTAL;
@@ -71,7 +77,9 @@ struct CompanyCargosWindow : Window {
 		int icon_space = icon_size.width + ScaleGUITrad(CT_ICON_MARGIN);
 		switch (widget) {
 			case WID_CT_HEADER_AMOUNT:
+			case WID_CT_HEADER_INCOME:
 			case WID_CT_AMOUNT:
+			case WID_CT_INCOME:
 				size.width = std::max<uint>(size.width, static_cast<uint>(ScaleGUITrad(108)));
 				break;
 			case WID_CT_HEADER_CARGO:
@@ -79,15 +87,18 @@ struct CompanyCargosWindow : Window {
 				for (const CargoSpec *cs : _sorted_standard_cargo_specs) {
 					size.width = std::max(GetStringBoundingBox(cs->name).width + icon_space, size.width);
 				}
+				size.width = std::max(GetStringBoundingBox(STR_JRPM_CARGOS_HEADER_TOTAL_MONTH).width, size.width);
 				break;
 			default:
 				break;
 		}
 		switch (widget) {
 			case WID_CT_HEADER_AMOUNT:
+			case WID_CT_HEADER_INCOME:
 				size.height = GetCharacterHeight(FontSize::Normal);
 				break;
 			case WID_CT_AMOUNT:
+			case WID_CT_INCOME:
 			case WID_CT_LIST:
 				size.height = static_cast<uint>(_sorted_standard_cargo_specs.size()) * line_height + CT_LINESPACE + GetCharacterHeight(FontSize::Normal);
 				break;
@@ -112,6 +123,8 @@ struct CompanyCargosWindow : Window {
 	void DrawWidget(const Rect &r, WidgetID widget) const override
 	{
 		const Company *c = Company::Get(static_cast<CompanyID>(this->window_number));
+		uint32_t sum_cargo_amount = 0;
+		Money sum_cargo_income = 0;
 		int y = r.top;
 		Dimension max_icon_size = this->GetMaxIconSize();
 		int line_height = std::max(GetCharacterHeight(FontSize::Normal), static_cast<int>(max_icon_size.height));
@@ -124,6 +137,9 @@ struct CompanyCargosWindow : Window {
 			case WID_CT_HEADER_AMOUNT:
 				DrawString(r.left, r.right, y, GetString(this->period == CP_TOTAL ? STR_JRPM_CARGOS_HEADER_TOTAL : STR_JRPM_CARGOS_HEADER_MONTH), TextColour::FromString, SA_RIGHT);
 				break;
+			case WID_CT_HEADER_INCOME:
+				DrawString(r.left, r.right, y, GetString(STR_JRPM_CARGOS_HEADER_INCOME), TextColour::FromString, SA_RIGHT);
+				break;
 
 			case WID_CT_LIST: {
 				int rect_x = r.left + WidgetDimensions::scaled.framerect.left;
@@ -135,6 +151,10 @@ struct CompanyCargosWindow : Window {
 					DrawString(rect_x + icon_space, r.right, y + text_y_ofs, GetString(STR_JRPM_CARGOS_NAME, cs->name));
 					y += line_height;
 				}
+
+				GfxFillRect(r.left, y + 1, r.right, y + 1, PC_BLACK);
+				y += CT_LINESPACE;
+				DrawString(r.left, r.right, y, GetString(this->period == CP_TOTAL ? STR_JRPM_CARGOS_HEADER_TOTAL : STR_JRPM_CARGOS_HEADER_MONTH), TextColour::FromString, SA_RIGHT);
 				break;
 			}
 			case WID_CT_AMOUNT: {
@@ -149,6 +169,19 @@ struct CompanyCargosWindow : Window {
 				GfxFillRect(r.left, y + 1, r.right, y + 1, PC_BLACK);
 				y += CT_LINESPACE;
 				DrawString(r.left, r.right, y, GetString(STR_JRPM_CARGOS_UNITS_TOTAL, total), TextColour::FromString, SA_RIGHT);
+				break;
+			}
+			case WID_CT_INCOME: {
+				for (const CargoSpec *cs : _sorted_standard_cargo_specs) {
+					auto &economy = (this->period == CP_MONTH && c->num_valid_stat_ent > 0) ? c->old_economy[0] : c->cur_economy;
+					Money income = economy.cargo_income[cs->Index()];
+					sum_cargo_income += income;
+					DrawPrice(income, r.left, r.right, y + text_y_ofs);
+					y += line_height;
+				}
+				GfxFillRect(r.left, y + 1, r.right, y + 1, PC_BLACK);
+				y += CT_LINESPACE;
+				DrawPrice(sum_cargo_income, r.left, r.right, y);
 				break;
 			}
 			default:
@@ -168,12 +201,14 @@ static constexpr std::initializer_list<NWidgetPart> _nested_cargos_widgets = {
 		NWidget(NWID_HORIZONTAL), SetPadding(2, 2, 2, 2), SetPIP(0, 9, 0),
 			NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_CT_HEADER_CARGO), SetFill(1, 0), SetPadding(2, 2, 2, 2), SetStringTip(STR_JRPM_CARGOS_HEADER_CARGO, STR_JRPM_CARGOS_HEADER_CARGO_TIP),
 			NWidget(WWT_TEXT, Colours::Grey, WID_CT_HEADER_AMOUNT), SetMinimalSize(108, 16), SetFill(1, 0), SetPadding(2, 2, 2, 2),
+			NWidget(WWT_TEXT, Colours::Grey, WID_CT_HEADER_INCOME), SetMinimalSize(108, 16), SetFill(1, 0), SetPadding(2, 2, 2, 2),
 		EndContainer(),
 	EndContainer(),
 	NWidget(WWT_PANEL, Colours::Grey), SetResize(1, 1),
 		NWidget(NWID_HORIZONTAL), SetPadding(2, 2, 2, 2), SetPIP(0, 9, 0),
 			NWidget(WWT_EMPTY, Colours::Grey, WID_CT_LIST), SetFill(1, 0), SetPadding(2, 2, 2, 2), SetResize(1, 1),
 			NWidget(WWT_EMPTY, Colours::Grey, WID_CT_AMOUNT), SetMinimalSize(108, 0), SetFill(1, 0), SetPadding(2, 2, 2, 2), SetResize(1, 1),
+			NWidget(WWT_EMPTY, Colours::Grey, WID_CT_INCOME), SetMinimalSize(108, 0), SetFill(1, 0), SetPadding(2, 2, 2, 2), SetResize(1, 1),
 		EndContainer(),
 	EndContainer(),
 };

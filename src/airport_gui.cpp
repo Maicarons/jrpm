@@ -174,7 +174,7 @@ struct BuildAirToolbarWindow : Window {
 	std::string GetWidgetString(WidgetID widget, StringID stringid) const override
 	{
 		if (widget == WID_AT_CAPTION) {
-			if (_settings_game.station.allow_modify_airports) {
+			if (_settings_game.station.allow_modify_airports && _settings_game.jrpm_features.enable_modular_airport) {
 				return GetString(GetAirTypeInfo(_cur_airtype)->strings.toolbar_caption);
 			}
 			return GetString(STR_TOOLBAR_AIRPORT_CAPTION);
@@ -456,7 +456,7 @@ struct BuildAirToolbarWindow : Window {
 
 		switch (this->last_user_action) {
 			case WID_AT_BUILD_TILE: {
-				assert(_settings_game.station.allow_modify_airports);
+				assert(_settings_game.station.allow_modify_airports && _settings_game.jrpm_features.enable_modular_airport);
 
 				auto proc = [=](bool test, StationID to_join) -> bool {
 					if (test) {
@@ -470,7 +470,7 @@ struct BuildAirToolbarWindow : Window {
 				break;
 			}
 			case WID_AT_TRACKS:
-				assert(_settings_game.station.allow_modify_airports);
+				assert(_settings_game.station.allow_modify_airports && _settings_game.jrpm_features.enable_modular_airport);
 				Command<Commands::AddRemoveTracksAirport>::Post(STR_ERROR_CAN_T_DO_THIS, start_tile, end_tile, _cur_airtype, !_remove_button_clicked, (Track)(_thd.drawstyle & HT_DIR_MASK));
 				break;
 			case WID_AT_AIRPORT:
@@ -548,7 +548,7 @@ struct BuildAirToolbarWindow : Window {
 	{
 		if (_game_mode != GameMode::Normal  || !CanBuildVehicleInfrastructure(VehicleType::Aircraft)) return ES_NOT_HANDLED;
 		extern AirType _last_built_airtype;
-		Window *w = ShowBuildAirToolbar(_settings_game.station.allow_modify_airports ? _last_built_airtype : INVALID_AIRTYPE);
+		Window *w = ShowBuildAirToolbar(_settings_game.station.allow_modify_airports && _settings_game.jrpm_features.enable_modular_airport ? _last_built_airtype : INVALID_AIRTYPE);
 		if (w == nullptr) return ES_NOT_HANDLED;
 		return w->OnHotkey(hotkey);
 	}
@@ -676,7 +676,7 @@ Window *ShowBuildAirToolbar(AirType airtype)
 	if (airtype != INVALID_AIRTYPE && !ValParamAirType(airtype)) return nullptr;
 
 	CloseWindowByClass(WindowClass::BuildToolbar);
-	assert((airtype == INVALID_AIRTYPE) != (_settings_game.station.allow_modify_airports));
+	assert((airtype == INVALID_AIRTYPE) != (_settings_game.station.allow_modify_airports && _settings_game.jrpm_features.enable_modular_airport));
 
 	_cur_airtype = airtype;
 	_remove_button_clicked = false;
@@ -897,7 +897,7 @@ public:
 
 		if (_selected_airport_index != -1) {
 			const AirportSpec *as = AirportClass::Get(_selected_airport_class)->GetSpec(_selected_airport_index);
-			AirType airtype = _settings_game.station.allow_modify_airports ? _cur_airtype : as->airtype;
+			AirType airtype = _settings_game.station.allow_modify_airports && _settings_game.jrpm_features.enable_modular_airport ? _cur_airtype : as->airtype;
 			const AirTypeInfo *ati = GetAirTypeInfo(airtype);
 			int rad = _settings_game.station.modified_catchment ? ati->catchment_radius : (uint)CA_UNMODIFIED;
 

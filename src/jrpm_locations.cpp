@@ -6,6 +6,7 @@
  */
 
 #include "stdafx.h"
+#include "settings_type.h"
 #include "company_base.h"
 #include "company_func.h"
 #include "console_func.h"
@@ -33,6 +34,10 @@ static ViewportLocation _locations[NUM_LOCATIONS];
 
 static bool ConSaveLocation(std::span<std::string_view> argv)
 {
+	if (!_settings_game.jrpm_features.enable_location_bookmarks) {
+		IConsolePrint(CC_ERROR, "The location bookmarks feature is disabled in the settings (jrpm feature toggles).");
+		return true;
+	}
 	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Save the current viewport position to a slot. Usage: 'savelocation <slot 1-9>'.");
 		return true;
@@ -59,6 +64,10 @@ static bool ConSaveLocation(std::span<std::string_view> argv)
 
 static bool ConGotoLocation(std::span<std::string_view> argv)
 {
+	if (!_settings_game.jrpm_features.enable_location_bookmarks) {
+		IConsolePrint(CC_ERROR, "The location bookmarks feature is disabled in the settings (jrpm feature toggles).");
+		return true;
+	}
 	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Jump to a saved viewport position. Usage: 'gotolocation <slot 1-9>'.");
 		return true;
@@ -95,6 +104,10 @@ static bool ConGotoLocation(std::span<std::string_view> argv)
 
 static bool ConCompanyCargo(std::span<std::string_view> argv)
 {
+	if (!_settings_game.jrpm_features.enable_cargo_details) {
+		IConsolePrint(CC_ERROR, "The company cargo details feature is disabled in the settings (jrpm feature toggles).");
+		return true;
+	}
 	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Show the cargo details of a company. Usage: 'company_cargo <company_id>'.");
 		return true;
@@ -111,6 +124,10 @@ static bool ConCompanyCargo(std::span<std::string_view> argv)
 
 static bool ConWatchCompany(std::span<std::string_view> argv)
 {
+	if (!_settings_game.jrpm_features.enable_spectate) {
+		IConsolePrint(CC_ERROR, "The company spectate feature is disabled in the settings (jrpm feature toggles).");
+		return true;
+	}
 	if (argv.size() <= 1) {
 		IConsolePrint(CC_HELP, "Center the viewport on a company and watch it. Usage: 'watch <company_id>' or 'watch' for the company list window.");
 		return true;

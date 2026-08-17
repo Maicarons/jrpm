@@ -870,6 +870,9 @@ enum class CommandCallback : uint8_t {
 	CreateTraceRestrictSlot,
 	CreateTraceRestrictCounter,
 
+	/* cm_blueprint.cpp */
+	BlueprintStation,
+
 	End, ///< Must ALWAYS be on the end of this list
 };
 

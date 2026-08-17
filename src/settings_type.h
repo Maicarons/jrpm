@@ -1042,6 +1042,30 @@ struct ScriptConfigSettings
 	ScriptConfigSettings &operator=(const ScriptConfigSettings &other);
 };
 
+/**
+ * Independent on/off toggles for features newly added in the jrpm fork
+ * (cmclient-inspired UI, pulsexlb merges, jrpm-exclusive extras, etc.).
+ * Every toggle defaults to OFF (opt-in) so users can disable any feature
+ * that misbehaves, improving stability and control.
+ * @see src/table/settings/game_settings.ini [jrpm_features]
+ */
+struct JrpmFeaturesSettings {
+	bool enable_resource_download;   ///< resource download: multi-mirror + parallel
+	bool enable_vehicle_autogroup;   ///< vehicle auto-grouping
+	bool enable_global_ai;           ///< whole-game-aware (GlobalAI) access
+	bool enable_trip_history;        ///< vehicle trip history
+	bool enable_plane_taxi_speed;    ///< adjustable plane taxiing speed
+	bool enable_location_bookmarks;  ///< location bookmarks (savelocation/gotolocation)
+	bool enable_cargo_details;       ///< company cargo details window
+	bool enable_spectate;            ///< spectate a company
+	bool enable_highlight;           ///< object-level highlight / overlay system
+	bool enable_blueprint;           ///< blueprint copy/rotate/save/load/rebuild
+	bool enable_town_zoning;         ///< town zoning + growth_tiles save
+	bool enable_command_replay;      ///< command record & replay
+	bool enable_decouple;            ///< train decouple / recouple
+	bool enable_modular_airport;     ///< modular (multi-tile) airports
+};
+
 /** All settings together for the game. */
 struct GameSettings {
 	DifficultySettings   difficulty;         ///< settings related to the difficulty
@@ -1059,6 +1083,7 @@ struct GameSettings {
 	LocaleSettings       locale;             ///< settings related to used currency/unit system in the current game
 	DebugSettings        debug;              ///< debug settings
 	TimeSettings         game_time;          ///< time display settings.
+	JrpmFeaturesSettings jrpm_features;      ///< jrpm new-feature independent toggles (default OFF, opt-in)
 
 	OldEconomySettings   old_economy;
 
