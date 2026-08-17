@@ -18,6 +18,7 @@
 #include "transport_type.h"
 #include "story_type.h"
 #include "company_type.h"
+#include "air_type.h"
 
 struct Window;
 
@@ -31,7 +32,7 @@ void ShowGameOptions();
 void ShowOrdersWindow(const Vehicle *v);
 
 /* airport_gui.cpp */
-Window *ShowBuildAirToolbar();
+Window *ShowBuildAirToolbar(AirType airtype);
 
 /* tgp_gui.cpp */
 void ShowGenerateLandscape();

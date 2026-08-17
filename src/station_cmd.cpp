@@ -3205,7 +3205,7 @@ void DrawAirportTracks(const TileInfo *ti)
 		PaletteID palette = IsLandingTypeTile(ti->tile) ? PALETTE_SEL_TILE_BLUE : PALETTE_SEL_TILE_RED;
 		extern const uint8_t _slope_to_sprite_offset[32];
 		DrawSelectionSprite(SPR_SELECT_TILE + _slope_to_sprite_offset[ti->tileh], palette, ti,
-				7, FOUNDATION_PART_NORMAL);
+				7, FoundationPart::Normal);
 	}
 
 	TrackBits trackbits = GetAirportTileTracks(ti->tile);

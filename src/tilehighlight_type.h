@@ -91,12 +91,12 @@ struct TileHighlightData {
 };
 
 /** Tile highlight types drawn by the viewport. */
-enum TileHighlightType {
-	THT_NONE,
-	THT_WHITE,
-	THT_BLUE,
-	THT_RED,
-	THT_LIGHT_BLUE,
+enum class TileHighlightType : uint8_t {
+	None, ///< No tile highlight.
+	White, ///< Indicates a tile which is part of the highlighted station, or a station tile within the highlighted town.
+	Blue, ///< Indicates a tile which is in the catchment area of the highlighted station.
+	Red, ///< Indicates a house tile which is not in any station catchment area of the highlighted town.
+	LightBlue,
 };
 
 

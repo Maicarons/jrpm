@@ -1797,7 +1797,7 @@ void DrawTunnelHead(SpriteID palette, const TileInfo *ti, RailType railtype, Dia
 
 void DrawSelectionPoint(SpriteID palette, const TileInfo *ti) {
     int z = 0;
-    FoundationPart foundation_part = FOUNDATION_PART_NORMAL;
+    FoundationPart foundation_part = FoundationPart::Normal;
     if (ti->tileh & SLOPE_N) {
         z += TILE_HEIGHT;
         if (RemoveHalftileSlope(ti->tileh) == SLOPE_STEEP_N) z += TILE_HEIGHT;
@@ -1806,7 +1806,7 @@ void DrawSelectionPoint(SpriteID palette, const TileInfo *ti) {
         Corner halftile_corner = GetHalftileSlopeCorner(ti->tileh);
         if ((halftile_corner == CORNER_W) || (halftile_corner == CORNER_E)) z += TILE_HEIGHT;
         if (halftile_corner != CORNER_S) {
-            foundation_part = FOUNDATION_PART_HALFTILE;
+            foundation_part = FoundationPart::Halftile;
             if (IsSteepSlope(ti->tileh)) z -= TILE_HEIGHT;
         }
     }
@@ -1817,16 +1817,16 @@ void DrawBorderSprites(const TileInfo *ti, ZoningBorder border, SpriteID color) 
     auto b = (uint8_t)border & 15;
     auto tile_sprite = SPR_DOT + _tileh_to_sprite[ti->tileh] * 19;
     if (b) {
-        DrawSelectionSprite(tile_sprite + b - 1, color, ti, 7, FOUNDATION_PART_NORMAL);
+        DrawSelectionSprite(tile_sprite + b - 1, color, ti, 7, FoundationPart::Normal);
     }
     if (border & ZoningBorder::TOP_CORNER)
-        DrawSelectionSprite(tile_sprite + 15, color, ti, 7, FOUNDATION_PART_NORMAL);
+        DrawSelectionSprite(tile_sprite + 15, color, ti, 7, FoundationPart::Normal);
     if (border & ZoningBorder::RIGHT_CORNER)
-        DrawSelectionSprite(tile_sprite + 16, color, ti, 7, FOUNDATION_PART_NORMAL);
+        DrawSelectionSprite(tile_sprite + 16, color, ti, 7, FoundationPart::Normal);
     if (border & ZoningBorder::BOTTOM_CORNER)
-        DrawSelectionSprite(tile_sprite + 17, color, ti, 7, FOUNDATION_PART_NORMAL);
+        DrawSelectionSprite(tile_sprite + 17, color, ti, 7, FoundationPart::Normal);
     if (border & ZoningBorder::LEFT_CORNER)
-        DrawSelectionSprite(tile_sprite + 18, color, ti, 7, FOUNDATION_PART_NORMAL);
+        DrawSelectionSprite(tile_sprite + 18, color, ti, 7, FoundationPart::Normal);
 }
 
 TileHighlight ObjectHighlight::GetTileHighlight(const TileInfo *ti) {
@@ -1964,10 +1964,10 @@ static void DrawObjectTileHighlight(const TileInfo *ti, const ObjectTileHighligh
                     { -31 + 34, -1000, 1000, 1000 }, // CORNER_E
                     { -1000, -1000, 1000, 30 - 8 }   // CORNER_N
                 };
-                DrawSelectionSprite(sprite, oth.palette, ti, 7 + TILE_HEIGHT, FOUNDATION_PART_HALFTILE, 0, 0, &(sub_sprites[GetHalftileSlopeCorner(ti->tileh)]));
+                DrawSelectionSprite(sprite, oth.palette, ti, 7 + TILE_HEIGHT, FoundationPart::Halftile, 0, 0, &(sub_sprites[GetHalftileSlopeCorner(ti->tileh)]));
             } else {
                 sprite += SlopeToSpriteOffset(ti->tileh);
-                DrawSelectionSprite(sprite, oth.palette, ti, 7, FOUNDATION_PART_NORMAL);
+                DrawSelectionSprite(sprite, oth.palette, ti, 7, FoundationPart::Normal);
             }
             break;
         }
@@ -2210,12 +2210,12 @@ void DrawTileZoning(const TileInfo *ti, const TileHighlight &th, TileType tile_t
     for (uint i = 0; i < th.border_count; i++)
         DrawBorderSprites(ti, th.border[i], th.border_colour[i]);
     if (th.sprite) {
-        DrawSelectionSprite(th.sprite, PAL_NONE, ti, 0, FOUNDATION_PART_NORMAL);
+        DrawSelectionSprite(th.sprite, PAL_NONE, ti, 0, FoundationPart::Normal);
     }
     if (th.selection) {
         DrawBorderSprites(ti, ZoningBorder::FULL, th.selection);
         // DrawSelectionSprite(SPR_SELECT_TILE + _tileh_to_sprite[ti->tileh],
-        //                     th.selection, ti, 0, FOUNDATION_PART_NORMAL);
+        //                     th.selection, ti, 0, FoundationPart::Normal);
     }
 }
 

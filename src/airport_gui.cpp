@@ -542,14 +542,14 @@ struct BuildAirToolbarWindow : Window {
 	/**
 	 * Handler for global hotkeys of the BuildAirToolbarWindow.
 	 * @param hotkey Hotkey
-	 * @return ES_HANDLED if hotkey was accepted.
+	 * @return EventState::Handled if hotkey was accepted.
 	 */
 	static EventState AirportToolbarGlobalHotkeys(int hotkey)
 	{
-		if (_game_mode != GameMode::Normal  || !CanBuildVehicleInfrastructure(VehicleType::Aircraft)) return ES_NOT_HANDLED;
-		extern AirType _last_built_airtype;
-		Window *w = ShowBuildAirToolbar(_settings_game.station.allow_modify_airports && _settings_game.jrpm_features.enable_modular_airport ? _last_built_airtype : INVALID_AIRTYPE);
-		if (w == nullptr) return ES_NOT_HANDLED;
+	if (_game_mode != GameMode::Normal  || !CanBuildVehicleInfrastructure(VehicleType::Aircraft)) return EventState::NotHandled;
+	extern AirType _last_built_airtype;
+	Window *w = ShowBuildAirToolbar(_settings_game.station.allow_modify_airports && _settings_game.jrpm_features.enable_modular_airport ? _last_built_airtype : INVALID_AIRTYPE);
+	if (w == nullptr) return EventState::NotHandled;
 		return w->OnHotkey(hotkey);
 	}
 

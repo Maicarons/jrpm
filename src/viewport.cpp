@@ -92,6 +92,7 @@
 #include "waypoint_func.h"
 #include "window_func.h"
 #include "tilehighlight_func.h"
+#include "tilehighlight_type.h"
 #include "zoning.h"
 #include "window_gui.h"
 #include "linkgraph/linkgraph_gui.h"
@@ -202,10 +203,10 @@ struct ChildScreenSpriteToDraw {
  * Mode of "sprite combining"
  * @see StartSpriteCombine
  */
-enum SpriteCombineMode : uint8_t {
-	SPRITE_COMBINE_NONE,     ///< Every #AddSortableSpriteToDraw start its own bounding box
-	SPRITE_COMBINE_PENDING,  ///< %Sprite combining will start with the next unclipped sprite.
-	SPRITE_COMBINE_ACTIVE,   ///< %Sprite combining is active. #AddSortableSpriteToDraw outputs child sprites.
+enum class SpriteCombineMode : uint8_t {
+	None, ///< Every #AddSortableSpriteToDraw start its own bounding box
+	Pending, ///< %Sprite combining will start with the next unclipped sprite.
+	Active, ///< %Sprite combining is active. #AddSortableSpriteToDraw outputs child sprites.
 };
 
 typedef std::vector<TileSpriteToDraw> TileSpriteToDrawVector;
@@ -296,10 +297,10 @@ struct ViewportDrawer {
 	int combine_top;
 	int combine_bottom;
 
-	int foundation[FOUNDATION_PART_END];             ///< Foundation sprites (index into parent_sprites_to_draw).
-	FoundationPart foundation_part;                  ///< Currently active foundation for ground sprite drawing.
-	ChildStoreID last_foundation_child[FOUNDATION_PART_END]; ///< Tail of ChildSprite list of the foundations. (index into child_screen_sprites_to_draw)
-	Point foundation_offset[FOUNDATION_PART_END];    ///< Pixel offset for ground sprites on the foundations.
+	FoundationPart foundation_part;                                                          ///< Currently active foundation for ground sprite drawing.
+	EnumIndexArray<int, FoundationPart, FoundationPart::End> foundation;                     ///< Foundation sprites (index into parent_sprites_to_draw).
+	EnumIndexArray<ChildStoreID, FoundationPart, FoundationPart::End> last_foundation_child; ///< Tail of ChildSprite list of the foundations. (index into child_screen_sprites_to_draw)
+	EnumIndexArray<Point, FoundationPart, FoundationPart::End> foundation_offset;            ///< Pixel offset for ground sprites on the foundations.
 };
 static ViewportDrawer _vd;
 
@@ -1132,7 +1133,7 @@ static void AddTileSpriteToDraw(SpriteID image, PaletteID pal, int32_t x, int32_
  */
 static void AddChildSpriteToFoundation(SpriteID image, PaletteID pal, const SubSprite *sub, FoundationPart foundation_part, int extra_offs_x, int extra_offs_y)
 {
-	dbg_assert(IsInsideMM(foundation_part, 0, FOUNDATION_PART_END));
+	dbg_assert(foundation_part < FoundationPart::End);
 	dbg_assert(_vd.foundation[foundation_part] != -1);
 	Point offs = _vd.foundation_offset[foundation_part];
 
@@ -1162,7 +1163,7 @@ static void AddChildSpriteToFoundation(SpriteID image, PaletteID pal, const SubS
 void DrawGroundSpriteAt(SpriteID image, PaletteID pal, int32_t x, int32_t y, int z, const SubSprite *sub, int extra_offs_x, int extra_offs_y)
 {
 	/* Switch to first foundation part, if no foundation was drawn */
-	if (_vd.foundation_part == FOUNDATION_PART_NONE) _vd.foundation_part = FOUNDATION_PART_NORMAL;
+	if (_vd.foundation_part == FoundationPart::None) _vd.foundation_part = FoundationPart::Normal;
 
 	if (_vd.foundation[_vd.foundation_part] != -1) {
 		Point pt = RemapCoords(x, y, z);
@@ -1188,6 +1189,20 @@ void DrawGroundSprite(SpriteID image, PaletteID pal, const SubSprite *sub, int e
 }
 
 /**
+ * Get the next foundation part
+ * @param foundation_part The current foundation part.
+ * @return The next foundation part.
+ */
+static FoundationPart GetNextFoundationPart(FoundationPart foundation_part)
+{
+	switch (foundation_part) {
+		case FoundationPart::None: return FoundationPart::Normal;
+		case FoundationPart::Normal: return FoundationPart::Halftile;
+		default: NOT_REACHED();
+	}
+}
+
+/**
  * Called when a foundation has been drawn for the current tile.
  * Successive ground sprites for the current tile will be drawn as child sprites of the "foundation"-ParentSprite, not as TileSprites.
  *
@@ -1197,15 +1212,7 @@ void DrawGroundSprite(SpriteID image, PaletteID pal, const SubSprite *sub, int e
 void OffsetGroundSprite(int x, int y)
 {
 	/* Switch to next foundation part */
-	switch (_vd.foundation_part) {
-		case FOUNDATION_PART_NONE:
-			_vd.foundation_part = FOUNDATION_PART_NORMAL;
-			break;
-		case FOUNDATION_PART_NORMAL:
-			_vd.foundation_part = FOUNDATION_PART_HALFTILE;
-			break;
-		default: NOT_REACHED();
-	}
+	_vd.foundation_part = GetNextFoundationPart(_vd.foundation_part);
 
 	/* _vd.last_child == NO_CHILD_STORE if foundation sprite was clipped by the viewport bounds */
 	if (_vd.last_child != NO_CHILD_STORE) _vd.foundation[_vd.foundation_part] = (uint)_vdd->parent_sprites_to_draw.size() - 1;
@@ -1287,7 +1294,7 @@ void AddSortableSpriteToDraw(SpriteID image, PaletteID pal, int x, int y, int z,
 		pal = PALETTE_TO_TRANSPARENT;
 	}
 
-	if (_vd.combine_sprites == SPRITE_COMBINE_ACTIVE) {
+	if (_vd.combine_sprites == SpriteCombineMode::Active) {
 		AddCombinedSprite(image, pal, x + bounds.offset.x, y + bounds.offset.y, z + bounds.offset.z, sub);
 		return;
 	}
@@ -1362,8 +1369,8 @@ void AddSortableSpriteToDraw(SpriteID image, PaletteID pal, int x, int y, int z,
 	/* bit 15 of ps.height */
 	// ps.comparison_done = false;
 
-	if (_vd.combine_sprites == SPRITE_COMBINE_PENDING) {
-		_vd.combine_sprites = SPRITE_COMBINE_ACTIVE;
+	if (_vd.combine_sprites == SpriteCombineMode::Pending) {
+		_vd.combine_sprites = SpriteCombineMode::Active;
 		_vd.combine_psd_index = (uint)_vdd->parent_sprites_to_draw.size() - 1;
 		_vd.combine_left = tmp_left;
 		_vd.combine_right = right;
@@ -1397,8 +1404,8 @@ void SetLastSortableSpriteToDrawSpecialFlags(ViewportSortableSpriteSpecialFlags 
  */
 void StartSpriteCombine()
 {
-	dbg_assert(_vd.combine_sprites == SPRITE_COMBINE_NONE);
-	_vd.combine_sprites = SPRITE_COMBINE_PENDING;
+	dbg_assert(_vd.combine_sprites == SpriteCombineMode::None);
+	_vd.combine_sprites = SpriteCombineMode::Pending;
 }
 
 /**
@@ -1407,15 +1414,15 @@ void StartSpriteCombine()
  */
 void EndSpriteCombine()
 {
-	dbg_assert(_vd.combine_sprites != SPRITE_COMBINE_NONE);
-	if (_vd.combine_sprites == SPRITE_COMBINE_ACTIVE) {
+	dbg_assert(_vd.combine_sprites != SpriteCombineMode::None);
+	if (_vd.combine_sprites == SpriteCombineMode::Active) {
 		ParentSpriteToDraw &ps = _vdd->parent_sprites_to_draw[_vd.combine_psd_index];
 		ps.left = _vd.combine_left;
 		ps.top = _vd.combine_top;
 		ps.width = _vd.combine_right - _vd.combine_left;
 		ps.height = _vd.combine_bottom - _vd.combine_top;
 	}
-	_vd.combine_sprites = SPRITE_COMBINE_NONE;
+	_vd.combine_sprites = SpriteCombineMode::None;
 }
 
 /**
@@ -1495,8 +1502,8 @@ void AddChildSpriteScreen(SpriteID image, PaletteID pal, int x, int y, bool tran
 	/* Append the sprite to the active ChildSprite list.
 	 * If the active ParentSprite is a foundation, update last_foundation_child as well.
 	 * Note: ChildSprites of foundations are NOT sequential in the vector, as selection sprites are added at last. */
-	if (_vd.last_foundation_child[0] == _vd.last_child) _vd.last_foundation_child[0] = child_store;
-	if (_vd.last_foundation_child[1] == _vd.last_child) _vd.last_foundation_child[1] = child_store;
+	if (_vd.last_foundation_child[FoundationPart::Normal] == _vd.last_child) _vd.last_foundation_child[FoundationPart::Normal] = child_store;
+	if (_vd.last_foundation_child[FoundationPart::Halftile] == _vd.last_child) _vd.last_foundation_child[FoundationPart::Halftile] = child_store;
 	_vd.last_child = child_store;
 }
 
@@ -1554,7 +1561,7 @@ void DrawTileSelectionRect(const TileInfo *ti, PaletteID pal)
 	if (IsHalftileSlope(ti->tileh)) {
 		Corner halftile_corner = GetHalftileSlopeCorner(ti->tileh);
 		SpriteID sel2 = SPR_HALFTILE_SELECTION_FLAT + halftile_corner;
-		DrawSelectionSprite(sel2, pal, ti, 7 + TILE_HEIGHT, FOUNDATION_PART_HALFTILE);
+		DrawSelectionSprite(sel2, pal, ti, 7 + TILE_HEIGHT, FoundationPart::Halftile);
 
 		Corner opposite_corner = OppositeCorner(halftile_corner);
 		if (IsSteepSlope(ti->tileh)) {
@@ -1566,7 +1573,7 @@ void DrawTileSelectionRect(const TileInfo *ti, PaletteID pal)
 	} else {
 		sel = SPR_SELECT_TILE + SlopeToSpriteOffset(ti->tileh);
 	}
-	DrawSelectionSprite(sel, pal, ti, 7, FOUNDATION_PART_NORMAL);
+	DrawSelectionSprite(sel, pal, ti, 7, FoundationPart::Normal);
 }
 
 static HighLightStyle GetPartOfAutoLine(int px, int py, const Point &selstart, const Point &selend, HighLightStyle dir)
@@ -1602,7 +1609,7 @@ static HighLightStyle GetPartOfAutoLine(int px, int py, const Point &selstart, c
 void DrawAutorailSelection(const TileInfo *ti, HighLightStyle highlight_style, PaletteID pal = -1)
 {
 	SpriteID image;
-	FoundationPart foundation_part = FOUNDATION_PART_NORMAL;
+	FoundationPart foundation_part = FoundationPart::Normal;
 	int offset;
 	bool bridge_head_mode = false;
 
@@ -1624,7 +1631,7 @@ void DrawAutorailSelection(const TileInfo *ti, HighLightStyle highlight_style, P
 			static const HighLightStyle _lower_rail[CORNER_END] = { HT_DIR_VR, HT_DIR_HU, HT_DIR_VL, HT_DIR_HL }; // CORNER_W, CORNER_S, CORNER_E, CORNER_N
 			Corner halftile_corner = GetHalftileSlopeCorner(ti->tileh);
 			if ((highlight_style & HT_DIR_MASK) != _lower_rail[halftile_corner]) {
-				foundation_part = FOUNDATION_PART_HALFTILE;
+				foundation_part = FoundationPart::Halftile;
 				/* Here we draw the highlights of the "three-corners-raised"-slope. That looks ok to me. */
 				slope = SlopeWithThreeCornersRaised(OppositeCorner(halftile_corner));
 			}
@@ -1662,51 +1669,50 @@ const TraceRestrictProgram *_viewport_highlight_tracerestrict_program; ///< Curr
 static TileHighlightType GetTileHighlightType(TileIndex t)
 {
 	if (_viewport_highlight_station != nullptr) {
-		if (IsTileType(t, TileType::Station) && GetStationIndex(t) == _viewport_highlight_station->index) return THT_LIGHT_BLUE;
-		if (_viewport_highlight_station->TileIsInCatchment(t)) return THT_BLUE;
+		if (IsTileType(t, TileType::Station) && GetStationIndex(t) == _viewport_highlight_station->index) return TileHighlightType::LightBlue;
+		if (_viewport_highlight_station->TileIsInCatchment(t)) return TileHighlightType::Blue;
 	}
 
 	if (_viewport_highlight_station_rect != nullptr) {
-		if (IsTileType(t, TileType::Station) && GetStationIndex(t) == _viewport_highlight_station_rect->index) return THT_WHITE;
+		if (IsTileType(t, TileType::Station) && GetStationIndex(t) == _viewport_highlight_station_rect->index) return TileHighlightType::White;
 		const StationRect *r = &_viewport_highlight_station_rect->rect;
-		if (r->PtInExtendedRect(TileX(t), TileY(t))) return THT_BLUE;
+		if (r->PtInExtendedRect(TileX(t), TileY(t))) return TileHighlightType::Blue;
 	}
 
 	if (_viewport_highlight_waypoint != nullptr) {
-		if (IsTileType(t, TileType::Station) && GetStationIndex(t) == _viewport_highlight_waypoint->index) return THT_LIGHT_BLUE;
+		if (IsTileType(t, TileType::Station) && GetStationIndex(t) == _viewport_highlight_waypoint->index) return TileHighlightType::LightBlue;
 	}
 
 	if (_viewport_highlight_waypoint_rect != nullptr) {
-		if (IsTileType(t, TileType::Station) && GetStationIndex(t) == _viewport_highlight_waypoint_rect->index) return THT_WHITE;
+		if (IsTileType(t, TileType::Station) && GetStationIndex(t) == _viewport_highlight_waypoint_rect->index) return TileHighlightType::White;
 		const StationRect *r = &_viewport_highlight_waypoint_rect->rect;
-		if (r->PtInExtendedRect(TileX(t), TileY(t))) return THT_BLUE;
+		if (r->PtInExtendedRect(TileX(t), TileY(t))) return TileHighlightType::Blue;
 	}
 
 	if (_viewport_highlight_town != nullptr) {
 		if (IsTileType(t, TileType::House)) {
 			if (GetTownIndex(t) == _viewport_highlight_town->index) {
-				TileHighlightType type = THT_RED;
 				for (const Station *st : _viewport_highlight_town->stations_near) {
 					if (st->owner != _current_company) continue;
-					if (st->TileIsInCatchment(t)) return THT_BLUE;
+					if (st->TileIsInCatchment(t)) return TileHighlightType::Blue;
 				}
-				return type;
+				return TileHighlightType::Red;
 			}
 		} else if (IsTileType(t, TileType::Station)) {
 			for (const Station *st : _viewport_highlight_town->stations_near) {
 				if (st->owner != _current_company) continue;
-				if (GetStationIndex(t) == st->index) return THT_WHITE;
+				if (GetStationIndex(t) == st->index) return TileHighlightType::White;
 			}
 		}
 	}
 
 	if (_viewport_highlight_tracerestrict_program != nullptr) {
 		for (TraceRestrictRefId ref : _viewport_highlight_tracerestrict_program->GetReferences()) {
-			if (GetTraceRestrictRefIdTileIndex(ref) == t) return THT_LIGHT_BLUE;
+			if (GetTraceRestrictRefIdTileIndex(ref) == t) return TileHighlightType::LightBlue;
 		}
 	}
 
-	return THT_NONE;
+	return TileHighlightType::None;
 }
 
 /**
@@ -1722,11 +1728,11 @@ static void DrawTileHighlightType(const TileInfo *ti, TileHighlightType tht)
 
 	switch (tht) {
 		default:
-		case THT_NONE: break;
-		case THT_WHITE: DrawTileSelectionRect(ti, PAL_NONE); break;
-		case THT_BLUE:  DrawTileSelectionRect(ti, PALETTE_SEL_TILE_BLUE); break;
-		case THT_RED:   DrawTileSelectionRect(ti, PALETTE_SEL_TILE_RED); break;
-		case THT_LIGHT_BLUE: DrawTileSelectionRect(ti, SPR_ZONING_INNER_HIGHLIGHT_LIGHT_BLUE); break;
+		case TileHighlightType::None:      break;
+		case TileHighlightType::White:     DrawTileSelectionRect(ti, PAL_NONE); break;
+		case TileHighlightType::Blue:      DrawTileSelectionRect(ti, PALETTE_SEL_TILE_BLUE); break;
+		case TileHighlightType::Red:       DrawTileSelectionRect(ti, PALETTE_SEL_TILE_RED); break;
+		case TileHighlightType::LightBlue: DrawTileSelectionRect(ti, SPR_ZONING_INNER_HIGHLIGHT_LIGHT_BLUE); break;
 	}
 }
 
@@ -1787,7 +1793,7 @@ static void DrawTileSelection(const TileInfo *ti)
 			if (!is_redsq) {
 				if (IsInsideSelectedRectangle(ti->x, ti->y)) {
 					DrawTileSelectionRect(ti, _thd.square_palette);
-				} else if (_thd.outersize.x > 0 && (tht == THT_NONE || tht == THT_RED) &&
+				} else if (_thd.outersize.x > 0 && (tht == TileHighlightType::None || tht == TileHighlightType::Red) &&
 						/* Check if it's inside the outer area? */
 						IsInsideBS(ti->x, _thd.pos.x + _thd.offs.x, _thd.size.x + _thd.outersize.x) &&
 						IsInsideBS(ti->y, _thd.pos.y + _thd.offs.y, _thd.size.y + _thd.outersize.y)) {
@@ -1801,7 +1807,7 @@ static void DrawTileSelection(const TileInfo *ti)
 			if (IsInsideSelectedRectangle(ti->x, ti->y)) {
 				/* Figure out the Z coordinate for the single dot. */
 				int z = 0;
-				FoundationPart foundation_part = FOUNDATION_PART_NORMAL;
+				FoundationPart foundation_part = FoundationPart::Normal;
 				if (ti->tileh & SLOPE_N) {
 					z += TILE_HEIGHT;
 					if (RemoveHalftileSlope(ti->tileh) == SLOPE_STEEP_N) z += TILE_HEIGHT;
@@ -1810,7 +1816,7 @@ static void DrawTileSelection(const TileInfo *ti)
 					Corner halftile_corner = GetHalftileSlopeCorner(ti->tileh);
 					if ((halftile_corner == CORNER_W) || (halftile_corner == CORNER_E)) z += TILE_HEIGHT;
 					if (halftile_corner != CORNER_S) {
-						foundation_part = FOUNDATION_PART_HALFTILE;
+						foundation_part = FoundationPart::Halftile;
 						if (IsSteepSlope(ti->tileh)) z -= TILE_HEIGHT;
 					}
 				}
@@ -1958,11 +1964,11 @@ static void ViewportAddLandscape()
 
 			if (tile_visible) {
 				last_row = false;
-				_vd.foundation_part = FOUNDATION_PART_NONE;
-				_vd.foundation[0] = -1;
-				_vd.foundation[1] = -1;
-				_vd.last_foundation_child[0] = NO_CHILD_STORE;
-				_vd.last_foundation_child[1] = NO_CHILD_STORE;
+				_vd.foundation_part = FoundationPart::None;
+				_vd.foundation[FoundationPart::Normal] = -1;
+				_vd.foundation[FoundationPart::Halftile] = -1;
+				_vd.last_foundation_child[FoundationPart::Normal] = NO_CHILD_STORE;
+				_vd.last_foundation_child[FoundationPart::Halftile] = NO_CHILD_STORE;
 
 				bool no_ground_tiles = min_visible_height > 0;
 				_tile_type_procs[tile_type]->draw_tile_proc(&_cur_ti, { min_visible_height, no_ground_tiles });
@@ -4124,7 +4130,7 @@ void ViewportDoDraw(Viewport *vp, int left, int top, int right, int bottom, NWid
 	_vdd->dpi.zoom = vp->zoom;
 	int mask = ScaleByZoom(-1, vp->zoom);
 
-	_vd.combine_sprites = SPRITE_COMBINE_NONE;
+	_vd.combine_sprites = SpriteCombineMode::None;
 
 	_vdd->dpi.width = (right - left) & mask;
 	_vdd->dpi.height = (bottom - top) & mask;
@@ -5842,7 +5848,7 @@ void UpdateTileSelection()
  * @param text String to be displayed
  * @param close_cond Condition for closing this tooltip.
  */
-static inline void ShowMeasurementTooltips(EncodedString &&text, TooltipCloseCondition close_cond = TCC_EXIT_VIEWPORT)
+static inline void ShowMeasurementTooltips(EncodedString &&text, TooltipCloseCondition close_cond = TooltipCloseCondition::ExitViewport)
 {
 	if (!_settings_client.gui.measure_tooltip) return;
 	GuiShowTooltips(_thd.GetCallbackWnd(), std::move(text), close_cond);
@@ -5894,7 +5900,7 @@ void VpStartPlaceSizing(TileIndex tile, ViewportPlaceMethod method, ViewportDrag
 		_thd.place_mode = HT_SPECIAL | others;
 		_thd.next_drawstyle = HT_POINT | others;
 	}
-	_special_mouse_mode = WSM_SIZING;
+	_special_mouse_mode = SpecialMouseMode::Sizing;
 }
 
 /**
@@ -5909,7 +5915,7 @@ void VpStartDragging(ViewportDragDropSelectionProcess process)
 	_thd.selstart.y = 0;
 	_thd.next_drawstyle = HT_RECT;
 
-	_special_mouse_mode = WSM_DRAGGING;
+	_special_mouse_mode = SpecialMouseMode::Dragging;
 }
 
 void VpSetPlaceSizingLimit(int limit)
@@ -5943,7 +5949,7 @@ void VpSetPresizeRange(TileIndex from, TileIndex to)
 static void VpStartPreSizing()
 {
 	_thd.selend.x = -1;
-	_special_mouse_mode = WSM_PRESIZE;
+	_special_mouse_mode = SpecialMouseMode::Presize;
 }
 
 /**
@@ -6112,7 +6118,7 @@ static int CalcHeightdiff(HighLightStyle style, uint distance, TileIndex start_t
 	return (int)(h1 - h0) * TILE_HEIGHT_STEP;
 }
 
-static void ShowLengthMeasurement(HighLightStyle style, TileIndex start_tile, TileIndex end_tile, TooltipCloseCondition close_cond = TCC_EXIT_VIEWPORT, bool show_single_tile_length = false)
+static void ShowLengthMeasurement(HighLightStyle style, TileIndex start_tile, TileIndex end_tile, TooltipCloseCondition close_cond = TooltipCloseCondition::ExitViewport, bool show_single_tile_length = false)
 {
 	if (_settings_client.gui.measure_tooltip) {
 		uint distance = DistanceManhattan(start_tile, end_tile) + 1;
@@ -6599,7 +6605,7 @@ static HighLightStyle CalcPolyrailDrawstyle(Point pt, bool dragging)
 	}
 
 	HighLightStyle ret = HT_LINE | (HighLightStyle)TrackdirToTrack(seldir);
-	ShowLengthMeasurement(ret, TileVirtXY(_thd.selstart.x, _thd.selstart.y), TileVirtXY(_thd.selend.x, _thd.selend.y), TCC_EXIT_VIEWPORT, true);
+	ShowLengthMeasurement(ret, TileVirtXY(_thd.selstart.x, _thd.selstart.y), TileVirtXY(_thd.selend.x, _thd.selend.y), TooltipCloseCondition::ExitViewport, true);
 	return ret;
 }
 
@@ -6715,7 +6721,7 @@ calc_heightdiff_single_direction:;
 
 			/* Always show the measurement tooltip */
 			EncodedString str = GetEncodedString(STR_MEASURE_DIST_HEIGHTDIFF, manhattan_distance, euclid_distance, DistanceFromEdge(t1), GetTileMaxZ(t1) * TILE_HEIGHT_STEP, heightdiff);
-			GuiShowTooltips(_thd.GetCallbackWnd(), std::move(str), TCC_EXIT_VIEWPORT);
+			GuiShowTooltips(_thd.GetCallbackWnd(), std::move(str), TooltipCloseCondition::ExitViewport);
 			break;
 		}
 
@@ -6801,18 +6807,18 @@ calc_heightdiff_single_direction:;
  */
 EventState VpHandlePlaceSizingDrag()
 {
-	if (_special_mouse_mode != WSM_SIZING && _special_mouse_mode != WSM_DRAGGING) return ES_NOT_HANDLED;
+	if (_special_mouse_mode != SpecialMouseMode::Sizing && _special_mouse_mode != SpecialMouseMode::Dragging) return EventState::NotHandled;
 
 	/* stop drag mode if the window has been closed */
 	Window *w = _thd.GetCallbackWnd();
 	if (w == nullptr) {
 		ResetObjectToPlace();
-		return ES_HANDLED;
+		return EventState::Handled;
 	}
 
-	if (_left_button_down && _special_mouse_mode == WSM_DRAGGING) {
+	if (_left_button_down && _special_mouse_mode == SpecialMouseMode::Dragging) {
 		/* Only register a drag event when the mouse moved. */
-		if (_thd.new_pos.x == _thd.selstart.x && _thd.new_pos.y == _thd.selstart.y) return ES_HANDLED;
+		if (_thd.new_pos.x == _thd.selstart.x && _thd.new_pos.y == _thd.selstart.y) return EventState::Handled;
 		_thd.selstart.x = _thd.new_pos.x;
 		_thd.selstart.y = _thd.new_pos.y;
 	}
@@ -6822,11 +6828,11 @@ EventState VpHandlePlaceSizingDrag()
 		 * Do it even if the button is no longer pressed to make sure that OnPlaceDrag was called at least once. */
 		w->OnPlaceDrag(_thd.select_method, _thd.select_proc, GetTileBelowCursor());
 	}
-	if (_left_button_down) return ES_HANDLED;
+	if (_left_button_down) return EventState::Handled;
 
 	/* Mouse button released. */
-	_special_mouse_mode = WSM_NONE;
-	if (_special_mouse_mode == WSM_DRAGGING) return ES_HANDLED;
+	_special_mouse_mode = SpecialMouseMode::None;
+	if (_special_mouse_mode == SpecialMouseMode::Dragging) return EventState::Handled;
 
 	/* Keep the selected tool, but reset it to the original mode. */
 	HighLightStyle others = _thd.place_mode & ~(HT_DRAG_MASK | HT_DIR_MASK);
@@ -6843,12 +6849,12 @@ EventState VpHandlePlaceSizingDrag()
 
 	if (_thd.place_mode & HT_POLY) {
 		if (GetRailSnapMode() == RSM_SNAP_TO_TILE) SetRailSnapMode(RSM_NO_SNAP);
-		if (_thd.drawstyle == HT_NONE) return ES_HANDLED;
+		if (_thd.drawstyle == HT_NONE) return EventState::Handled;
 	}
 	HideMeasurementTooltips();
 
 	w->OnPlaceMouseUp(_thd.select_method, _thd.select_proc, _thd.selend, TileVirtXY(_thd.selstart.x, _thd.selstart.y), TileVirtXY(_thd.selend.x, _thd.selend.y));
-	return ES_HANDLED;
+	return EventState::Handled;
 }
 
 /**
@@ -6901,9 +6907,9 @@ void SetObjectToPlace(CursorID icon, PaletteID pal, HighLightStyle mode, WindowC
 
 	if (mode == HT_DRAG) { // HT_DRAG is for dragdropping trains in the depot window
 		mode = HT_NONE;
-		_special_mouse_mode = WSM_DRAGDROP;
+		_special_mouse_mode = SpecialMouseMode::DragDrop;
 	} else {
-		_special_mouse_mode = WSM_NONE;
+		_special_mouse_mode = SpecialMouseMode::None;
 	}
 
 	_thd.place_mode = mode;
