@@ -1,0 +1,45 @@
+# 可选补丁：客户端上限扩展至 uint16（方案 B）
+# ===========================================
+# 状态：未应用（UNSIGNED review material）。
+# 说明：把线上协议中 clients_max 从 uint8 提升到 uint16，使在线玩家上限可超过 255。
+# 代价：client<->server 线上协议、UDP 广播、游戏协调器协议不兼容旧版本/公共服务器列表。
+# 用法：审阅后如需应用，按下面清单逐文件修改（或重建为本分支内的 commit）。
+#
+# 注意：companies_max 保持 uint8（公司上限由瓦片 owner 5bit 约束，与协议无关）。
+
+# ---------- 1. src/network/network_type.h ----------
+# 把
+#   static const uint MAX_CLIENTS = 255;
+# 改为
+#   static const uint MAX_CLIENTS = 4095;
+# （ClientPoolIDTag 为 PoolIDTraits<uint16_t, MAX_CLIENTS + 1, 0xFFFF>，4096 < 65535，无需改）
+
+# ---------- 2. src/network/core/network_game_info.cpp ----------
+# SerializeNetworkGameInfo（约 251-259 行）：
+#   p.Send_uint8 (info.clients_max); // Used to be max-spectators   →  p.Send_uint16(info.clients_max);
+#   p.Send_uint8 (info.clients_max);                                →  p.Send_uint16(info.clients_max);
+# SerializeNetworkGameInfoExtended（约 289-296 行）：同上两处
+# DeserializeNetworkGameInfo（约 422-432 行）：
+#   info.clients_max    = p.Recv_uint8 ();                          →  info.clients_max    = p.Recv_uint16();
+#   （第二处 Recv_uint8 同理）
+# 注意：companies_max / companies_on / clients_on / spectators_on 保持 uint8 不动。
+
+# ---------- 3. src/settings_type.h（NetworkSettings） ----------
+#   uint8_t       max_clients;    →    uint16_t      max_clients;
+
+# ---------- 4. src/table/settings/network_settings.ini ----------
+# network.max_clients 块：
+#   type     = SLE_UINT8     →    type     = SLE_UINT16
+#   def      = 25            →    def      = 255     （可选，默认开更大）
+
+# ---------- 5. src/console_cmds.cpp（约 1056 行） ----------
+#   IConsolePrint(CC_DEFAULT, "Current/maximum clients:    {:3d}/{:3d}", ...)
+#   →  {:3d}/{:3d} 改为 {:4d}/{:4d}
+
+# ---------- 6. src/network/network_gui.cpp（约 519 行附近） ----------
+# 服务器列表/开局窗口对 max_clients 的显示与 Clamp 上限使用 MAX_CLIENTS 常量，无需改动；
+# 字符串参数按 4 位数字渲染即可。
+
+# ---------- 结论 ----------
+# 以上 6 处完成后，MAX_CLIENTS 可提到 4095（或任意 < 65535 的值）。
+# 若不接受公共服务器列表兼容性损失，保持 255 即可——255 已远超原版体验。

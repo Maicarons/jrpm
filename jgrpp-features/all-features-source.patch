@@ -1,0 +1,1699 @@
+diff --git a/bin/ai/GlobalAI/info.nut b/bin/ai/GlobalAI/info.nut
+new file mode 100644
+index 0000000000..fcf4b2dd6a
+--- /dev/null
++++ b/bin/ai/GlobalAI/info.nut
+@@ -0,0 +1,30 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ */
++
++/**
++ * @file info.nut Information about the GlobalAI example AI.
++ *
++ * GlobalAI demonstrates the whole-game perception API (AIGlobal) that is
++ * added by this patch pack. It reads data about every company and the whole
++ * map, which normal AIs cannot do.
++ *
++ * The AI's access to the Global API is controlled by the game setting
++ * "game.script.allow_global_ai_access" (disabled by default).
++ */
++
++class GlobalAIInfo extends AIInfo {
++	function GetAuthor()      { return "MaiBot"; }
++	function GetName()        { return "GlobalAI"; }
++	function GetDescription() { return "Example AI demonstrating the whole-game Global API."; }
++	function GetVersion()     { return 1; }
++	function GetDate()        { return "2026-08-14"; }
++	function CreateInstance() { return "GlobalAI"; }
++	function GetShortName()   { return "GLAI"; }
++	function GetAPIVersion()  { return "1.11"; }
++	function GetMinVersionToLoad() { return 1; }
++	function GetSettings()    { return []; }
++}
++
++RegisterAI(GlobalAIInfo());
+diff --git a/bin/ai/GlobalAI/main.nut b/bin/ai/GlobalAI/main.nut
+new file mode 100644
+index 0000000000..4b83f36a70
+--- /dev/null
++++ b/bin/ai/GlobalAI/main.nut
+@@ -0,0 +1,62 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ */
++
++/**
++ * @file main.nut Entry point of the GlobalAI example AI.
++ *
++ * This AI does not build anything; it demonstrates how an AI can use the
++ * whole-game perception API (AIGlobal) to observe every company and the
++ * whole map, and how the access is controlled.
++ *
++ * Enable "game.script.allow_global_ai_access" in the game settings for this
++ * AI to gain access; GameScripts always have access.
++ */
++
++class GlobalAI extends AIController {
++	function Start()
++	{
++		AICompany.SetName("GlobalAI Demo");
++
++		if (!AIGlobal.IsGlobalAccessAllowed()) {
++			AILog.Info("Global API not allowed. Enable the game setting 'game.script.allow_global_ai_access' to let this AI see the whole game.", AILog.INFO);
++			return;
++		}
++
++		AILog.Info("Whole-game perception demo:", AILog.INFO);
++
++		local companies = AIGlobalCompanyList();
++		AILog.Info("Companies in game: " + companies.Count(), AILog.INFO);
++
++		foreach (company_id, value in companies) {
++			local name    = AIGlobal.GetCompanyName(company_id);
++			local balance = AIGlobal.GetCompanyBankBalance(company_id);
++			local loan    = AIGlobal.GetCompanyLoan(company_id);
++			local worth   = AIGlobal.GetCompanyValue(company_id);
++			local rating  = AIGlobal.GetCompanyPerformanceRating(company_id);
++			local trains  = AIGlobal.GetCompanyVehicleCount(company_id, AIGlobal.VT_TRAIN);
++			local road    = AIGlobal.GetCompanyVehicleCount(company_id, AIGlobal.VT_ROAD);
++			local ships   = AIGlobal.GetCompanyVehicleCount(company_id, AIGlobal.VT_SHIP);
++			local planes  = AIGlobal.GetCompanyVehicleCount(company_id, AIGlobal.VT_AIRCRAFT);
++			local stations = AIGlobal.GetCompanyStationCount(company_id);
++
++			AILog.Info("  " + name + ": balance=" + balance
++				+ " loan=" + loan + " value=" + worth + " rating=" + rating
++				+ " vehicles(t/r/s/a)=" + trains + "/" + road + "/" + ships + "/" + planes
++				+ " stations=" + stations, AILog.INFO);
++		}
++
++		AILog.Info("Map size: " + AIGlobal.GetMapSizeX() + "x" + AIGlobal.GetMapSizeY()
++			+ ", year: " + AIGlobal.GetYear() + ", date: " + AIGlobal.GetDate(), AILog.INFO);
++
++		/*
++		 * This is where an AI's own control logic would plug in: for example,
++		 * only expand when the own company has the lowest performance rating,
++		 * or target cargo types that no other company transports.
++		 */
++		while (true) {
++			AIController.Sleep(100);
++		}
++	}
++}
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index f82f587665..553fe5d5f7 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -125,6 +125,8 @@ add_files(
+     company_gui.h
+     company_manager_face.h
+     company_type.h
++    construction_cost_tip.cpp
++    construction_cost_tip.h
+     console.cpp
+     console_cmds.cpp
+     console_func.h
+diff --git a/src/command_type.h b/src/command_type.h
+index b02f870f16..246143ab2b 100644
+--- a/src/command_type.h
++++ b/src/command_type.h
+@@ -696,6 +696,7 @@ enum class Commands : uint8_t {
+ 	CreateGroupFromList,                    ///< create and rename a new group from a vehicle list
+ 	AddVehicleToGroup,                      ///< add a vehicle to a group
+ 	AddSharedVehiclesToGroup,               ///< add all other shared vehicles to a group which are missing
++	AutoGroupSharedOrders,                  ///< auto-group all vehicles by their shared order lists
+ 	RemoveAllVehiclesGroup,                 ///< remove all vehicles from a group
+ 	SetGroupFlag,                           ///< set/clear a flag for a group
+ 	SetGroupLivery,                         ///< set the livery for a group
+diff --git a/src/console_cmds.cpp b/src/console_cmds.cpp
+index bc96e17520..2c0aead2d5 100644
+--- a/src/console_cmds.cpp
++++ b/src/console_cmds.cpp
+@@ -24,6 +24,8 @@
+ #include "network/network_server.h"
+ #include "command_func.h"
+ #include "command_log.h"
++#include "group_cmd.h"
++#include "vehicle_type.h"
+ #include "settings_func.h"
+ #include "fios.h"
+ #include "fileio_func.h"
+@@ -4440,6 +4442,32 @@ static bool ConDumpInfo(std::span<std::string_view> argv)
+ 	return false;
+ }
+ 
++/**
++ * Auto-group all vehicles of the current company by their shared orders.
++ * Usage: 'autogroup' or 'autogroup <train|road|ship|aircraft>'.
++ */
++static bool ConAutoGroup(std::span<std::string_view> argv)
++{
++	auto do_type = [](VehicleType vt) {
++		Command<Commands::AutoGroupSharedOrders>::Post(STR_ERROR_GROUP_CAN_T_CREATE, vt);
++	};
++
++	if (argv.size() >= 2) {
++		std::string_view arg = argv[1];
++		if (arg == "train") { do_type(VehicleType::Train); return true; }
++		if (arg == "road" || arg == "roadveh" || arg == "truck") { do_type(VehicleType::Road); return true; }
++		if (arg == "ship") { do_type(VehicleType::Ship); return true; }
++		if (arg == "aircraft" || arg == "plane") { do_type(VehicleType::Aircraft); return true; }
++		IConsolePrint(CC_ERROR, "Unknown vehicle type. Use: train, road, ship or aircraft.");
++		return false;
++	}
++
++	for (VehicleType vt : { VehicleType::Train, VehicleType::Road, VehicleType::Ship, VehicleType::Aircraft }) {
++		do_type(vt);
++	}
++	return true;
++}
++
+ /** Console command registration. */
+ void IConsoleStdLibRegister()
+ {
+@@ -4517,6 +4545,7 @@ void IConsoleStdLibRegister()
+ 
+ 	IConsole::CmdRegister("companies",               ConCompanies);
+ 	IConsole::AliasRegister("players",               "companies");
++	IConsole::CmdRegister("autogroup",               ConAutoGroup);
+ 
+ 	/* networking functions */
+ 
+diff --git a/src/construction_cost_tip.cpp b/src/construction_cost_tip.cpp
+new file mode 100644
+index 0000000000..9bb3f1b798
+--- /dev/null
++++ b/src/construction_cost_tip.cpp
+@@ -0,0 +1,151 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/** @file construction_cost_tip.cpp Implementation of the construction cost tooltip. */
++
++#include "stdafx.h"
++
++#include "construction_cost_tip.h"
++
++#include "command_func.h"
++#include "landscape.h"
++#include "rail_cmd.h"
++#include "road_cmd.h"
++#include "road_type.h"
++#include "settings_type.h"
++#include "slope_func.h"
++#include "strings_func.h"
++#include "terraform_cmd.h"
++#include "texteff.hpp"
++#include "tile_map.h"
++#include "tilehighlight_type.h"
++#include "town_type.h"
++#include "track_type.h"
++#include "transport_type.h"
++#include "viewport_func.h"
++#include "widgets/rail_widget.h"
++#include "widgets/road_widget.h"
++#include "widgets/terraform_widget.h"
++
++#include "safeguards.h"
++
++/** Current tooltip effect, if any. */
++static TextEffectID _cost_tip_effect = INVALID_TE_ID;
++/** Tile the tooltip was last shown for (throttling). */
++static TileIndex _cost_tip_last_tile = INVALID_TILE;
++/** Tool the tooltip was last shown for (throttling). */
++static WidgetID _cost_tip_last_tool = INVALID_WIDGET;
++/** Window class of the tool that currently owns the tooltip. */
++static WindowClass _cost_tip_owner_class = WC_INVALID;
++/** Window number of the tool that currently owns the tooltip. */
++static WindowNumber _cost_tip_owner_number = 0;
++
++/**
++ * Hide and remove the construction cost tooltip, if any.
++ */
++void HideConstructionCostTip()
++{
++	if (_cost_tip_effect != INVALID_TE_ID) {
++		RemoveTextEffect(_cost_tip_effect);
++		_cost_tip_effect = INVALID_TE_ID;
++	}
++	_cost_tip_last_tile = INVALID_TILE;
++	_cost_tip_last_tool = INVALID_WIDGET;
++	_cost_tip_owner_class = WC_INVALID;
++	_cost_tip_owner_number = 0;
++}
++
++/**
++ * Estimate the cost of building the currently selected tool on the given tile.
++ * @param ctx  Context of the active build tool.
++ * @param tile Tile to build on.
++ * @return The estimated cost, or an error cost when the tool is not supported
++ *         by the estimator or the build is not possible on the tile.
++ */
++static CommandCost EstimateBuildCost(const ConstructionCostTipContext &ctx, TileIndex tile)
++{
++	if (ctx.window_class == WindowClass::BuildToolbar) {
++		if (ctx.window_number == TRANSPORT_RAIL) {
++			/* Rail toolbar: support the single track pieces, auto-rail and depot. */
++			Track track = INVALID_TRACK;
++			switch (ctx.selected_tool) {
++				case WID_RAT_BUILD_NS: track = (Track)HT_DIR_VL; break;
++				case WID_RAT_BUILD_X:  track = (Track)HT_DIR_Y;  break;
++				case WID_RAT_BUILD_EW: track = (Track)HT_DIR_HL; break;
++				case WID_RAT_BUILD_Y:  track = (Track)HT_DIR_X;  break;
++				case WID_RAT_AUTORAIL: track = (Track)TRACK_X; break; /* best-effort estimate */
++				default: break;
++			}
++			if (track == INVALID_TRACK) return CMD_ERROR;
++
++			BuildRailTrackFlags rflags = _settings_client.gui.auto_remove_signals ? BuildRailTrackFlags::AutoRemoveSignals : BuildRailTrackFlags::None;
++			return Command<Commands::BuildRail>::Do(DC_QUERY_COST, tile, ctx.railtype, track, rflags);
++		}
++		if (ctx.window_number == TRANSPORT_ROAD) {
++			/* Road toolbar: estimate a single road piece. */
++			RoadBits piece;
++			switch (ctx.selected_tool) {
++				case WID_ROT_ROAD_X: piece = RoadBits::ROAD_X; break;
++				case WID_ROT_ROAD_Y: piece = RoadBits::ROAD_Y; break;
++				default: return CMD_ERROR;
++			}
++			return Command<Commands::BuildRoad>::Do(DC_QUERY_COST, tile, piece, ctx.roadtype, DisallowedRoadDirections::DRD_NONE, INVALID_TOWN, BuildRoadFlags::None);
++		}
++		return CMD_ERROR;
++	}
++
++	if (ctx.window_class == WindowClass::ScenarioGenerateLandscape) {
++		if (ctx.selected_tool != WID_TT_RAISE_LAND && ctx.selected_tool != WID_TT_LOWER_LAND) return CMD_ERROR;
++		bool dir_up = (ctx.selected_tool == WID_TT_RAISE_LAND);
++		return Command<Commands::TerraformLand>::Do(DC_QUERY_COST, tile, GetTileSlope(tile), dir_up);
++	}
++
++	return CMD_ERROR;
++}
++
++/**
++ * Update (or hide) the construction cost tooltip for the given tool and tile.
++ * @param ctx  Context of the active build tool.
++ * @param tile Tile under the cursor, or INVALID_TILE to hide the tooltip.
++ */
++void UpdateConstructionCostTip(const ConstructionCostTipContext &ctx, TileIndex tile)
++{
++	/* A tool is not active (or not ours): hide the tooltip when we were the
++	 * one showing it, otherwise leave it alone (another toolbar may own it). */
++	if (tile == INVALID_TILE || ctx.selected_tool == INVALID_WIDGET) {
++		if (ctx.window_class == _cost_tip_owner_class && ctx.window_number == _cost_tip_owner_number) {
++			HideConstructionCostTip();
++		}
++		return;
++	}
++
++	/* Nothing changed since the last update. */
++	if (tile == _cost_tip_last_tile && ctx.selected_tool == _cost_tip_last_tool) return;
++
++	_cost_tip_last_tile = tile;
++	_cost_tip_last_tool = ctx.selected_tool;
++
++	CommandCost cost = EstimateBuildCost(ctx, tile);
++	if (cost.Failed()) {
++		HideConstructionCostTip();
++		return;
++	}
++
++	/* Remove the previous effect before creating a new one. */
++	if (_cost_tip_effect != INVALID_TE_ID) {
++		RemoveTextEffect(_cost_tip_effect);
++		_cost_tip_effect = INVALID_TE_ID;
++	}
++
++	/* Remember which tool owns the tooltip. */
++	_cost_tip_owner_class = ctx.window_class;
++	_cost_tip_owner_number = ctx.window_number;
++
++	/* Anchor the tooltip to the tile under the cursor. */
++	Point pt = RemapCoords2(TileX(tile) * TILE_SIZE, TileY(tile) * TILE_SIZE);
++	_cost_tip_effect = AddTextEffect(STR_CONSTRUCTION_COST_TOOLTIP, pt.x, pt.y, 40, TE_STATIC, cost.GetCost());
++}
+diff --git a/src/construction_cost_tip.h b/src/construction_cost_tip.h
+new file mode 100644
+index 0000000000..0140c60535
+--- /dev/null
++++ b/src/construction_cost_tip.h
+@@ -0,0 +1,45 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/** @file construction_cost_tip.h Shows a cost tooltip near the cursor while building. */
++
++#ifndef CONSTRUCTION_COST_TIP_H
++#define CONSTRUCTION_COST_TIP_H
++
++#include "rail_type.h"
++#include "road_type.h"
++#include "tile_type.h"
++#include "window_type.h"
++
++/**
++ * Context describing the currently active build tool, as passed in by the
++ * construction toolbar windows (rail / road / terraform).
++ */
++struct ConstructionCostTipContext {
++	WindowClass window_class = WC_INVALID;         ///< Toolbar window class.
++	WindowNumber window_number = 0;                ///< Toolbar window number (e.g. TRANSPORT_RAIL / TRANSPORT_ROAD).
++	WidgetID selected_tool = INVALID_WIDGET;       ///< Widget of the currently selected build tool.
++	RailType railtype = INVALID_RAILTYPE;          ///< Rail type of the rail toolbar.
++	RoadType roadtype = INVALID_ROADTYPE;          ///< Road type of the road toolbar.
++};
++
++/**
++ * Update (or hide) the construction cost tooltip for the given tool and tile.
++ *
++ * The tooltip is anchored to the tile under the cursor and displays the
++ * estimated cost of building the selected tool there. It is only shown when
++ * the estimate succeeds (i.e. the build is possible on that tile).
++ *
++ * @param ctx  Context of the active build tool.
++ * @param tile Tile under the cursor, or INVALID_TILE to hide the tooltip.
++ */
++void UpdateConstructionCostTip(const ConstructionCostTipContext &ctx, TileIndex tile);
++
++/** Remove and hide the construction cost tooltip, if any. */
++void HideConstructionCostTip();
++
++#endif /* CONSTRUCTION_COST_TIP_H */
+diff --git a/src/group_cmd.cpp b/src/group_cmd.cpp
+index 8f0e37b2c9..ff1fd801c5 100644
+--- a/src/group_cmd.cpp
++++ b/src/group_cmd.cpp
+@@ -940,6 +940,56 @@ CommandCost CmdAddSharedVehicleGroup(DoCommandFlags flags, GroupID id_g, Vehicle
+ 	return CommandCost();
+ }
+ 
++/**
++ * Auto-group all vehicles of a company by their shared order lists.
++ *
++ * Vehicles that already belong to a non-default group are left untouched.
++ * A group is created for every distinct order list which is shared by at
++ * least two vehicles; all vehicles sharing that order list are moved into
++ * the newly created group. Group names are auto-generated from the route
++ * served by the shared orders.
++ *
++ * @param flags type of operation
++ * @param type type of vehicles
++ * @return the cost of this operation or an error
++ */
++CommandCost CmdAutoGroupSharedOrders(DoCommandFlags flags, VehicleType type)
++{
++	if (!IsCompanyBuildableVehicleType(type)) return CMD_ERROR;
++
++	GroupChangeDeferredUpdateScope updater(type);
++
++	CommandCost total_cost;
++
++	/* Front vehicles of the requested type; already-grouped vehicles are skipped,
++	 * so every distinct shared order list yields exactly one new group. */
++	for (const Vehicle *v : Vehicle::IterateTypeFrontOnly(type)) {
++		if (!v->IsPrimaryVehicle()) continue;
++		if (v->owner != _current_company) continue;
++		if (v->orders == nullptr || v->orders->GetNumOrders() == 0) continue;
++
++		/* Skip vehicles which are already in a custom group. */
++		if (!IsDefaultGroupID(v->group_id)) continue;
++
++		/* Count the vehicles sharing this order list. */
++		uint shared_count = 0;
++		for (const Vehicle *v2 = v->FirstShared(); v2 != nullptr; v2 = v2->NextShared()) {
++			if (v2->owner == _current_company && v2->IsPrimaryVehicle()) shared_count++;
++		}
++		if (shared_count < 2) continue;
++
++		/* Create a group from this vehicle's shared order list and move all
++		 * shared vehicles into it. */
++		std::string name = GenerateAutoNameForVehicleGroup(v);
++		VehicleListIdentifier vli(VL_SHARED_ORDERS, v->type, v->owner, v->index);
++		CommandCost ret = Command<Commands::CreateGroupFromList>::Do(flags, vli, CargoFilterCriteria::CF_ANY, name);
++		if (ret.Failed()) return ret;
++		total_cost.AddCost(ret.GetCost());
++	}
++
++	return total_cost;
++}
++
+ 
+ /**
+  * Remove all vehicles from a group
+diff --git a/src/group_cmd.h b/src/group_cmd.h
+index e50163c191..92ec7e9c09 100644
+--- a/src/group_cmd.h
++++ b/src/group_cmd.h
+@@ -29,6 +29,7 @@ DEF_CMD_TUPLE_NT(Commands::DeleteGroup,              CmdDeleteGroup,
+ DEF_CMD_TUPLE_NT(Commands::AlterGroup,               CmdAlterGroup,              {}, CommandType::OtherManagement, CmdDataT<AlterGroupMode, GroupID, GroupID, std::string>)
+ DEF_CMD_TUPLE_NT(Commands::AddVehicleToGroup,        CmdAddVehicleGroup,         {}, CommandType::RouteManagement, CmdDataT<GroupID, VehicleID, bool>)
+ DEF_CMD_TUPLE_NT(Commands::AddSharedVehiclesToGroup, CmdAddSharedVehicleGroup,   {}, CommandType::RouteManagement, CmdDataT<GroupID, VehicleType>)
++DEF_CMD_TUPLE_NT(Commands::AutoGroupSharedOrders,    CmdAutoGroupSharedOrders,   {}, CommandType::RouteManagement, CmdDataT<VehicleType>)
+ DEF_CMD_TUPLE_NT(Commands::RemoveAllVehiclesGroup,   CmdRemoveAllVehiclesGroup,  {}, CommandType::RouteManagement, CmdDataT<GroupID>)
+ DEF_CMD_TUPLE_NT(Commands::SetGroupFlag,             CmdSetGroupFlag,            {}, CommandType::RouteManagement, CmdDataT<GroupID, GroupFlag, bool, bool>)
+ DEF_CMD_TUPLE_NT(Commands::SetGroupLivery,           CmdSetGroupLivery,          {}, CommandType::RouteManagement, CmdDataT<GroupID, bool, Colours>)
+diff --git a/src/group_gui.cpp b/src/group_gui.cpp
+index 15606ff2d0..f2f1984108 100644
+--- a/src/group_gui.cpp
++++ b/src/group_gui.cpp
+@@ -68,6 +68,8 @@ static constexpr std::initializer_list<NWidgetPart> _nested_group_widgets = {
+ 						SetToolTip(STR_GROUP_RENAME_TOOLTIP),
+ 				NWidget(WWT_PUSHIMGBTN, Colours::Grey, WID_GL_LIVERY_GROUP),
+ 						SetToolTip(STR_GROUP_LIVERY_TOOLTIP),
++				NWidget(WWT_PUSHIMGBTN, Colours::Grey, WID_GL_AUTOGROUP_SHARED),
++						SetToolTip(STR_GROUP_AUTOGROUP_SHARED_TOOLTIP),
+ 				NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_GL_COLLAPSE_ALL_GROUPS),
+ 						SetStringTip(STR_GROUP_COLLAPSE_ALL, STR_GROUP_COLLAPSE_ALL),
+ 				NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_GL_EXPAND_ALL_GROUPS),
+@@ -522,6 +524,7 @@ public:
+ 		this->GetWidget<NWidgetCore>(WID_GL_RENAME_GROUP)->SetSprite(SPR_GROUP_RENAME_TRAIN + to_underlying(this->vli.vtype));
+ 		this->GetWidget<NWidgetCore>(WID_GL_DELETE_GROUP)->SetSprite(SPR_GROUP_DELETE_TRAIN + to_underlying(this->vli.vtype));
+ 		this->GetWidget<NWidgetCore>(WID_GL_LIVERY_GROUP)->SetSprite(SPR_GROUP_LIVERY_TRAIN + to_underlying(this->vli.vtype));
++		this->GetWidget<NWidgetCore>(WID_GL_AUTOGROUP_SHARED)->SetSprite(SPR_GROUP_CREATE_TRAIN + to_underlying(this->vli.vtype));
+ 		this->GetWidget<NWidgetCore>(WID_GL_REPLACE_PROTECTION)->SetSprite(SPR_GROUP_REPLACE_OFF_TRAIN + to_underlying(this->vli.vtype));
+ 
+ 		this->FinishInitNested(window_number);
+@@ -945,6 +948,11 @@ public:
+ 				break;
+ 			}
+ 
++			case WID_GL_AUTOGROUP_SHARED: { // Auto-group vehicles by their shared orders
++				Command<Commands::AutoGroupSharedOrders>::Post(STR_ERROR_GROUP_CAN_T_CREATE, this->vli.vtype);
++				break;
++			}
++
+ 			case WID_GL_DELETE_GROUP: { // Delete the selected group
+ 				this->group_confirm = this->vli.ToGroupID();
+ 				ShowQuery(
+diff --git a/src/lang/english.txt b/src/lang/english.txt
+index 2e6357b996..802e03d781 100644
+--- a/src/lang/english.txt
++++ b/src/lang/english.txt
+@@ -1883,6 +1883,9 @@ STR_CONFIG_SETTING_AI_BUILDS_SHIPS_HELPTEXT                     :Enabling this s
+ STR_CONFIG_SETTING_AI_IN_MULTIPLAYER                            :Allow AIs in multiplayer: {STRING2}
+ STR_CONFIG_SETTING_AI_IN_MULTIPLAYER_HELPTEXT                   :Allow AI computer players to participate in multiplayer games
+ 
++STR_CONFIG_SETTING_ALLOW_GLOBAL_AI_ACCESS                       :Allow AIs to access whole-game data: {STRING2}
++STR_CONFIG_SETTING_ALLOW_GLOBAL_AI_ACCESS_HELPTEXT              :Allow AIs to use the Global API to access data of all companies and the whole map. GameScripts always have this access
++
+ STR_CONFIG_SETTING_SCRIPT_MAX_OPCODES                           :#opcodes before scripts are suspended: {STRING2}
+ STR_CONFIG_SETTING_SCRIPT_MAX_OPCODES_HELPTEXT                  :Maximum number of computation steps that a script can take in one turn
+ STR_CONFIG_SETTING_SCRIPT_MAX_MEMORY                            :Max memory usage per script: {STRING2}
+@@ -4189,6 +4192,8 @@ STR_GROUP_CREATE_TOOLTIP                                        :{BLACK}Click to
+ STR_GROUP_DELETE_TOOLTIP                                        :{BLACK}Delete the selected group
+ STR_GROUP_RENAME_TOOLTIP                                        :{BLACK}Rename the selected group
+ STR_GROUP_LIVERY_TOOLTIP                                        :{BLACK}Change livery of the selected group
++STR_GROUP_AUTOGROUP_SHARED_TOOLTIP                              :{BLACK}Auto-group vehicles by their shared orders
++STR_CONSTRUCTION_COST_TOOLTIP                                   :{BLACK}Estimated cost: {CURRENCY_LONG}
+ STR_GROUP_REPLACE_PROTECTION_TOOLTIP                            :{BLACK}Click to protect this group from global autoreplace. Ctrl+Click to also protect sub-groups
+ 
+ STR_QUERY_GROUP_DELETE_CAPTION                                  :{WHITE}Delete Group
+diff --git a/src/network/core/config.cpp b/src/network/core/config.cpp
+index 6b8744417e..c323153cd0 100644
+--- a/src/network/core/config.cpp
++++ b/src/network/core/config.cpp
+@@ -10,6 +10,10 @@
+ #include "../../stdafx.h"
+ 
+ #include <cstdlib>
++#include <ranges>
++#include <string>
++#include <vector>
++#include "../../settings_type.h"
+ #include "../../string_func.h"
+ 
+ #include "../../safeguards.h"
+@@ -36,22 +40,54 @@ std::string_view NetworkStunConnectionString()
+ 
+ /**
+  * Get the connection string for the content server from the environment variable OTTD_CONTENT_SERVER_CS,
+- * or when it has not been set a hard coded default DNS hostname of the production server.
++ * the setting network.content_server, or a hard coded default DNS hostname of the production server.
+  * @return The content server's connection string.
+  */
+ std::string_view NetworkContentServerConnectionString()
+ {
+-	return GetEnv("OTTD_CONTENT_SERVER_CS").value_or("content.openttd.org");
++	if (auto env = GetEnv("OTTD_CONTENT_SERVER_CS"); env.has_value()) return *env;
++	if (!_settings_client.network.content_server.empty()) return _settings_client.network.content_server;
++	return "content.openttd.org";
+ }
+ 
+ /**
+  * Get the URI string for the content mirror from the environment variable OTTD_CONTENT_MIRROR_URI,
+- * or when it has not been set a hard coded URI of the production server.
+- * @return The content mirror's URI string.
++ * the setting network.content_mirrors, or a hard coded URI of the production server.
++ * @return The first content mirror's URI string.
+  */
+ std::string_view NetworkContentMirrorUriString()
+ {
+-	return GetEnv("OTTD_CONTENT_MIRROR_URI").value_or("https://binaries.openttd.org/bananas");
++	auto mirrors = NetworkContentMirrorUris();
++	return mirrors.front();
++}
++
++/**
++ * Get the list of content mirror URIs from the environment variable OTTD_CONTENT_MIRROR_URI
++ * or the setting network.content_mirrors (comma separated), falling back to the production server.
++ *
++ * Mirrors are used in order: when a download from one mirror fails, the next mirror is tried.
++ * @return The list of content mirror URIs.
++ */
++std::vector<std::string> NetworkContentMirrorUris()
++{
++	std::string_view list = "https://binaries.openttd.org/bananas";
++	if (auto env = GetEnv("OTTD_CONTENT_MIRROR_URI"); env.has_value()) {
++		list = *env;
++	} else if (!_settings_client.network.content_mirrors.empty()) {
++		list = _settings_client.network.content_mirrors;
++	}
++
++	std::vector<std::string> mirrors;
++	for (const auto part : StrMakeValidView(list) | std::views::split(',')) {
++		std::string_view sv(part.data(), part.size());
++		size_t begin = sv.find_first_not_of(" \t\r\n");
++		if (begin == std::string_view::npos) continue;
++		size_t end = sv.find_last_not_of(" \t\r\n");
++		std::string uri(sv.substr(begin, end - begin + 1));
++		if (!uri.empty()) mirrors.push_back(std::move(uri));
++	}
++	if (mirrors.empty()) mirrors.emplace_back("https://binaries.openttd.org/bananas");
++	return mirrors;
+ }
+ 
+ /**
+diff --git a/src/network/core/config.h b/src/network/core/config.h
+index aa6dd79fc9..c7812de1c3 100644
+--- a/src/network/core/config.h
++++ b/src/network/core/config.h
+@@ -10,10 +10,14 @@
+ #ifndef NETWORK_CORE_CONFIG_H
+ #define NETWORK_CORE_CONFIG_H
+ 
++#include <string>
++#include <vector>
++
+ std::string_view NetworkCoordinatorConnectionString();
+ std::string_view NetworkStunConnectionString();
+ std::string_view NetworkContentServerConnectionString();
+ std::string_view NetworkContentMirrorUriString();
++std::vector<std::string> NetworkContentMirrorUris();
+ std::string_view NetworkSurveyUriString();
+ 
+ static const uint16_t NETWORK_COORDINATOR_SERVER_PORT = 3976;           ///< The default port of the Game Coordinator server (TCP)
+diff --git a/src/network/network_content.cpp b/src/network/network_content.cpp
+index 907baa0d42..929516030f 100644
+--- a/src/network/network_content.cpp
++++ b/src/network/network_content.cpp
+@@ -24,6 +24,7 @@
+ #include "../timer/timer.h"
+ #include "../timer/timer_window.h"
+ #include "../core/string_consumer.hpp"
++#include "core/config.h"
+ #include "network_content.h"
+ 
+ #include "table/strings.h"
+@@ -319,6 +320,12 @@ void ClientNetworkContentSocketHandler::DownloadSelectedContent(uint &files, uin
+ 
+ /**
+  * Initiate downloading the content over HTTP.
++ *
++ * The first configured mirror is asked for the file list, after which the
++ * files are downloaded in parallel (see #StartDownloadSessions). When the
++ * request or a download fails, the next mirror is tried, before falling back
++ * to the legacy TCP protocol.
++ *
+  * @param content The content to download.
+  */
+ void ClientNetworkContentSocketHandler::DownloadSelectedContentHTTP(const ContentIDList &content)
+@@ -328,9 +335,16 @@ void ClientNetworkContentSocketHandler::DownloadSelectedContentHTTP(const Conten
+ 		content_request.format("{}\n", id);
+ 	}
+ 
++	this->pending_files.clear();
++	this->next_file_index = 0;
++	this->download_sessions.clear();
++	this->http_response.clear();
+ 	this->http_response_index = -1;
+ 
+-	NetworkHTTPSocketHandler::Connect(NetworkContentMirrorUriString(), this, content_request.to_string());
++	auto mirrors = NetworkContentMirrorUris();
++	if (this->mirror_index >= mirrors.size()) this->mirror_index = 0;
++
++	NetworkHTTPSocketHandler::Connect(mirrors[this->mirror_index], this, content_request.to_string());
+ }
+ 
+ /**
+@@ -372,11 +386,24 @@ void ClientNetworkContentSocketHandler::DownloadSelectedContentFallback(const Co
+  */
+ static std::string GetFullFilename(const ContentInfo &ci, bool compressed)
+ {
+-	Subdirectory dir = GetContentInfoSubDir(ci.type);
++	return GetFullFilename(ci.type, ci.filename, compressed);
++}
++
++/**
++ * Determine the full filename of a piece of content
++ * @param type       the type of content
++ * @param filename   the filename of the content, without extension
++ * @param compressed should the filename end with .gz?
++ * @return a statically allocated buffer with the filename or
++ *         nullptr when no filename could be made.
++ */
++static std::string GetFullFilename(ContentType type, std::string_view filename, bool compressed)
++{
++	Subdirectory dir = GetContentInfoSubDir(type);
+ 	if (dir == Subdirectory::None) return {};
+ 
+ 	std::string buf = FioGetDirectory(Searchpath::AutodownloadDir, dir);
+-	buf += ci.filename;
++	buf += filename;
+ 	buf += compressed ? ".tar.gz" : ".tar";
+ 
+ 	return buf;
+@@ -557,24 +584,21 @@ bool ClientNetworkContentSocketHandler::IsCancelled() const
+ 	return this->is_cancelled;
+ }
+ 
+-/* Also called to just clean up the mess. */
++/* Also called to just clean up the mess (the mirror request failed). */
+ void ClientNetworkContentSocketHandler::OnFailure()
+ {
+ 	this->http_response.clear();
+ 	this->http_response.shrink_to_fit();
+ 	this->http_response_index = -2;
+ 
+-	if (this->cur_file.has_value()) {
+-		this->OnDownloadProgress(*this->cur_info, -1);
++	/* Cancel the parallel downloads so they wind down gracefully. */
++	this->download_cancelled = true;
++	for (auto &session : this->download_sessions) session->cur_file.reset();
+ 
+-		this->cur_file.reset();
+-	}
+-
+-	/* If we fail, download the rest via the 'old' system. */
+-	if (!this->is_cancelled) {
+-		uint files, bytes;
+-
+-		this->DownloadSelectedContent(files, bytes, true);
++	/* If we fail, try the next mirror, and if there is none download the
++	 * rest via the 'old' system. */
++	if (!this->is_cancelled && this->download_sessions.empty()) {
++		this->OnAllSessionsDone();
+ 	}
+ }
+ 
+@@ -587,82 +611,70 @@ void ClientNetworkContentSocketHandler::OnReceiveData(UniqueBuffer<char> data)
+ 		return;
+ 	}
+ 
++	/* Buffer the mirror's response: a list of file entries. */
+ 	if (this->http_response_index == -1) {
+ 		if (data != nullptr) {
+ 			/* Append the rest of the response. */
+ 			this->http_response.insert(this->http_response.end(), data.get(), data.get() + data.size());
+ 			return;
+-		} else {
+-			/* Make sure the response is properly terminated. */
+-			this->http_response.push_back('\0');
+-
+-			/* And prepare for receiving the rest of the data. */
+-			this->http_response_index = 0;
+ 		}
+-	}
+ 
+-	if (data != nullptr) {
+-		/* We have data, so write it to the file. */
+-		if (fwrite(data.get(), 1, data.size(), *this->cur_file) != data.size()) {
+-			/* Writing failed somehow, let try via the old method. */
+-			this->OnFailure();
++		/* Make sure the response is properly terminated. */
++		this->http_response.push_back('\0');
++		this->http_response_index = 0;
++
++		/* Parse the response and start the parallel downloads. */
++		if (this->ParseResponseHeaders()) {
++			this->StartDownloadSessions();
+ 		} else {
+-			/* Just received the data. */
+-			this->OnDownloadProgress(*this->cur_info, (int)data.size());
++			this->OnFailure();
+ 		}
+-
+-		/* Nothing more to do now. */
+ 		return;
+ 	}
+ 
+-	if (this->cur_file.has_value()) {
+-		/* We've finished downloading a file. */
+-		this->AfterDownload();
+-	}
+-
+-	if ((uint)this->http_response_index >= this->http_response.size()) {
+-		/* It's not a real failure, but if there's
+-		 * nothing more to download it helps with
+-		 * cleaning up the stuff we allocated. */
+-		this->OnFailure();
+-		return;
+-	}
++	/* Any further data on this connection is unexpected; ignore it. */
++}
+ 
+-	/* When we haven't opened a file this must be our first packet with metadata. */
+-	this->cur_info = std::make_unique<ContentInfo>();
++/**
++ * Parse the mirror's response into a list of files to download.
++ * @return True when at least one file was parsed.
++ */
++bool ClientNetworkContentSocketHandler::ParseResponseHeaders()
++{
++	this->pending_files.clear();
++	this->next_file_index = 0;
+ 
+ 	try {
+ 		for (;;) {
+ 			std::string_view buffer{this->http_response.data(), this->http_response.size()};
+ 			buffer.remove_prefix(this->http_response_index);
+ 			auto len = buffer.find('\n');
+-			if (len == std::string_view::npos) throw std::exception{};
++			if (len == std::string_view::npos) break;
++
+ 			/* Update the index for the next one */
+ 			this->http_response_index += static_cast<int>(len + 1);
+ 
+ 			StringConsumer consumer{buffer.substr(0, len)};
+ 
++			ContentFileDownload file;
++
+ 			/* Read the ID */
+-			this->cur_info->id = static_cast<ContentID>(consumer.ReadIntegerBase<uint>(10));
++			file.id = static_cast<ContentID>(consumer.ReadIntegerBase<uint>(10));
+ 			if (!consumer.ReadIf(",")) throw std::exception{};
+ 
+ 			/* Read the type */
+-			this->cur_info->type = static_cast<ContentType>(consumer.ReadIntegerBase<uint>(10));
++			file.type = static_cast<ContentType>(consumer.ReadIntegerBase<uint>(10));
+ 			if (!consumer.ReadIf(",")) throw std::exception{};
+ 
+ 			/* Read the file size */
+-			this->cur_info->filesize = consumer.ReadIntegerBase<uint32_t>(10);
++			file.filesize = consumer.ReadIntegerBase<uint32_t>(10);
+ 			if (!consumer.ReadIf(",")) throw std::exception{};
+ 
+ 			/* Read the URL */
+ 			auto url = consumer.GetLeftData();
+ 
+ 			/* Is it a fallback URL? If so, just continue with the next one. */
+-			if (consumer.ReadIf("ottd")) {
+-				/* Have we gone through all lines? */
+-				if (static_cast<size_t>(this->http_response_index) >= this->http_response.size()) throw std::exception{};
+-				continue;
+-			}
++			if (consumer.ReadIf("ottd")) continue;
+ 
+ 			consumer.SkipUntilChar('/', StringConsumer::KEEP_SEPARATOR);
+ 			std::string_view filename;
+@@ -675,21 +687,186 @@ void ClientNetworkContentSocketHandler::OnReceiveData(UniqueBuffer<char> data)
+ 			/* Remove the extension from the string. */
+ 			for (uint i = 0; i < 2; i++) {
+ 				auto pos = filename.find_last_of('.');
+-				if (pos == std::string::npos) throw std::exception{};
++				if (pos == std::string_view::npos) throw std::exception{};
+ 				filename = filename.substr(0, pos);
+ 			}
+ 
+-			/* Copy the string, without extension, to the filename. */
+-			this->cur_info->filename = filename;
++			file.url = std::string(url);
++			file.filename = std::string(filename);
++			this->pending_files.push_back(std::move(file));
++		}
++	} catch (const std::exception&) {
++		return false;
++	}
++
++	/* Nothing to download (e.g. a fallback-only response). */
++	return !this->pending_files.empty();
++}
++
++/** How many files to download concurrently from a mirror. */
++static const size_t CONTENT_DOWNLOAD_PARALLEL = 4;
++
++/**
++ * Start downloading the pending files in parallel.
++ *
++ * Up to #CONTENT_DOWNLOAD_PARALLEL files are downloaded concurrently; every
++ * finished session immediately picks up the next pending file.
++ */
++void ClientNetworkContentSocketHandler::StartDownloadSessions()
++{
++	if (this->next_file_index >= this->pending_files.size()) {
++		/* All pending files have been started. */
++		this->http_response_index = -2;
++		return;
++	}
++
++	while (this->download_sessions.size() < CONTENT_DOWNLOAD_PARALLEL && this->next_file_index < this->pending_files.size()) {
++		ContentFileDownload file = std::move(this->pending_files[this->next_file_index++]);
++
++		/* Open the output file before starting the connection. */
++		std::string filename = GetFullFilename(file.type, file.filename, true);
++		auto session = std::make_unique<ContentDownloadSession>(*this, std::move(file));
++		if (filename.empty() || !(session->cur_file = FileHandle::Open(filename, "wb")).has_value()) {
++			CloseWindowById(WindowClass::NetworkStatus, NetworkStatusWindowNumber::ContentDownload);
++			ShowErrorMessage(
++				GetEncodedString(STR_CONTENT_ERROR_COULD_NOT_DOWNLOAD),
++				GetEncodedString(STR_CONTENT_ERROR_COULD_NOT_DOWNLOAD_FILE_NOT_WRITABLE),
++				WarningLevel::Error);
++			this->OnFailure();
++			return;
++		}
++
++		NetworkHTTPSocketHandler::Connect(session->file.url, session.get());
++		this->download_sessions.push_back(std::move(session));
++	}
++}
++
++/* ContentDownloadSession */
++
++void ContentDownloadSession::OnReceiveData(UniqueBuffer<char> data)
++{
++	assert(data.get() == nullptr || data.size() != 0);
++
++	if (data != nullptr) {
++		/* After a cancellation the output file may already have been closed;
++		 * ignore any data still arriving on the connection. */
++		if (!this->cur_file.has_value()) return;
++
++		/* Write the received data to the file. */
++		if (fwrite(data.get(), 1, data.size(), *this->cur_file) != data.size()) {
++			this->handler.OnSessionFailure(*this);
++		} else {
++			this->handler.OnSessionProgress(*this, (int)data.size());
++		}
++		return;
++	}
++
++	/* End of the file: extract it and download the next one. */
++	this->handler.OnSessionFileDone(*this);
++}
++
++void ContentDownloadSession::OnFailure()
++{
++	this->handler.OnSessionFailure(*this);
++}
++
++bool ContentDownloadSession::IsCancelled() const
++{
++	return this->handler.IsCancelled() || this->handler.download_cancelled;
++}
++
++/* ClientNetworkContentSocketHandler::OnSession* */
++
++void ClientNetworkContentSocketHandler::OnSessionProgress(ContentDownloadSession &session, int bytes)
++{
++	ContentInfo ci;
++	ci.id = session.file.id;
++	ci.type = session.file.type;
++	ci.filesize = session.file.filesize;
++	ci.filename = session.file.filename;
++	this->OnDownloadProgress(ci, bytes);
++}
++
++void ClientNetworkContentSocketHandler::OnSessionFileDone(ContentDownloadSession &session)
++{
++	session.cur_file.reset();
++
++	if (!this->download_cancelled && !this->is_cancelled) {
++		/* Gunzip and unpack the downloaded file. */
++		ContentInfo ci;
++		ci.id = session.file.id;
++		ci.type = session.file.type;
++		ci.filesize = session.file.filesize;
++		ci.filename = session.file.filename;
++
++		if (GunzipFile(ci)) {
++			FioRemove(GetFullFilename(ci.type, ci.filename, true));
++
++			Subdirectory sd = GetContentInfoSubDir(ci.type);
++			if (sd == Subdirectory::None) NOT_REACHED();
++
++			TarScanner ts;
++			std::string fname = GetFullFilename(ci.type, ci.filename, false);
++			ts.AddFile(sd, fname);
++
++			if (ci.type == ContentType::BaseMusic) {
++				/* Music can't be in a tar. So extract the tar! */
++				ExtractTar(fname, Subdirectory::Baseset);
++				FioRemove(fname);
++			}
++
++			this->OnDownloadComplete(session.file.id);
++		} else {
++			ShowErrorMessage(GetEncodedString(STR_CONTENT_ERROR_COULD_NOT_EXTRACT), {}, WarningLevel::Error);
++		}
++	} else {
++		/* The download was cancelled; remove the partial file. */
++		FioRemove(GetFullFilename(session.file.type, session.file.filename, true));
++	}
+ 
+-			/* Request the next file. */
+-			if (!this->BeforeDownload()) throw std::exception{};
++	/* Remove the finished session and start the next download. */
++	for (auto it = this->download_sessions.begin(); it != this->download_sessions.end(); ++it) {
++		if (it->get() == &session) {
++			this->download_sessions.erase(it);
++			break;
++		}
++	}
++	this->StartDownloadSessions();
++	if (this->download_cancelled && this->download_sessions.empty()) this->OnAllSessionsDone();
++}
++
++void ClientNetworkContentSocketHandler::OnSessionFailure(ContentDownloadSession &session)
++{
++	session.cur_file.reset();
++	FioRemove(GetFullFilename(session.file.type, session.file.filename, true));
+ 
+-			NetworkHTTPSocketHandler::Connect(url, this);
++	/* Remove the failed session (its connection is already closed). */
++	for (auto it = this->download_sessions.begin(); it != this->download_sessions.end(); ++it) {
++		if (it->get() == &session) {
++			this->download_sessions.erase(it);
+ 			break;
+ 		}
+-	} catch (const std::exception&) {
+-		this->OnFailure();
++	}
++
++	if (this->download_cancelled && this->download_sessions.empty()) this->OnAllSessionsDone();
++}
++
++/**
++ * All parallel downloads have wound down; either retry with the next mirror
++ * or fall back to the legacy protocol.
++ */
++void ClientNetworkContentSocketHandler::OnAllSessionsDone()
++{
++	this->download_cancelled = false;
++	if (this->is_cancelled) return;
++
++	uint files, bytes;
++	auto mirrors = NetworkContentMirrorUris();
++	if (this->mirror_index + 1 < mirrors.size()) {
++		this->mirror_index++;
++		this->DownloadSelectedContent(files, bytes, false);
++	} else {
++		this->DownloadSelectedContent(files, bytes, true);
+ 	}
+ }
+ 
+diff --git a/src/network/network_content.h b/src/network/network_content.h
+index 7602820db2..7f9f3ca3be 100644
+--- a/src/network/network_content.h
++++ b/src/network/network_content.h
+@@ -58,6 +58,34 @@ struct ContentCallback {
+ 	virtual ~ContentCallback() = default;
+ };
+ 
++class ClientNetworkContentSocketHandler;
++
++/** A single file to download, as parsed from the mirror's response. */
++struct ContentFileDownload {
++	ContentID id = INVALID_CONTENT_ID;   ///< Content ID of the file.
++	ContentType type = ContentType::Invalid; ///< Content type of the file.
++	uint32_t filesize = 0;               ///< Size of the file to download.
++	std::string url;                     ///< URL to fetch the file from.
++	std::string filename;                ///< Local filename, without extension.
++};
++
++/**
++ * Per-file download state; also acts as the HTTP callback for the file's
++ * connection. Multiple sessions may run concurrently.
++ */
++class ContentDownloadSession : public HTTPCallback {
++public:
++	ClientNetworkContentSocketHandler &handler; ///< The content client.
++	ContentFileDownload file;                   ///< The file being downloaded.
++	std::optional<FileHandle> cur_file;         ///< Currently open output file.
++
++	ContentDownloadSession(ClientNetworkContentSocketHandler &handler, ContentFileDownload &&file) : handler(handler), file(std::move(file)) {}
++
++	void OnFailure() override;
++	void OnReceiveData(UniqueBuffer<char> data) override;
++	bool IsCancelled() const override;
++};
++
+ /**
+  * Socket handler for the content server connection
+  */
+@@ -69,16 +97,22 @@ protected:
+ 	ContentIDList queued;                         ///< ContentID queue to be requested.
+ 	ContentVector infos;                          ///< All content info we received
+ 	btree::btree_multimap<ContentID, ContentID> reverse_dependency_map; ///< Content reverse dependency map
+-	std::vector<char> http_response;              ///< The HTTP response to the requests we've been doing
++	std::vector<char> http_response;              ///< The HTTP response (file header list) of the mirror request
+ 	int http_response_index = -2;                 ///< Where we are, in the response, with handling it
+ 
+-	std::optional<FileHandle> cur_file;           ///< Currently downloaded file
+-	std::unique_ptr<ContentInfo> cur_info;        ///< Information about the currently downloaded file
++	std::optional<FileHandle> cur_file;           ///< Currently downloaded file (fallback protocol)
++	std::unique_ptr<ContentInfo> cur_info;        ///< Information about the currently downloaded file (fallback protocol)
++	std::vector<ContentFileDownload> pending_files;         ///< Files parsed from the mirror response, waiting to be downloaded.
++	size_t next_file_index = 0;                   ///< Index of the next pending file to start downloading.
++	std::vector<std::unique_ptr<ContentDownloadSession>> download_sessions; ///< Active parallel file downloads.
++	size_t mirror_index = 0;                      ///< Index of the mirror currently used.
++	bool download_cancelled = false;              ///< Whether the parallel downloads should wind down (retry pending)
+ 	bool is_connecting = false;                   ///< Whether we're connecting
+ 	bool is_cancelled = false;                    ///< Whether the download has been cancelled
+ 	std::chrono::steady_clock::time_point last_activity = std::chrono::steady_clock::now(); ///< The last time there was network activity
+ 
+ 	friend class NetworkContentConnecter;
++	friend class ContentDownloadSession;
+ 
+ 	bool ReceiveServerInfo(Packet &p) override;
+ 	bool ReceiveServerContent(Packet &p) override;
+@@ -102,6 +136,12 @@ protected:
+ 
+ 	void DownloadSelectedContentHTTP(const ContentIDList &content);
+ 	void DownloadSelectedContentFallback(const ContentIDList &content);
++	bool ParseResponseHeaders();
++	void StartDownloadSessions();
++	void OnSessionProgress(ContentDownloadSession &session, int bytes);
++	void OnSessionFileDone(ContentDownloadSession &session);
++	void OnSessionFailure(ContentDownloadSession &session);
++	void OnAllSessionsDone();
+ public:
+ 	/** The idle timeout; when to close the connection because it's idle. */
+ 	static constexpr std::chrono::seconds IDLE_TIMEOUT = std::chrono::seconds(60);
+@@ -116,6 +156,8 @@ public:
+ 	void RequestContentList(ContentVector *cv, bool send_md5sum = true);
+ 
+ 	void DownloadSelectedContent(uint &files, uint &bytes, bool fallback = false);
++	/** Reset the mirror index so a fresh download starts with the first mirror. */
++	void ResetMirrorIndex() { this->mirror_index = 0; }
+ 	void RequestQueuedContentInfo();
+ 
+ 	void Select(ContentID cid);
+diff --git a/src/network/network_content_gui.cpp b/src/network/network_content_gui.cpp
+index 37c66a3f4f..d1ef5a4567 100644
+--- a/src/network/network_content_gui.cpp
++++ b/src/network/network_content_gui.cpp
+@@ -126,6 +126,7 @@ static WindowDesc _network_content_download_status_window_desc(__FILE__, __LINE_
+ BaseNetworkContentDownloadStatusWindow::BaseNetworkContentDownloadStatusWindow(WindowDesc &desc) : Window(desc)
+ {
+ 	_network_content_client.AddCallback(this);
++	_network_content_client.ResetMirrorIndex();
+ 	_network_content_client.DownloadSelectedContent(this->total_files, this->total_bytes);
+ 
+ 	this->InitNested(NetworkStatusWindowNumber::ContentDownload);
+diff --git a/src/rail_gui.cpp b/src/rail_gui.cpp
+index 4f61080651..5edeaa311d 100644
+--- a/src/rail_gui.cpp
++++ b/src/rail_gui.cpp
+@@ -23,6 +23,7 @@
+ #include "newgrf_badge_gui.h"
+ #include "newgrf_station.h"
+ #include "company_base.h"
++#include "construction_cost_tip.h"
+ #include "strings_func.h"
+ #include "window_func.h"
+ #include "date_func.h"
+@@ -558,6 +559,7 @@ struct BuildRailToolbarWindow : Window {
+ 
+ 	void Close([[maybe_unused]] int data = 0) override
+ 	{
++		HideConstructionCostTip();
+ 		if (this->IsWidgetLowered(WID_RAT_BUILD_STATION)) SetViewportCatchmentStation(nullptr, true);
+ 		if (this->IsWidgetLowered(WID_RAT_BUILD_WAYPOINT)) SetViewportCatchmentWaypoint(nullptr, true);
+ 		if (_settings_client.gui.link_terraform_toolbar) CloseWindowById(WindowClass::ScenarioGenerateLandscape, 0, false);
+@@ -565,6 +567,16 @@ struct BuildRailToolbarWindow : Window {
+ 		this->Window::Close();
+ 	}
+ 
++	void OnMouseLoop() override
++	{
++		ConstructionCostTipContext ctx;
++		ctx.window_class = this->window_class;
++		ctx.window_number = this->window_number;
++		ctx.selected_tool = this->last_user_action;
++		ctx.railtype = this->railtype;
++		UpdateConstructionCostTip(ctx, (_thd.GetCallbackWnd() == this) ? GetTileBelowCursor() : INVALID_TILE);
++	}
++
+ 	/** List of widgets to be disabled if infrastructure limit prevents building. */
+ 	static inline const std::initializer_list<WidgetID> can_build_widgets = {
+ 		WID_RAT_BUILD_NS, WID_RAT_BUILD_X, WID_RAT_BUILD_EW, WID_RAT_BUILD_Y, WID_RAT_AUTORAIL,
+diff --git a/src/road_gui.cpp b/src/road_gui.cpp
+index 10152a07e5..535fcc56b6 100644
+--- a/src/road_gui.cpp
++++ b/src/road_gui.cpp
+@@ -15,6 +15,7 @@
+ #include "terraform_gui.h"
+ #include "viewport_func.h"
+ #include "command_func.h"
++#include "construction_cost_tip.h"
+ #include "road_cmd.h"
+ #include "station_func.h"
+ #include "window_func.h"
+@@ -375,6 +376,7 @@ struct BuildRoadToolbarWindow : Window {
+ 
+ 	void Close([[maybe_unused]] int data = 0) override
+ 	{
++		HideConstructionCostTip();
+ 		if (_game_mode == GameMode::Normal && (this->IsWidgetLowered(WID_ROT_BUS_STATION) || this->IsWidgetLowered(WID_ROT_TRUCK_STATION))) SetViewportCatchmentStation(nullptr, true);
+ 		if (_game_mode == GameMode::Normal && this->IsWidgetLowered(WID_ROT_BUILD_WAYPOINT)) SetViewportCatchmentWaypoint(nullptr, true);
+ 		if (_settings_client.gui.link_terraform_toolbar) CloseWindowById(WindowClass::ScenarioGenerateLandscape, 0, false);
+@@ -382,6 +384,16 @@ struct BuildRoadToolbarWindow : Window {
+ 		this->Window::Close();
+ 	}
+ 
++	void OnMouseLoop() override
++	{
++		ConstructionCostTipContext ctx;
++		ctx.window_class = this->window_class;
++		ctx.window_number = this->window_number;
++		ctx.selected_tool = this->last_started_action;
++		ctx.roadtype = this->roadtype;
++		UpdateConstructionCostTip(ctx, (_thd.GetCallbackWnd() == this) ? GetTileBelowCursor() : INVALID_TILE);
++	}
++
+ 	/**
+ 	 * Some data on this window has become invalid.
+ 	 * @param data Information about the changed data.
+diff --git a/src/script/api/CMakeLists.txt b/src/script/api/CMakeLists.txt
+index 9264d27be2..42c78d81e6 100644
+--- a/src/script/api/CMakeLists.txt
++++ b/src/script/api/CMakeLists.txt
+@@ -245,6 +245,7 @@ add_files(
+     script_execmode.cpp
+     script_game.cpp
+     script_gamesettings.cpp
++    script_global.cpp
+     script_goal.cpp
+     script_group.cpp
+     script_grouplist.cpp
+diff --git a/src/script/api/script_global.cpp b/src/script/api/script_global.cpp
+new file mode 100644
+index 0000000000..c708bfa434
+--- /dev/null
++++ b/src/script/api/script_global.cpp
+@@ -0,0 +1,190 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/** @file script_global.cpp Implementation of ScriptGlobal and ScriptGlobalCompanyList. */
++
++#include "../../stdafx.h"
++
++#include "script_global.hpp"
++#include "script_companymode.hpp"
++#include "../../company_base.h"
++#include "../../company_func.h"
++#include "../../date_func.h"
++#include "../../economy_base.h"
++#include "../../group.h"
++#include "../../map_func.h"
++#include "../../settings_type.h"
++#include "../../station_base.h"
++#include "../../string_func.h"
++#include "../../strings_func.h"
++
++#include "../../safeguards.h"
++
++/**
++ * Check whether the current script is allowed to use the Global API.
++ * @return True when the API can be used.
++ */
++static bool IsGlobalAccessAllowed()
++{
++	return ScriptCompanyMode::IsDeity() || _settings_game.script.allow_global_ai_access;
++}
++
++/**
++ * Resolve a script company ID to an internal company ID.
++ * @param company The script company ID.
++ * @return The internal company ID, or CompanyID::Invalid() when it cannot be resolved.
++ */
++static ::CompanyID ResolveCompany(ScriptCompany::CompanyID company)
++{
++	if (company == ScriptCompany::COMPANY_SELF) {
++		if (!::Company::IsValidID(_current_company)) return ::CompanyID::Invalid();
++		return _current_company;
++	}
++	if (company == ScriptCompany::COMPANY_SPECTATOR || company == ScriptCompany::COMPANY_INVALID) {
++		return ::CompanyID::Invalid();
++	}
++	if (company < ScriptCompany::COMPANY_FIRST || company >= ScriptCompany::COMPANY_LAST) {
++		return ::CompanyID::Invalid();
++	}
++	return static_cast<::CompanyID>(company);
++}
++
++/* static */ bool ScriptGlobal::IsGlobalAccessAllowed()
++{
++	return ::IsGlobalAccessAllowed();
++}
++
++/* static */ SQInteger ScriptGlobal::GetCompanyCount()
++{
++	if (!::IsGlobalAccessAllowed()) return 0;
++
++	SQInteger count = 0;
++	for (const Company *c : Company::Iterate()) {
++		(void)c;
++		count++;
++	}
++	return count;
++}
++
++/* static */ SQInteger ScriptGlobal::GetMapSizeX()
++{
++	if (!::IsGlobalAccessAllowed()) return 0;
++	return (SQInteger)MapSizeX();
++}
++
++/* static */ SQInteger ScriptGlobal::GetMapSizeY()
++{
++	if (!::IsGlobalAccessAllowed()) return 0;
++	return (SQInteger)MapSizeY();
++}
++
++/* static */ SQInteger ScriptGlobal::GetDate()
++{
++	if (!::IsGlobalAccessAllowed()) return 0;
++	return (SQInteger)EconTime::CurDate().base();
++}
++
++/* static */ SQInteger ScriptGlobal::GetYear()
++{
++	if (!::IsGlobalAccessAllowed()) return 0;
++	return (SQInteger)CalTime::CurYear();
++}
++
++/* static */ std::optional<std::string> ScriptGlobal::GetCompanyName(ScriptCompany::CompanyID company)
++{
++	if (!::IsGlobalAccessAllowed()) return std::nullopt;
++
++	::CompanyID cid = ResolveCompany(company);
++	if (!::Company::IsValidID(cid)) return std::nullopt;
++
++	return ::StrMakeValid(::GetString(STR_COMPANY_NAME, cid), {});
++}
++
++/* static */ Money ScriptGlobal::GetCompanyBankBalance(ScriptCompany::CompanyID company)
++{
++	if (!::IsGlobalAccessAllowed()) return -1;
++
++	::CompanyID cid = ResolveCompany(company);
++	if (!::Company::IsValidID(cid)) return -1;
++	/* If we return INT64_MAX as usual, overflows may occur in the script. So return a smaller value. */
++	if (_settings_game.difficulty.infinite_money) return INT32_MAX;
++
++	return GetAvailableMoney(cid);
++}
++
++/* static */ Money ScriptGlobal::GetCompanyLoan(ScriptCompany::CompanyID company)
++{
++	if (!::IsGlobalAccessAllowed()) return -1;
++
++	::CompanyID cid = ResolveCompany(company);
++	if (!::Company::IsValidID(cid)) return -1;
++
++	return ::Company::Get(cid)->current_loan;
++}
++
++/* static */ Money ScriptGlobal::GetCompanyValue(ScriptCompany::CompanyID company)
++{
++	if (!::IsGlobalAccessAllowed()) return -1;
++
++	::CompanyID cid = ResolveCompany(company);
++	if (!::Company::IsValidID(cid)) return -1;
++
++	return ::Company::Get(cid)->old_economy[0].company_value;
++}
++
++/* static */ SQInteger ScriptGlobal::GetCompanyPerformanceRating(ScriptCompany::CompanyID company)
++{
++	if (!::IsGlobalAccessAllowed()) return -1;
++
++	::CompanyID cid = ResolveCompany(company);
++	if (!::Company::IsValidID(cid)) return -1;
++
++	return (SQInteger)::Company::Get(cid)->old_economy[0].performance_history;
++}
++
++/* static */ SQInteger ScriptGlobal::GetCompanyVehicleCount(ScriptCompany::CompanyID company, VehicleType vehicle_type)
++{
++	if (!::IsGlobalAccessAllowed()) return -1;
++
++	if (vehicle_type < VT_TRAIN || vehicle_type > VT_AIRCRAFT) return -1;
++
++	::CompanyID cid = ResolveCompany(company);
++	if (!::Company::IsValidID(cid)) return -1;
++
++	return (SQInteger)::Company::Get(cid)->group_all[static_cast<::VehicleType>(vehicle_type)].num_vehicle;
++}
++
++/* static */ SQInteger ScriptGlobal::GetCompanyStationCount(ScriptCompany::CompanyID company)
++{
++	if (!::IsGlobalAccessAllowed()) return -1;
++
++	::CompanyID cid = ResolveCompany(company);
++	if (!::Company::IsValidID(cid)) return -1;
++
++	SQInteger count = 0;
++	for (const Station *s : Station::Iterate()) {
++		if (s->owner == cid) count++;
++	}
++	return count;
++}
++
++/* static */ bool ScriptGlobal::IsCompanyBankrupt(ScriptCompany::CompanyID company)
++{
++	if (!::IsGlobalAccessAllowed()) return false;
++
++	::CompanyID cid = ResolveCompany(company);
++	if (!::Company::IsValidID(cid)) return false;
++
++	return ::Company::Get(cid)->months_of_bankruptcy != 0;
++}
++
++ScriptGlobalCompanyList::ScriptGlobalCompanyList(HSQUIRRELVM vm)
++{
++	if (!::IsGlobalAccessAllowed()) return;
++
++	ScriptList::FillList<Company>(vm, this);
++}
+diff --git a/src/script/api/script_global.hpp b/src/script/api/script_global.hpp
+new file mode 100644
+index 0000000000..4dbbd4dc18
+--- /dev/null
++++ b/src/script/api/script_global.hpp
+@@ -0,0 +1,178 @@
++/*
++ * This file is part of OpenTTD.
++ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
++ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
++ */
++
++/** @file script_global.hpp Whole-game perception API for AIs and GameScripts. */
++
++#ifndef SCRIPT_GLOBAL_HPP
++#define SCRIPT_GLOBAL_HPP
++
++#include "script_object.hpp"
++#include "script_company.hpp"
++#include "script_list.hpp"
++#include "../../economy_type.h"
++#include "../../vehicle_type.h"
++
++/**
++ * Class that provides a whole-game perception API.
++ *
++ * Unlike the regular AI API, which is limited to what the AI's own company
++ * can observe, this class exposes data about every company and the whole map
++ * (company finances, vehicle counts, performance ratings, map size, ...).
++ *
++ * For AIs this access is controlled by the game setting
++ * \c game.script.allow_global_ai_access (disabled by default). GameScripts
++ * always have access, as they run in "deity mode".
++ *
++ * @api ai game
++ */
++class ScriptGlobal : public ScriptObject {
++public:
++	/** Vehicle types, matching ScriptVehicle::VehicleType values. */
++	enum VehicleType {
++		VT_TRAIN    = ::VehicleType::Train,    ///< Trains.
++		VT_ROAD     = ::VehicleType::Road,     ///< Road vehicles.
++		VT_SHIP     = ::VehicleType::Ship,     ///< Ships.
++		VT_AIRCRAFT = ::VehicleType::Aircraft, ///< Aircraft.
++	};
++
++	/**
++	 * Check whether the current script is allowed to use this API.
++	 * @return True when the API can be used (GameScript, or the game setting allows it).
++	 * @api ai game
++	 */
++	static bool IsGlobalAccessAllowed();
++
++	/**
++	 * Get the number of companies currently in the game.
++	 * @return The number of companies, or 0 when the API is not accessible.
++	 * @api ai game
++	 */
++	static SQInteger GetCompanyCount();
++
++	/**
++	 * Get the width of the map, in tiles.
++	 * @return The width of the map, or 0 when the API is not accessible.
++	 * @api ai game
++	 */
++	static SQInteger GetMapSizeX();
++
++	/**
++	 * Get the height of the map, in tiles.
++	 * @return The height of the map, or 0 when the API is not accessible.
++	 * @api ai game
++	 */
++	static SQInteger GetMapSizeY();
++
++	/**
++	 * Get the current game date.
++	 * @return The current date, or 0 when the API is not accessible.
++	 * @api ai game
++	 */
++	static SQInteger GetDate();
++
++	/**
++	 * Get the current calendar year.
++	 * @return The current year, or 0 when the API is not accessible.
++	 * @api ai game
++	 */
++	static SQInteger GetYear();
++
++	/**
++	 * Get the name of a company.
++	 * @param company The company to get the name of.
++	 * @return The name of the company, or nullopt when the company does not exist
++	 *         or the API is not accessible.
++	 * @api ai game
++	 */
++	static std::optional<std::string> GetCompanyName(ScriptCompany::CompanyID company);
++
++	/**
++	 * Get the bank balance of a company.
++	 * @param company The company to get the balance of.
++	 * @return The bank balance of the company, or -1 when the company does not exist
++	 *         or the API is not accessible.
++	 * @api ai game
++	 */
++	static Money GetCompanyBankBalance(ScriptCompany::CompanyID company);
++
++	/**
++	 * Get the current loan of a company.
++	 * @param company The company to get the loan of.
++	 * @return The current loan, or -1 when the company does not exist
++	 *         or the API is not accessible.
++	 * @api ai game
++	 */
++	static Money GetCompanyLoan(ScriptCompany::CompanyID company);
++
++	/**
++	 * Get the estimated value of a company.
++	 * @param company The company to get the value of.
++	 * @return The value of the company, or -1 when the company does not exist
++	 *         or the API is not accessible.
++	 * @api ai game
++	 */
++	static Money GetCompanyValue(ScriptCompany::CompanyID company);
++
++	/**
++	 * Get the performance rating of a company.
++	 * @param company The company to get the rating of.
++	 * @return The performance rating (0..1000), or -1 when the company does not exist
++	 *         or the API is not accessible.
++	 * @api ai game
++	 */
++	static SQInteger GetCompanyPerformanceRating(ScriptCompany::CompanyID company);
++
++	/**
++	 * Get the number of vehicles of the given type owned by a company.
++	 * @param company      The company to count vehicles of.
++	 * @param vehicle_type The type of vehicle to count.
++	 * @return The number of vehicles, or -1 when the company does not exist
++	 *         or the API is not accessible.
++	 * @api ai game
++	 */
++	static SQInteger GetCompanyVehicleCount(ScriptCompany::CompanyID company, VehicleType vehicle_type);
++
++	/**
++	 * Get the number of stations owned by a company.
++	 * @param company The company to count stations of.
++	 * @return The number of stations, or -1 when the company does not exist
++	 *         or the API is not accessible.
++	 * @api ai game
++	 */
++	static SQInteger GetCompanyStationCount(ScriptCompany::CompanyID company);
++
++	/**
++	 * Check whether a company is currently in bankruptcy.
++	 * @param company The company to check.
++	 * @return True when the company is bankrupt, or false when the company does
++	 *         not exist or the API is not accessible.
++	 * @api ai game
++	 */
++	static bool IsCompanyBankrupt(ScriptCompany::CompanyID company);
++};
++
++/**
++ * Creates a list of all companies currently in the game.
++ * @api ai game
++ * @ingroup ScriptList
++ */
++class ScriptGlobalCompanyList : public ScriptList {
++public:
++#ifdef DOXYGEN_API
++	/**
++	 * Create a list of all companies currently in the game.
++	 */
++	ScriptGlobalCompanyList();
++#else
++	/**
++	 * The constructor wrapper from Squirrel.
++	 */
++	ScriptGlobalCompanyList(HSQUIRRELVM vm);
++#endif /* DOXYGEN_API */
++};
++
++#endif /* SCRIPT_GLOBAL_HPP */
+diff --git a/src/settings_type.h b/src/settings_type.h
+index 87be85802d..32d636600e 100644
+--- a/src/settings_type.h
++++ b/src/settings_type.h
+@@ -617,6 +617,8 @@ struct NetworkSettings {
+ 	uint8_t       autoclean_novehicles;                   ///< remove companies with no vehicles after this many months
+ 	uint8_t       max_companies;                          ///< maximum amount of companies
+ 	uint8_t       max_clients;                            ///< maximum amount of clients
++	std::string content_server;                           ///< content server hostname for the metadata protocol
++	std::string content_mirrors;                          ///< comma-separated list of content mirror URIs used for downloads
+ 	CalTime::Year restart_game_year;                      ///< year the server restarts
+ 	uint16_t      restart_hours;                          ///< number of hours to run the server before automatic restart
+ 	uint8_t       min_active_clients;                     ///< minimum amount of active clients to unpause the game
+@@ -744,6 +746,7 @@ struct AISettings {
+ struct ScriptSettings {
+ 	uint32_t script_max_opcode_till_suspend;   ///< max opcode calls till scripts will suspend
+ 	uint32_t script_max_memory_megabytes;      ///< limit on memory a single script instance may have allocated
++	bool allow_global_ai_access;               ///< allow AIs to use the whole-game Global API
+ };
+ 
+ /** Settings related to the yet another pathfinder. */
+diff --git a/src/table/settings/network_settings.ini b/src/table/settings/network_settings.ini
+index db15155dcb..9257e05654 100644
+--- a/src/table/settings/network_settings.ini
++++ b/src/table/settings/network_settings.ini
+@@ -247,6 +247,22 @@ max      = MAX_CLIENTS
+ post_cb  = [](auto) { UpdateClientConfigValues(); }
+ cat      = SC_BASIC
+ 
++[SDTC_SSTR]
++var      = network.content_server
++type     = SLE_STR
++length   = 0
++flags    = SettingFlag::NotInSave, SettingFlag::NoNetworkSync
++def      = nullptr
++cat      = SC_BASIC
++
++[SDTC_SSTR]
++var      = network.content_mirrors
++type     = SLE_STR
++length   = 0
++flags    = SettingFlag::NotInSave, SettingFlag::NoNetworkSync
++def      = nullptr
++cat      = SC_BASIC
++
+ [SDTC_VAR]
+ var      = network.restart_game_year
+ type     = SLE_INT32
+diff --git a/src/table/settings/script_settings.ini b/src/table/settings/script_settings.ini
+index 7f1a422ccd..7f0a2341e1 100644
+--- a/src/table/settings/script_settings.ini
++++ b/src/table/settings/script_settings.ini
+@@ -79,6 +79,13 @@ pre_cb   = CheckScriptMaxMemoryChange
+ post_cb  = ScriptMaxMemoryChange
+ cat      = SC_EXPERT
+ 
++[SDT_BOOL]
++var      = script.allow_global_ai_access
++def      = false
++str      = STR_CONFIG_SETTING_ALLOW_GLOBAL_AI_ACCESS
++strhelp  = STR_CONFIG_SETTING_ALLOW_GLOBAL_AI_ACCESS_HELPTEXT
++cat      = SC_EXPERT
++
+ [SDT_BOOL]
+ var      = ai.ai_in_multiplayer
+ def      = true
+diff --git a/src/terraform_gui.cpp b/src/terraform_gui.cpp
+index c094d3eeda..941b3bdb77 100644
+--- a/src/terraform_gui.cpp
++++ b/src/terraform_gui.cpp
+@@ -18,6 +18,7 @@
+ #include "window_func.h"
+ #include "viewport_func.h"
+ #include "command_func.h"
++#include "construction_cost_tip.h"
+ #include "signs_func.h"
+ #include "sound_func.h"
+ #include "base_station_base.h"
+@@ -233,6 +234,21 @@ struct TerraformToolbarWindow : Window {
+ 		this->FinishInitNested(window_number);
+ 	}
+ 
++	void Close([[maybe_unused]] int data = 0) override
++	{
++		HideConstructionCostTip();
++		this->Window::Close();
++	}
++
++	void OnMouseLoop() override
++	{
++		ConstructionCostTipContext ctx;
++		ctx.window_class = this->window_class;
++		ctx.window_number = this->window_number;
++		ctx.selected_tool = this->last_user_action;
++		UpdateConstructionCostTip(ctx, (_thd.GetCallbackWnd() == this) ? GetTileBelowCursor() : INVALID_TILE);
++	}
++
+ 	void OnInit() override
+ 	{
+ 		/* Don't show the place object button when there are no objects to place. */
+diff --git a/src/widgets/group_widget.h b/src/widgets/group_widget.h
+index 958c3ccfc4..8a4efcd120 100644
+--- a/src/widgets/group_widget.h
++++ b/src/widgets/group_widget.h
+@@ -36,6 +36,7 @@ enum GroupListWidgets : WidgetID {
+ 	WID_GL_COLLAPSE_ALL_GROUPS,      ///< Collapse all groups button.
+ 	WID_GL_EXPAND_ALL_GROUPS,        ///< Expand all groups button.
+ 	WID_GL_REPLACE_PROTECTION,       ///< Replace protection button.
++	WID_GL_AUTOGROUP_SHARED,         ///< Auto-group vehicles by shared orders button.
+ 	WID_GL_INFO,                     ///< Group info.
+ };
+ 
