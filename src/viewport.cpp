@@ -2644,7 +2644,7 @@ static inline Vehicle *GetVehicleFromWindow(const Window *w)
 			case WindowClass::ShipList:
 			case WindowClass::AircraftList: {
 				VehicleListIdentifier vli = VehicleListIdentifier::UnPack(wn);
-				if (vli.type == VL_SHARED_ORDERS) {
+				if (vli.type == VehicleListType::VehicleSharedOrders) {
 					return Vehicle::GetIfValid(vli.index);
 				}
 				break;
@@ -3626,9 +3626,9 @@ static inline TileIndex ViewportMapGetMostSignificantTileType(const Viewport * c
 				ViewportMapStoreBridge(vp, from_tile);
 			}
 			switch (GetTunnelBridgeTransportType(from_tile)) {
-				case TRANSPORT_RAIL:  *tile_type = TileType::Railway; break;
-				case TRANSPORT_ROAD:  *tile_type = TileType::Road;    break;
-				case TRANSPORT_WATER: *tile_type = TileType::Water;   break;
+				case TransportType::Rail:  *tile_type = TileType::Railway; break;
+				case TransportType::Road:  *tile_type = TileType::Road;    break;
+				case TransportType::Water: *tile_type = TileType::Water;   break;
 				default:              NOT_REACHED();           break;
 			}
 		}
@@ -3661,8 +3661,8 @@ static inline TileIndex ViewportMapGetMostSignificantTileType(const Viewport * c
 			ViewportMapStoreBridge(vp, result);
 		}
 		switch (GetTunnelBridgeTransportType(result)) {
-			case TRANSPORT_RAIL: *tile_type = TileType::Railway; break;
-			case TRANSPORT_ROAD: *tile_type = TileType::Road;    break;
+			case TransportType::Rail: *tile_type = TileType::Railway; break;
+			case TransportType::Road: *tile_type = TileType::Road;    break;
 			default:             *tile_type = TileType::Water;   break;
 		}
 	}
@@ -3856,15 +3856,15 @@ static void ViewportMapDrawBridgeTunnel(Viewport * const vp, const TunnelBridgeT
 		colour = PixelColour{is_tunnel ? _darken_colour[colour.p] : _lighten_colour[colour.p]};
 	} else if (vp->map_type == VPMT_ROUTES && IsTileType(tile, TileType::TunnelBridge)) {
 		switch (GetTunnelBridgeTransportType(tile)) {
-			case TRANSPORT_WATER:
+			case TransportType::Water:
 				colour = PC_WATER;
 				break;
 
-			case TRANSPORT_RAIL:
+			case TransportType::Rail:
 				colour = GetRailTypeInfo(GetRailType(tile))->map_colour;
 				break;
 
-			case TRANSPORT_ROAD: {
+			case TransportType::Road: {
 				const RoadTypeInfo *rti = nullptr;
 				if (GetRoadTypeRoad(tile) != INVALID_ROADTYPE) {
 					rti = GetRoadTypeInfo(GetRoadTypeRoad(tile));
@@ -4303,7 +4303,7 @@ void ViewportDoDrawProcessAllPending()
 {
 	if (_viewport_drawer_jobs == 0) return;
 
-	PerformanceAccumulator framerate(PFE_DRAWWORLD);
+	PerformanceAccumulator framerate(PerformanceElement::ViewportDrawing);
 
 	std::unique_lock<std::mutex> lk(_viewport_drawer_return_lock);
 	while (true) {
@@ -4456,7 +4456,7 @@ static inline void ViewportDraw(Viewport *vp, int left, int top, int right, int 
  */
 void Window::DrawViewport(NWidgetDisplayFlags display_flags) const
 {
-	PerformanceAccumulator framerate(PFE_DRAWWORLD);
+	PerformanceAccumulator framerate(PerformanceElement::ViewportDrawing);
 
 	DrawPixelInfo *dpi = _cur_dpi;
 
@@ -7007,12 +7007,12 @@ CommandCost CmdScrollViewport(DoCommandFlags flags, TileIndex tile, ViewportScro
 {
 	if (_current_company != OWNER_DEITY) return CMD_ERROR;
 	switch (target) {
-		case VST_EVERYONE:
+		case ViewportScrollTarget::Everyone:
 			break;
-		case VST_COMPANY:
+		case ViewportScrollTarget::Company:
 			if (_local_company != (CompanyID)ref) return CommandCost();
 			break;
-		case VST_CLIENT:
+		case ViewportScrollTarget::Client:
 			if (_network_own_client_id != (ClientID)ref) return CommandCost();
 			break;
 		default:

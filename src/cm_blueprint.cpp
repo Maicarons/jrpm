@@ -202,11 +202,11 @@ BlueprintCmdClosure GetBlueprintCommand(TileIndex start, const Blueprint::Item &
 			};
 		case Blueprint::Item::Type::RAIL_TUNNEL:
 			return [item, start](TileIndex) {
-				Command<Commands::BuildTunnel>::Post(AddTileIndexDiffCWrap(start, item.tdiff), TRANSPORT_RAIL, to_underlying(_cur_railtype));
+				Command<Commands::BuildTunnel>::Post(AddTileIndexDiffCWrap(start, item.tdiff), TransportType::Rail, to_underlying(_cur_railtype));
 			};
 		case Blueprint::Item::Type::RAIL_BRIDGE:
 			return [item, start](TileIndex) {
-				Command<Commands::BuildBridge>::Post(AddTileIndexDiffCWrap(start, item.tdiff), AddTileIndexDiffCWrap(start, item.u.rail.bridge.other_end), TRANSPORT_RAIL, item.u.rail.bridge.type, to_underlying(_cur_railtype), BuildBridgeFlags::None);
+				Command<Commands::BuildBridge>::Post(AddTileIndexDiffCWrap(start, item.tdiff), AddTileIndexDiffCWrap(start, item.u.rail.bridge.other_end), TransportType::Rail, item.u.rail.bridge.type, to_underlying(_cur_railtype), BuildBridgeFlags::None);
 			};
 		case Blueprint::Item::Type::RAIL_STATION:
 			return [item, start](TileIndex) {
@@ -256,9 +256,9 @@ static bool TestBlueprintCommand(TileIndex start, const Blueprint::Item &item) {
 		case Blueprint::Item::Type::RAIL_DEPOT:
 			return Command<Commands::BuildRailDepot>::Do(CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildRailDepot>()) | DoCommandFlag::QueryCost, AddTileIndexDiffCWrap(start, item.tdiff), _cur_railtype, item.u.rail.depot.ddir).Succeeded();
 		case Blueprint::Item::Type::RAIL_TUNNEL:
-			return Command<Commands::BuildTunnel>::Do(CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildTunnel>()) | DoCommandFlag::QueryCost, AddTileIndexDiffCWrap(start, item.tdiff), TRANSPORT_RAIL, to_underlying(_cur_railtype)).Succeeded();
+			return Command<Commands::BuildTunnel>::Do(CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildTunnel>()) | DoCommandFlag::QueryCost, AddTileIndexDiffCWrap(start, item.tdiff), TransportType::Rail, to_underlying(_cur_railtype)).Succeeded();
 		case Blueprint::Item::Type::RAIL_BRIDGE:
-			return Command<Commands::BuildBridge>::Do(CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildBridge>()) | DoCommandFlag::QueryCost, AddTileIndexDiffCWrap(start, item.tdiff), AddTileIndexDiffCWrap(start, item.u.rail.bridge.other_end), TRANSPORT_RAIL, item.u.rail.bridge.type, to_underlying(_cur_railtype), BuildBridgeFlags::None).Succeeded();
+			return Command<Commands::BuildBridge>::Do(CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildBridge>()) | DoCommandFlag::QueryCost, AddTileIndexDiffCWrap(start, item.tdiff), AddTileIndexDiffCWrap(start, item.u.rail.bridge.other_end), TransportType::Rail, item.u.rail.bridge.type, to_underlying(_cur_railtype), BuildBridgeFlags::None).Succeeded();
 		case Blueprint::Item::Type::RAIL_STATION:
 			return Command<Commands::BuildRailStation>::Do(CommandFlagsToDCFlags(GetCommandFlags<Commands::BuildRailStation>()) | DoCommandFlag::QueryCost, AddTileIndexDiffCWrap(start, item.tdiff), _cur_railtype, Axis::X, 1, 1, _station_gui.sel_class, _station_gui.sel_type, NEW_STATION, true).Succeeded();
 		case Blueprint::Item::Type::RAIL_STATION_PART:
@@ -528,7 +528,7 @@ void BlueprintCopyArea(TileIndex start, TileIndex end) {
                 }
                 break;
             case TileType::TunnelBridge: {
-                if (GetTunnelBridgeTransportType(tile) != TRANSPORT_RAIL) break;
+                if (GetTunnelBridgeTransportType(tile) != TransportType::Rail) break;
                 auto other = GetOtherTunnelBridgeEnd(tile);
                 if (!ta.Contains(other)) break;
                 if (other < tile) break;

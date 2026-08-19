@@ -417,7 +417,7 @@ void DrawFoundation(TileInfo *ti, Foundation f)
 		if (!IsNonContinuousFoundation(f)) {
 			/* Lower part of foundation */
 			static constexpr SpriteBounds bounds{{}, {TILE_SIZE, TILE_SIZE, TILE_HEIGHT - 1}, {}};
-			AddSortableSpriteToDraw(leveled_base + (ti->tileh & ~SLOPE_STEEP), PAL_NONE, *ti, bounds);
+			AddSortableSpriteToDraw(leveled_base + RemoveSteepSlope(ti->tileh), PAL_NONE, *ti, bounds);
 		}
 
 		Corner highest_corner = GetHighestSlopeCorner(ti->tileh);
@@ -508,10 +508,10 @@ void DoClearSquare(TileIndex tile)
 /**
  * Returns information about trackdirs and signal states.
  * If there is any trackbit at 'side', return all trackdirbits.
- * For TRANSPORT_ROAD, return no trackbits if there is no roadbit (of given subtype) at given side.
+ * For TransportType::Road, return no trackbits if there is no roadbit (of given subtype) at given side.
  * @param tile tile to get info about
  * @param mode transport type
- * @param sub_mode for TRANSPORT_ROAD, roadtypes to check
+ * @param sub_mode for TransportType::Road, roadtypes to check
  * @param side side we are entering from, DiagDirection::Invalid to return all trackbits
  * @return trackdirbits and other info depending on 'mode'
  */
@@ -772,7 +772,7 @@ void RunTileLoop(bool apply_day_length)
 		count = 1 << (Map::LogX() + Map::LogY() - TILE_UPDATE_FREQUENCY_LOG);
 	}
 
-	PerformanceAccumulator framerate(PFE_GL_LANDSCAPE);
+	PerformanceAccumulator framerate(PerformanceElement::GameLoopLandscape);
 
 	const uint32_t feedback = GetTileLoopFeedback();
 
@@ -809,7 +809,7 @@ void RunAuxiliaryTileLoop()
 	/* At day lengths <= 4, flooding is handled by main tile loop */
 	if (DayLengthFactor() <= 4 || (_scaled_tick_counter % 4) != 0) return;
 
-	PerformanceAccumulator framerate(PFE_GL_LANDSCAPE);
+	PerformanceAccumulator framerate(PerformanceElement::GameLoopLandscape);
 
 	const uint32_t feedback = GetTileLoopFeedback();
 	uint count = 1 << (Map::LogX() + Map::LogY() - 8);
@@ -1782,7 +1782,7 @@ void OnTick_Industry();
 void CallLandscapeTick()
 {
 	{
-		PerformanceAccumulator framerate(PFE_GL_LANDSCAPE);
+		PerformanceAccumulator framerate(PerformanceElement::GameLoopLandscape);
 
 		OnTick_Town();
 		RecordSyncEvent(NSRE_TOWN);

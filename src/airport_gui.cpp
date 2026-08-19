@@ -129,7 +129,7 @@ struct BuildAirToolbarWindow : Window {
 	{
 		this->CreateNestedTree();
 		this->SetupAirToolbar(airtype);
-		this->FinishInitNested(TRANSPORT_AIR);
+		this->FinishInitNested(TransportType::Air);
 
 		this->DisableWidget(WID_AT_REMOVE);
 		this->last_user_action = INVALID_WID_AT;
@@ -162,7 +162,7 @@ struct BuildAirToolbarWindow : Window {
 		bool can_build = CanBuildVehicleInfrastructure(VehicleType::Aircraft);
 		this->SetWidgetDisabledState(WID_AT_AIRPORT, !can_build);
 		if (!can_build) {
-			CloseWindowById(WindowClass::BuildStation, TRANSPORT_AIR);
+			CloseWindowById(WindowClass::BuildStation, TransportType::Air);
 
 			/* Show in the tooltip why this button is disabled. */
 			this->GetWidget<NWidgetCore>(WID_AT_AIRPORT)->SetToolTip(STR_TOOLBAR_DISABLED_NO_VEHICLE_AVAILABLE);
@@ -535,7 +535,7 @@ struct BuildAirToolbarWindow : Window {
 
 		this->RaiseButtons();
 
-		CloseWindowById(WindowClass::BuildStation, TRANSPORT_AIR);
+		CloseWindowById(WindowClass::BuildStation, TransportType::Air);
 		CloseWindowById(WindowClass::JoinStation, 0);
 	}
 
@@ -721,7 +721,7 @@ public:
 		this->vscroll->SetCapacity(5);
 		this->vscroll->SetPosition(0);
 
-		this->FinishInitNested(TRANSPORT_AIR);
+		this->FinishInitNested(TransportType::Air);
 
 		this->SetWidgetLoweredState(WID_AP_BTN_DONTHILIGHT, !_settings_client.gui.station_show_coverage);
 		this->SetWidgetLoweredState(WID_AP_BTN_DOHILIGHT, _settings_client.gui.station_show_coverage);
@@ -1117,7 +1117,7 @@ struct BuildHangarWindow : public PickerWindowBase {
 	{
 		this->CreateNestedTree();
 		this->LowerWidget(WID_BHW_NE + _rotation_dir);
-		this->FinishInitNested(TRANSPORT_AIR);
+		this->FinishInitNested(TransportType::Air);
 	}
 
 	uint GetHangarSpriteHeight() const { return 48; }
@@ -1195,7 +1195,7 @@ struct SelectTrackGfxWindow : public PickerWindowBase {
 	{
 		this->CreateNestedTree();
 		this->LowerWidget(_selected_track_gfx_index);
-		this->FinishInitNested(TRANSPORT_AIR);
+		this->FinishInitNested(TransportType::Air);
 	}
 
 	void UpdateWidgetSize(int widget, Dimension &size, [[maybe_unused]] const Dimension &padding, [[maybe_unused]] Dimension &fill, [[maybe_unused]] Dimension &resize) override
@@ -1294,7 +1294,7 @@ struct BuildHeliportWindow : public PickerWindowBase {
 	{
 		this->CreateNestedTree();
 		this->LowerWidget(WID_BHW_NE + _rotation_dir);
-		this->FinishInitNested(TRANSPORT_AIR);
+		this->FinishInitNested(TransportType::Air);
 	}
 
 	uint GetHeliportSpriteHeight() const { return 91; }
@@ -1380,7 +1380,7 @@ struct BuildAirportInfraNoCatchWindow : public PickerWindowBase {
 	{
 		this->CreateNestedTree();
 		this->LowerWidget(WID_BAINC_FLAG + (BuildAirportInfrastructureNoCatchmentWidgets)_selected_infra_nocatch);
-		this->FinishInitNested(TRANSPORT_AIR);
+		this->FinishInitNested(TransportType::Air);
 	}
 
 	uint GetHeliportSpriteHeight() const { return 97; }
@@ -1532,7 +1532,7 @@ struct BuildAirportInfraWithCatchWindow : public PickerWindowBase {
 	{
 		this->CreateNestedTree();
 		this->LowerWidget(WID_BAIWC_BUILDING_1 + (BuildAirportInfrastructureNoCatchmentWidgets)_selected_infra_catch);
-		this->FinishInitNested(TRANSPORT_AIR);
+		this->FinishInitNested(TransportType::Air);
 	}
 
 	uint GetHeliportSpriteHeight() const { return 91; }
@@ -1682,7 +1682,7 @@ static void SetDefaultAirGui()
 	}
 
 	_last_built_airtype = _cur_airtype = rt;
-	BuildAirToolbarWindow *w = dynamic_cast<BuildAirToolbarWindow *>(FindWindowById(WindowClass::BuildToolbar, TRANSPORT_AIR));
+	BuildAirToolbarWindow *w = dynamic_cast<BuildAirToolbarWindow *>(FindWindowById(WindowClass::BuildToolbar, TransportType::Air));
 	if (w != nullptr) w->ModifyAirType(_cur_airtype);
 }
 

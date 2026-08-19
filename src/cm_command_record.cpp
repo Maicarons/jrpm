@@ -132,7 +132,7 @@ static void ReplayExecute(DynBaseCommandContainer &container, CompanyID company)
 
 	Backup<CompanyID> cur_company(_current_company, FILE_LINE);
 	cur_company.Change(company);
-	_cmd_client_id = CLIENT_ID_SERVER;
+	_cmd_client_id = ClientID::Server;
 
 	DoCommandPImplementation(container.cmd, container.tile, *container.payload, container.error_msg, CommandCallback::None, 0,
 			DCIF_NETWORK_COMMAND | DCIF_TYPE_CHECKED | DCIF_NOT_MY_CMD);

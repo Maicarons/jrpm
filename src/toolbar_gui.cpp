@@ -673,7 +673,7 @@ static CallBackFunction MenuClickCompany(int index)
 
 			case CTMN_SPECTATE:
 				if (_network_server) {
-					NetworkServerDoMove(CLIENT_ID_SERVER, COMPANY_SPECTATOR);
+					NetworkServerDoMove(ClientID::Server, COMPANY_SPECTATOR);
 					MarkWholeScreenDirty();
 				} else {
 					NetworkClientRequestMove(COMPANY_SPECTATOR);
@@ -1229,15 +1229,15 @@ static void UsePickerTool(TileIndex tile)
 
 		case TileType::TunnelBridge:
 			switch (GetTunnelBridgeTransportType(tile)) {
-				case TRANSPORT_RAIL:
+				case TransportType::Rail:
 					ShowBuildRailToolbarFromTile(tile);
 					break;
 
-				case TRANSPORT_ROAD:
+				case TransportType::Road:
 					ShowBuildRoadToolbarFromTile(tile);
 					break;
 
-				case TRANSPORT_WATER:
+				case TransportType::Water:
 					ShowBuildDocksToolbarFromTile(tile);
 					break;
 

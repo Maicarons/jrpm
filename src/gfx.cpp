@@ -1721,7 +1721,7 @@ void DrawDirtyBlocks()
 					vp->ClearDirty();
 				} else if (vp->is_dirty) {
 					clear_overlays();
-					PerformanceAccumulator framerate(PFE_DRAWWORLD);
+					PerformanceAccumulator framerate(PerformanceElement::ViewportDrawing);
 					_cur_dpi->left = 0;
 					_cur_dpi->top = 0;
 					_cur_dpi->width = _screen.width;
