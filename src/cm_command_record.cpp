@@ -138,7 +138,7 @@ static void ReplayExecute(DynBaseCommandContainer &container, CompanyID company)
 			DCIF_NETWORK_COMMAND | DCIF_TYPE_CHECKED | DCIF_NOT_MY_CMD);
 
 	cur_company.Restore();
-	_cmd_client_id = INVALID_CLIENT_ID;
+	_cmd_client_id = ClientID::Invalid;
 }
 
 static bool ConCmdReplay(std::span<std::string_view> argv)
