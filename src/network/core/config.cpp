@@ -81,9 +81,10 @@ std::vector<std::string> NetworkContentMirrorUris()
 	std::vector<std::string> mirrors;
 	std::string clean = StrMakeValid(list, {});
 	for (const auto part : clean | std::views::split(',')) {
-		std::string_view sv(part.data(), part.size());
+		/* GCC < 13 does not provide .data()/.size() on split_view subranges (P2210). */
+		std::string sv(part.begin(), part.end());
 		size_t begin = sv.find_first_not_of(" \t\r\n");
-		if (begin == std::string_view::npos) continue;
+		if (begin == std::string::npos) continue;
 		size_t end = sv.find_last_not_of(" \t\r\n");
 		std::string uri(sv.substr(begin, end - begin + 1));
 		if (!uri.empty()) mirrors.push_back(std::move(uri));
