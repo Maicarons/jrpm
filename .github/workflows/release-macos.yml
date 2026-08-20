@@ -134,8 +134,8 @@ jobs:
 
         echo "::group::Create universal binary"
         # Combine the `openttd` binaries from each build into a single file
-        lipo -create -output openttd-universal ../build-*/openttd
-        mv openttd-universal openttd
+        lipo -create -output openttd-universal ../build-*/openttd-jrpm
+        mv openttd-universal openttd-jrpm
         echo "::endgroup::"
 
         echo "::group::Run CPack"

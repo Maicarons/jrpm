@@ -261,22 +261,22 @@ if(OPTION_PACKAGE_DEPENDENCIES)
     # than the one this is compiled with.
     # We copy these libraries into lib/ folder, so they can be found on game
     # startup. See comment in root CMakeLists.txt for how this works exactly.
-    install(CODE [[
+    install(CODE "
         file(GET_RUNTIME_DEPENDENCIES
                 RESOLVED_DEPENDENCIES_VAR DEPENDENCIES
                 UNRESOLVED_DEPENDENCIES_VAR UNRESOLVED_DEPENDENCIES
-                EXECUTABLES openttd
-                POST_EXCLUDE_REGEXES "ld-linux|libc.so|libdl.so|libm.so|libgcc_s.so|libpthread.so|librt.so|libstdc...so")
+                EXECUTABLES ${BINARY_NAME}
+                POST_EXCLUDE_REGEXES \"ld-linux|libc.so|libdl.so|libm.so|libgcc_s.so|libpthread.so|librt.so|libstdc...so\")
         file(INSTALL
-                DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
-                FILES ${DEPENDENCIES}
+                DESTINATION \"\${CMAKE_INSTALL_PREFIX}/lib\"
+                FILES \${DEPENDENCIES}
                 FOLLOW_SYMLINK_CHAIN)
 
         # This should not be possible, but error out when a dependency cannot
         # be resolved.
-        list(LENGTH UNRESOLVED_DEPENDENCIES UNRESOLVED_LENGTH)
-        if(${UNRESOLVED_LENGTH} GREATER 0)
-            message(FATAL_ERROR "Unresolved dependencies: ${UNRESOLVED_DEPENDENCIES}")
+        list(LENGTH \${UNRESOLVED_DEPENDENCIES} UNRESOLVED_LENGTH)
+        if(\${UNRESOLVED_LENGTH} GREATER 0)
+            message(FATAL_ERROR \"Unresolved dependencies: \${UNRESOLVED_DEPENDENCIES}\")
         endif()
-    ]])
+    ")
 endif()
