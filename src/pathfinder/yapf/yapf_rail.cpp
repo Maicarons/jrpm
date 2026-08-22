@@ -500,6 +500,13 @@ public:
 			}
 		}
 
+		/* [FIX-couple-upstream] Destination is at the origin (path length 0):
+		 * the reservation already reaches the waiting train, so the walk-back
+		 * loop never executes and pPrev stays nullptr. Return the origin's
+		 * trackdir so the train follows its existing reservation instead of
+		 * dereferencing a null pointer. Ported from pulsexlb ba9c745b0d. */
+		if (pPrev == nullptr) return origin.trackdir;
+
 		next_trackdir = pPrev->GetTrackdir();
 		if (!dont_reserve) {
 			bool reserved = this->TryReservePath(nullptr, pNode->GetLastTile(), true);

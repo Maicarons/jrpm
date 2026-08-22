@@ -57,6 +57,8 @@
 #include "table/strings.h"
 #include "table/train_cmd.h"
 
+#include <algorithm>
+
 #include "safeguards.h"
 
 extern btree::btree_multimap<VehicleID, PendingSpeedRestrictionChange> _pending_speed_restriction_change_map;
@@ -5465,6 +5467,14 @@ static void Couple(Train *v, Train *u)
 		u = u->First();
 	}
 
+	/* [FIX-couple-upstream] The couple happened at the station of the
+	 * GOTO_COUPLE order; record it as the last visited station. The
+	 * movement-loop and collision couple paths never pass through
+	 * TrainEnterStation, so without this the implicit order bookkeeping on
+	 * departure runs with an invalid station and derails order advancement.
+	 * Ported from pulsexlb a3e82095d0. */
+	v->last_station_visited = v->current_order.GetDestination().ToStationID();
+
 	v->IncrementImplicitOrderIndex();
 	ProcessOrders(v);
 	v = v->First();
@@ -5529,6 +5539,29 @@ static void Couple(Train *v, Train *u)
 	}
 
 	AdvanceWagonsAfterCouple(v_last);
+
+	/* [FIX-couple-upstream] If the absorbed consist was queued for
+	 * loading/unloading at a station, drop the stale entry: it can never
+	 * leave the queue by itself anymore and its load_unload_ticks would
+	 * eventually hit zero and trip the assert in LoadUnloadStation (crash).
+	 * Ported from pulsexlb ff85b58dd2. */
+	{
+		Station *couple_station = Station::GetIfValid(u->last_station_visited);
+		if (couple_station != nullptr) {
+			auto &loading = couple_station->loading_vehicles;
+			auto it = std::find(loading.begin(), loading.end(), u);
+			if (it != loading.end()) loading.erase(it);
+		}
+	}
+
+	/* [FIX-couple-upstream] Stale look-ahead/reservations from before the
+	 * flip: rebuild them for the combined train's new position and direction,
+	 * otherwise it drives blindly (and may run into a depot) until it meets a
+	 * PBS signal. Ported from pulsexlb a3e82095d0. */
+	v->lookahead.reset();
+	if (u != nullptr) u->lookahead.reset();
+	TryPathReserve(v);
+
 	InvalidateWindowClassesData(WindowClass::TrainList);
 	/* The physical chain order is now correct (orientation is fixed before
 	 * the merge), so give the consist the usual chance to reverse in the
