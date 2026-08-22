@@ -150,7 +150,7 @@ endif()
 
 set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
 set(CPACK_MONOLITHIC_INSTALL YES)
-set(CPACK_PACKAGE_EXECUTABLES "openttd;OpenTTD")
+set(CPACK_PACKAGE_EXECUTABLES "${BINARY_NAME};OpenTTD")
 set(CPACK_STRIP_FILES NO)
 set(CPACK_OUTPUT_FILE_PREFIX "bundles")
 
@@ -274,7 +274,7 @@ if(OPTION_PACKAGE_DEPENDENCIES)
 
         # This should not be possible, but error out when a dependency cannot
         # be resolved.
-        list(LENGTH \${UNRESOLVED_DEPENDENCIES} UNRESOLVED_LENGTH)
+        list(LENGTH \"\${UNRESOLVED_DEPENDENCIES}\" UNRESOLVED_LENGTH)
         if(\${UNRESOLVED_LENGTH} GREATER 0)
             message(FATAL_ERROR \"Unresolved dependencies: \${UNRESOLVED_DEPENDENCIES}\")
         endif()

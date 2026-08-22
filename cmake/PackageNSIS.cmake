@@ -13,7 +13,7 @@ set(CPACK_NSIS_MUI_WELCOMEFINISHPAGE_BITMAP "${CMAKE_SOURCE_DIR}/os/windows\\\\n
 set(CPACK_NSIS_MUI_UNWELCOMEFINISHPAGE_BITMAP "${CMAKE_SOURCE_DIR}/os/windows\\\\nsis-welcome.bmp")
 
 # Use the icon of the application
-set(CPACK_NSIS_INSTALLED_ICON_NAME "openttd.exe")
+set(CPACK_NSIS_INSTALLED_ICON_NAME "${BINARY_NAME}.exe")
 # Tell NSIS the binary will be in the root
 set(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
 

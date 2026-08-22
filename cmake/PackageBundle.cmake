@@ -20,7 +20,7 @@ install(
     "
         include(BundleUtilities)
         set(BU_CHMOD_BUNDLE_ITEMS TRUE)
-        fixup_bundle(\"\${CMAKE_INSTALL_PREFIX}/../MacOS/openttd\"  \"\" \"\")
+        fixup_bundle(\"\${CMAKE_INSTALL_PREFIX}/../MacOS/${BINARY_NAME}\"  \"\" \"\")
     "
     DESTINATION .
     COMPONENT Runtime)
