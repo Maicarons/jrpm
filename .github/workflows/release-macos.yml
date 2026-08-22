@@ -168,7 +168,7 @@ jobs:
       run: |
         cd build-x64
 
-        pushd _CPack_Packages/*/Bundle/OpenTTD/
+        pushd _CPack_Packages/*/Bundle/openttd-*/
 
         # Remove the Applications symlink from the staging folder
         rm -f Applications
