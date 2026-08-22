@@ -195,25 +195,10 @@ jobs:
         mkdir ${FOLDER_NAME}
         find . -maxdepth 1 -not -name . -not -name build -not -name ${FOLDER_NAME} -exec mv {} ${FOLDER_NAME}/ \;
 
-        echo "::group::Create tarball (xz) bundle"
-        tar --xz -cvf build/bundles/${FOLDER_NAME}-source.tar.xz ${FOLDER_NAME}
-        echo "::endgroup::"
-
         # This tarball is only to be used within this workflow.
         echo "::group::Create tarball (gz) bundle"
         tar --gzip -cvf source.tar.gz ${FOLDER_NAME}
         echo "::endgroup::"
-
-        echo "::group::Create zip bundle"
-        zip -9 -r build/bundles/${FOLDER_NAME}-source.zip ${FOLDER_NAME}
-        echo "::endgroup::"
-
-    - name: Store bundles
-      uses: actions/upload-artifact@v7
-      with:
-        name: openttd-source
-        path: build/bundles/*
-        retention-days: 5
 
     - name: Store source (for other jobs)
       uses: actions/upload-artifact@v7

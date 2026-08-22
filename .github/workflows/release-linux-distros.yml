@@ -7,6 +7,10 @@ on:
         required: false
         type: string
         default: ""
+      version:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   linux-distro:
@@ -89,6 +93,7 @@ jobs:
           -DOPTION_LTO=ON \
           -DOPTION_TRIM_PATH_PREFIX=ON \
           -DCMAKE_INSTALL_PREFIX=/usr \
+          -DJRPM_RELEASE_VERSION=${{ inputs.version }} \
           # EOF
         echo "::endgroup::"
 

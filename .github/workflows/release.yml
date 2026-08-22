@@ -42,6 +42,7 @@ jobs:
     secrets: inherit
 
     with:
+      version: ${{ needs.source.outputs.version }}
       survey_key: ${{ needs.source.outputs.survey_key }}
 
   linux_distros:
@@ -52,6 +53,7 @@ jobs:
     secrets: inherit
 
     with:
+      version: ${{ needs.source.outputs.version }}
       survey_key: ${{ needs.source.outputs.survey_key }}
 
   linux-dedicated:
@@ -62,6 +64,7 @@ jobs:
     secrets: inherit
 
     with:
+      version: ${{ needs.source.outputs.version }}
       survey_key: ${{ needs.source.outputs.survey_key }}
 
   macos:
@@ -72,6 +75,7 @@ jobs:
     secrets: inherit
 
     with:
+      version: ${{ needs.source.outputs.version }}
       survey_key: ${{ needs.source.outputs.survey_key }}
 
   windows:
@@ -83,6 +87,7 @@ jobs:
 
     with:
       is_tag: ${{ needs.source.outputs.is_tag }}
+      version: ${{ needs.source.outputs.version }}
       survey_key: ${{ needs.source.outputs.survey_key }}
 
   publish:

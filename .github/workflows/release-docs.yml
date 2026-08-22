@@ -60,17 +60,12 @@ jobs:
         cd ${GITHUB_WORKSPACE}/build
 
         mv docs/source ${BASENAME}-docs
-        mv docs/ai-api ${BASENAME}-docs-ai
         mv docs/gs-api ${BASENAME}-docs-gs
 
         mkdir -p bundles
 
         echo "::group::Create docs bundle"
         tar --xz -cf bundles/${BASENAME}-docs.tar.xz ${BASENAME}-docs
-        echo "::endgroup::"
-
-        echo "::group::Create AI API docs bundle"
-        tar --xz -cf bundles/${BASENAME}-docs-ai.tar.xz ${BASENAME}-docs-ai
         echo "::endgroup::"
 
         echo "::group::Create GameScript API docs bundle"

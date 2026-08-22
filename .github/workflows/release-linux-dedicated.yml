@@ -7,6 +7,10 @@ on:
         required: false
         type: string
         default: ""
+      version:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   linux:
@@ -93,6 +97,7 @@ jobs:
           -DOPTION_TRIM_PATH_PREFIX=ON \
           -DOPTION_SURVEY_KEY=${{ inputs.survey_key }} \
           -DOPTION_PACKAGE_DEPENDENCIES=ON \
+          -DJRPM_RELEASE_VERSION=${{ inputs.version }} \
           # EOF
         echo "::endgroup::"
 

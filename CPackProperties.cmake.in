@@ -1,14 +1,22 @@
-# Make the current version available to CPack
-set(CPACK_PACKAGE_VERSION "@REV_VERSION@")
+# Make the current version available to CPack.
+# Prefer a CI-provided override (JRPM_RELEASE_VERSION) when present, so the
+# released binaries carry the exact tag version instead of whatever `git
+# describe` happens to resolve inside the detached source tarball.
+if(DEFINED CPACK_PACKAGE_VERSION AND NOT CPACK_PACKAGE_VERSION STREQUAL "16.0")
+    # Already set (e.g. by JRPM_RELEASE_VERSION override); keep it.
+else()
+    set(CPACK_PACKAGE_VERSION "@REV_VERSION@")
+endif()
 
 # Name the output file with the correct version
-string(REPLACE "#CPACK_PACKAGE_VERSION#" "@REV_VERSION@" CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}")
+string(REPLACE "#CPACK_PACKAGE_VERSION#" "${CPACK_PACKAGE_VERSION}" CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}")
 
 string(REGEX REPLACE "^jgrpp-" "" CPACK_DEBIAN_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION}")
+string(REGEX REPLACE "^jrpm-" "" CPACK_DEBIAN_PACKAGE_VERSION "${CPACK_DEBIAN_PACKAGE_VERSION}")
 
 if (CPACK_BUNDLE_PLIST_SOURCE)
     # Rewrite the Info.plist.in to contain the correct version
     file(READ ${CPACK_BUNDLE_PLIST_SOURCE} INFO_PLIST_CONTENT)
-    string(REPLACE "#CPACK_PACKAGE_VERSION#" "@REV_VERSION@" INFO_PLIST_CONTENT "${INFO_PLIST_CONTENT}")
+    string(REPLACE "#CPACK_PACKAGE_VERSION#" "${CPACK_PACKAGE_VERSION}" INFO_PLIST_CONTENT "${INFO_PLIST_CONTENT}")
     file(WRITE ${CPACK_BUNDLE_PLIST} "${INFO_PLIST_CONTENT}")
 endif (CPACK_BUNDLE_PLIST_SOURCE)

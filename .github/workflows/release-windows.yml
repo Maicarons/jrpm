@@ -10,6 +10,10 @@ on:
       is_tag:
         required: true
         type: string
+      version:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   windows:
@@ -101,6 +105,7 @@ jobs:
           -DHOST_BINARY_DIR=${GITHUB_WORKSPACE}/build-host \
           -DCMAKE_BUILD_TYPE=RelWithDebInfo \
           -DOPTION_SURVEY_KEY=${{ inputs.survey_key }} \
+          -DJRPM_RELEASE_VERSION=${{ inputs.version }} \
           # EOF
         echo "::endgroup::"
 
@@ -130,6 +135,7 @@ jobs:
           -DHOST_BINARY_DIR=${GITHUB_WORKSPACE}/build-host \
           -DCMAKE_BUILD_TYPE=RelWithDebInfo \
           -DOPTION_SURVEY_KEY=${{ inputs.survey_key }} \
+          -DJRPM_RELEASE_VERSION=${{ inputs.version }} \
           # EOF
         echo "::endgroup::"
 
@@ -150,18 +156,6 @@ jobs:
         cd ${GITHUB_WORKSPACE}/build
         echo "::group::Run CPack"
         cpack
-        echo "::endgroup::"
-
-        echo "::group::Prepare PDB to be bundled"
-        PDB=$(ls bundles/*.zip | cut -d/ -f2 | sed 's/.zip$/.pdb/')
-        # The executable is renamed to openttd-jrpm (see CMake BINARY_NAME), so the
-        # MSVC-generated PDB is openttd-jrpm.pdb, not the upstream default openttd.pdb.
-        if [ -f openttd-jrpm.pdb ]; then
-          cp openttd-jrpm.pdb "bundles/${PDB}"
-        else
-          cp "$(ls *.pdb | head -1)" "bundles/${PDB}"
-        fi
-        xz -9 "bundles/${PDB}"
         echo "::endgroup::"
 
         echo "::group::Cleanup"
