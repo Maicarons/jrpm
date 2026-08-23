@@ -18,3 +18,5 @@ openttd.new
 
 # Local reference material (not part of the project)
 /_refs/
+*.bak
+*.grf.corrupt_bak
