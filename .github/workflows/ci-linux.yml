@@ -81,8 +81,8 @@ jobs:
 
     - name: Get OpenGFX
       run: |
-        mkdir -p ~/.local/share/openttd/baseset
-        cd ~/.local/share/openttd/baseset
+        mkdir -p ~/.local/share/openttd/baseset ~/.openttd/baseset build/baseset
+        cd build/baseset
 
         echo "::group::Download OpenGFX"
         curl -L https://cdn.openttd.org/opengfx-releases/0.6.0/opengfx-0.6.0-all.zip -o opengfx-all.zip
@@ -100,6 +100,9 @@ jobs:
         echo "::endgroup::"
 
         rm -f opengfx-all.zip opengfx-0.6.0.tar
+        # Mirror into the personal data dirs OpenTTD also scans for basesets
+        cp -r ./* ~/.local/share/openttd/baseset/ 2>/dev/null || true
+        cp -r ./* ~/.openttd/baseset/ 2>/dev/null || true
 
     - name: Install GCC problem matcher
       uses: ammaraskar/gcc-problem-matcher@master
