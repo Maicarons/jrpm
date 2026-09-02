@@ -27,7 +27,7 @@ static const NWidgetPart _nested_land_tooltips_widgets[] = {
 };
 
 static WindowDesc _land_tooltips_desc(__FILE__, __LINE__,
-    WindowPosition::Manual, "land_tooltips", 0, 0,
+    WindowPosition::Manual, nullptr, 0, 0,
     WindowClass::CmLandTooltips, WindowClass::None,
     {},
     _nested_land_tooltips_widgets

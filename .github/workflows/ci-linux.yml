@@ -90,9 +90,16 @@ jobs:
 
         echo "::group::Unpack OpenGFX"
         unzip opengfx-all.zip
+        # opengfx-0.6.0-all.zip only wraps opengfx-0.6.0.tar; extract it so the .grf baseset files exist
+        tar xf opengfx-0.6.0.tar
+        # Flatten if the tarball extracted into a subfolder (OpenTTD scans the baseset dir directly)
+        if [ -d opengfx-0.6.0 ]; then
+          mv opengfx-0.6.0/* . 2>/dev/null || true
+          rmdir opengfx-0.6.0 2>/dev/null || true
+        fi
         echo "::endgroup::"
 
-        rm -f opengfx-all.zip
+        rm -f opengfx-all.zip opengfx-0.6.0.tar
 
     - name: Install GCC problem matcher
       uses: ammaraskar/gcc-problem-matcher@master
