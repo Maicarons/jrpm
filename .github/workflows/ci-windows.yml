@@ -31,31 +31,6 @@ jobs:
       id: vcpkg
       uses: OpenTTD/actions/setup-vcpkg@v6
 
-    - name: Install OpenGFX
-      shell: bash
-      run: |
-        mkdir -p "C:/Users/Public/Documents/OpenTTD/baseset" build/baseset
-        cd build/baseset
-
-        echo "::group::Download OpenGFX"
-        curl -L https://cdn.openttd.org/opengfx-releases/0.6.0/opengfx-0.6.0-all.zip -o opengfx-all.zip
-        echo "::endgroup::"
-
-        echo "::group::Unpack OpenGFX"
-        unzip opengfx-all.zip
-        # opengfx-0.6.0-all.zip only wraps opengfx-0.6.0.tar; extract it so the .grf baseset files exist
-        tar xf opengfx-0.6.0.tar
-        # Flatten if the tarball extracted into a subfolder (OpenTTD scans the baseset dir directly)
-        if [ -d opengfx-0.6.0 ]; then
-          mv opengfx-0.6.0/* . 2>/dev/null || true
-          rmdir opengfx-0.6.0 2>/dev/null || true
-        fi
-        echo "::endgroup::"
-
-        rm -f opengfx-all.zip opengfx-0.6.0.tar
-        # Mirror into the personal data dir OpenTTD also scans for basesets
-        cp -r ./* "C:/Users/Public/Documents/OpenTTD/baseset/" 2>/dev/null || true
-
     - name: Install MSVC problem matcher
       uses: ammaraskar/msvc-problem-matcher@master
 
@@ -83,6 +58,31 @@ jobs:
         echo "::group::Build"
         cmake --build . --target all openttd_test
         echo "::endgroup::"
+
+    - name: Install OpenGFX
+      shell: bash
+      run: |
+        mkdir -p "C:/Users/Public/Documents/OpenTTD/baseset" build/baseset
+        cd build/baseset
+
+        echo "::group::Download OpenGFX"
+        curl -L https://cdn.openttd.org/opengfx-releases/0.6.0/opengfx-0.6.0-all.zip -o opengfx-all.zip
+        echo "::endgroup::"
+
+        echo "::group::Unpack OpenGFX"
+        unzip opengfx-all.zip
+        # opengfx-0.6.0-all.zip only wraps opengfx-0.6.0.tar; extract it so the .grf baseset files exist
+        tar xf opengfx-0.6.0.tar
+        # Flatten if the tarball extracted into a subfolder (OpenTTD scans the baseset dir directly)
+        if [ -d opengfx-0.6.0 ]; then
+          mv opengfx-0.6.0/* . 2>/dev/null || true
+          rmdir opengfx-0.6.0 2>/dev/null || true
+        fi
+        echo "::endgroup::"
+
+        rm -f opengfx-all.zip opengfx-0.6.0.tar
+        # Mirror into the personal data dir OpenTTD also scans for basesets
+        cp -r ./* "C:/Users/Public/Documents/OpenTTD/baseset/" 2>/dev/null || true
 
     - name: Test
       shell: bash

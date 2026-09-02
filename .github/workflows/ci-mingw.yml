@@ -49,6 +49,29 @@ jobs:
           opus:p
           opusfile:p
 
+    - name: Install GCC problem matcher
+      uses: ammaraskar/gcc-problem-matcher@master
+
+    - name: Build
+      shell: msys2 {0}
+      env:
+        NINJA_STATUS: "[%f/%t -- %e] " # [finished_edges/total_edges -- elapsed_time], default value is "[%f/%t] "
+      run: |
+        mkdir build
+        cd build
+
+        echo "::group::CMake"
+        cmake .. \
+          -GNinja \
+          -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
+          -DOPTION_NO_WARN_UNINIT=1 \
+          # EOF
+        echo "::endgroup::"
+
+        echo "::group::Build"
+        cmake --build . --target all openttd_test
+        echo "::endgroup::"
+
     - name: Install OpenGFX
       shell: bash
       run: |
@@ -73,29 +96,6 @@ jobs:
         rm -f opengfx-all.zip opengfx-0.6.0.tar
         # Mirror into the personal data dir OpenTTD also scans for basesets
         cp -r ./* "C:/Users/Public/Documents/OpenTTD/baseset/" 2>/dev/null || true
-
-    - name: Install GCC problem matcher
-      uses: ammaraskar/gcc-problem-matcher@master
-
-    - name: Build
-      shell: msys2 {0}
-      env:
-        NINJA_STATUS: "[%f/%t -- %e] " # [finished_edges/total_edges -- elapsed_time], default value is "[%f/%t] "
-      run: |
-        mkdir build
-        cd build
-
-        echo "::group::CMake"
-        cmake .. \
-          -GNinja \
-          -DCMAKE_CXX_FLAGS="-fuse-ld=lld" \
-          -DOPTION_NO_WARN_UNINIT=1 \
-          # EOF
-        echo "::endgroup::"
-
-        echo "::group::Build"
-        cmake --build . --target all openttd_test
-        echo "::endgroup::"
 
     - name: Test
       shell: msys2 {0}

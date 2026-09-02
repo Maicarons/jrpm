@@ -45,6 +45,28 @@ jobs:
       id: vcpkg
       uses: OpenTTD/actions/setup-vcpkg@v6
 
+    - name: Install GCC problem matcher
+      uses: ammaraskar/gcc-problem-matcher@master
+
+    - name: Build
+      run: |
+        mkdir build
+        cd build
+
+        echo "::group::CMake"
+        cmake .. \
+          -DCMAKE_OSX_ARCHITECTURES=${{ inputs.full_arch }} \
+          -DVCPKG_TARGET_TRIPLET=${{ inputs.arch }}-osx \
+          -DCMAKE_TOOLCHAIN_FILE=${{ steps.vcpkg.outputs.vcpkg-cmake }} \
+          ${{ inputs.extra-cmake-parameters }} \
+          # EOF
+        echo "::endgroup::"
+
+        echo "::group::Build"
+        echo "Running on $(sysctl -n hw.logicalcpu) cores"
+        cmake --build . -j $(sysctl -n hw.logicalcpu) --target all openttd_test
+        echo "::endgroup::"
+
     - name: Install OpenGFX
       run: |
         mkdir -p ~/Documents/OpenTTD/baseset build/baseset
@@ -68,28 +90,6 @@ jobs:
         rm -f opengfx-all.zip opengfx-0.6.0.tar
         # Mirror into the personal data dir OpenTTD also scans for basesets
         cp -r ./* ~/Documents/OpenTTD/baseset/ 2>/dev/null || true
-
-    - name: Install GCC problem matcher
-      uses: ammaraskar/gcc-problem-matcher@master
-
-    - name: Build
-      run: |
-        mkdir build
-        cd build
-
-        echo "::group::CMake"
-        cmake .. \
-          -DCMAKE_OSX_ARCHITECTURES=${{ inputs.full_arch }} \
-          -DVCPKG_TARGET_TRIPLET=${{ inputs.arch }}-osx \
-          -DCMAKE_TOOLCHAIN_FILE=${{ steps.vcpkg.outputs.vcpkg-cmake }} \
-          ${{ inputs.extra-cmake-parameters }} \
-          # EOF
-        echo "::endgroup::"
-
-        echo "::group::Build"
-        echo "Running on $(sysctl -n hw.logicalcpu) cores"
-        cmake --build . -j $(sysctl -n hw.logicalcpu) --target all openttd_test
-        echo "::endgroup::"
 
     - name: Test
       run: |

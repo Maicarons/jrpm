@@ -79,6 +79,23 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
 
+    - name: Install GCC problem matcher
+      uses: ammaraskar/gcc-problem-matcher@master
+
+    - name: Build
+      run: |
+        mkdir build
+        cd build
+
+        echo "::group::CMake"
+        cmake .. -DCMAKE_TOOLCHAIN_FILE=${{ runner.temp }}/vcpkg/scripts/buildsystems/vcpkg.cmake ${{ inputs.extra-cmake-parameters }}
+        echo "::endgroup::"
+
+        echo "::group::Build"
+        echo "Running on $(nproc) cores"
+        cmake --build . -j $(nproc) --target all openttd_test
+        echo "::endgroup::"
+
     - name: Get OpenGFX
       run: |
         mkdir -p ~/.local/share/openttd/baseset ~/.openttd/baseset build/baseset
@@ -103,23 +120,6 @@ jobs:
         # Mirror into the personal data dirs OpenTTD also scans for basesets
         cp -r ./* ~/.local/share/openttd/baseset/ 2>/dev/null || true
         cp -r ./* ~/.openttd/baseset/ 2>/dev/null || true
-
-    - name: Install GCC problem matcher
-      uses: ammaraskar/gcc-problem-matcher@master
-
-    - name: Build
-      run: |
-        mkdir build
-        cd build
-
-        echo "::group::CMake"
-        cmake .. -DCMAKE_TOOLCHAIN_FILE=${{ runner.temp }}/vcpkg/scripts/buildsystems/vcpkg.cmake ${{ inputs.extra-cmake-parameters }}
-        echo "::endgroup::"
-
-        echo "::group::Build"
-        echo "Running on $(nproc) cores"
-        cmake --build . -j $(nproc) --target all openttd_test
-        echo "::endgroup::"
 
     - name: Test
       run: |
