@@ -381,7 +381,7 @@ protected:
 						(t->dest_tile == this->new_tile ||
 						 (t->current_order.GetDepotActionType() & ODATFB_NEAREST_DEPOT) != 0);
 				if (!allow) {
-					this->err = EC_NO_WAY;
+					this->err = ErrorCode::EC_NO_WAY;
 					return false;
 				}
 			}

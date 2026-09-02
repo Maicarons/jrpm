@@ -4689,7 +4689,7 @@ public:
 
 	EventState OnHotkey(int hotkey) override
 	{
-		if (!IsLocalTarget()) return ES_NOT_HANDLED;
+		if (!IsLocalTarget()) return EventState::NotHandled;
 
 		switch (hotkey) {
 			case OHK_SKIP:           this->OrderClick_Skip(); break;

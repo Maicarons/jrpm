@@ -245,6 +245,15 @@ struct ResizeInfo {
 };
 
 /**
+ * Sort button state for DrawSortButtonState().
+ */
+enum SortButtonState : uint8_t {
+	SBS_OFF,  ///< Do not sort (with this button).
+	SBS_DOWN, ///< Sort ascending.
+	SBS_UP,   ///< Sort descending.
+};
+
+/**
  * Window flags.
  */
 enum class WindowFlag : uint8_t {
@@ -619,6 +628,7 @@ public:
 	void DrawWidgets() const;
 	void DrawViewport(NWidgetDisplayFlags display_flags) const;
 	void DrawSortButton(WidgetID widget, bool descending) const;
+	void DrawSortButtonState(WidgetID widget, SortButtonState state) const;
 	static int SortButtonWidth();
 
 	Window *FindChildWindow(WindowClass wc = WindowClass::Invalid) const;

@@ -838,6 +838,24 @@ int Window::SortButtonWidth()
 	return NWidgetScrollbar::GetVerticalDimension().width + 1;
 }
 
+/**
+ * Draw a sort button's up or down arrow symbol.
+ * @param widget Sort button widget
+ * @param state State of sort button
+ */
+void Window::DrawSortButtonState(WidgetID widget, SortButtonState state) const
+{
+	if (state == SBS_OFF) return;
+
+	assert(!this->widget_lookup.empty());
+	Rect r = this->GetWidget<NWidgetBase>(widget)->GetCurrentRect();
+
+	/* Sort button uses the same sprites as vertical scrollbar */
+	Dimension dim = NWidgetScrollbar::GetVerticalDimension();
+
+	DrawSpriteIgnorePadding(state == SBS_DOWN ? SPR_ARROW_DOWN : SPR_ARROW_UP, PAL_NONE, r.WithWidth(dim.width, _current_text_dir == TD_LTR), SA_CENTER);
+}
+
 bool _draw_widget_outlines;
 
 static void DrawOutline(const Window *, const NWidgetBase *wid)

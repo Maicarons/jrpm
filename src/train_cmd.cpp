@@ -2998,31 +2998,6 @@ void ReverseTrainSwapVehicles(Train *v)
 	InvalidateVehicleTickCaches();
 }
 
-
-
-/**
- * Reverse only the chain order of a train, without touching directions,
- * positions or the primary vehicle. Used when a consist must be attached to
- * a joint in reversed order to keep chain order matching spatial order.
- */
-static void ReverseTrainChainOrder(Train *v)
-{
-	assert(v == v->First());
-	std::vector<Train *> parts;
-	for (Train *u = v; u != nullptr; u = u->Next()) parts.push_back(u);
-
-	parts[0]->SetNext(nullptr);
-	for (size_t i = 1; i < parts.size(); ++i) {
-		parts[i]->SetNext(parts[i - 1]);
-	}
-
-	Train *new_first = parts.back();
-	for (Train *u = new_first; u != nullptr; u = u->Next()) {
-		u->SetFirst(new_first);
-		u->SetLast(parts[0]);
-	}
-}
-
 /**
  * Reverse a train in place without changing the physical positions of single
  * vehicles: every vehicle keeps its position and only turns around, while the
@@ -6389,6 +6364,7 @@ static void ReverseTrainMultiheaded(Train *v)
 	}
 }
 
+/**
  * Reverse a train for coupling by flipping the consist in place.
  *
  * Single vehicles keep their physical position and only turn around; the chain

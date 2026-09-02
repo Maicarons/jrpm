@@ -1271,8 +1271,8 @@ static void StandaloneListInsertUpdateVehicles(OrderList *ol, VehicleOrderID sel
 			/* We are inserting an order just before the current implicit order.
 			 * We do not know whether we will reach current implicit or the newly inserted order first.
 			 * So, disable creation of implicit orders until we are on track again. */
-			uint16_t &gv_flags = u->GetGroundVehicleFlags();
-			SetBit(gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS);
+			GroundVehicleFlags &gv_flags = u->GetGroundVehicleFlags();
+			gv_flags.Set(GroundVehicleFlag::SuppressImplicitOrders);
 		}
 		if (sel_ord <= u->cur_implicit_order_index) {
 			uint cur = u->cur_implicit_order_index + 1;
