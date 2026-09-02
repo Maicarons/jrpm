@@ -656,7 +656,7 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 		}
 
 		case 0x46: // Motion counter
-			return v->First()->motion_counter;
+			return v->Primary()->motion_counter;
 
 		case 0x47: { // Vehicle cargo info
 			/* Format: ccccwwtt
@@ -720,10 +720,10 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 
 		case 0x4D: // Position within articulated vehicle
 			if (!HasBit(v->grf_cache.cache_valid, NCVV_POSITION_IN_VEHICLE)) {
-			uint8_t artic_before = 0;
-			for (const Vehicle *u = v; u != nullptr && u->IsArticulatedPart(); u = u->Previous()) artic_before++;
-			uint8_t artic_after = 0;
-			for (const Vehicle *u = v; u != nullptr && u->HasArticulatedPart(); u = u->Next()) artic_after++;
+				uint8_t artic_before = 0;
+				for (const Vehicle *u = v; u != nullptr && u->IsArticulatedPart(); u = u->Previous()) artic_before++;
+				uint8_t artic_after = 0;
+				for (const Vehicle *u = v; u != nullptr && u->HasArticulatedPart(); u = u->Next()) artic_after++;
 				v->grf_cache.position_in_vehicle = artic_before | artic_after << 8;
 				SetBit(v->grf_cache.cache_valid, NCVV_POSITION_IN_VEHICLE);
 			}
@@ -1074,8 +1074,8 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 				case 0x75: return GB(t->gcache.cached_power,  8, 24);
 				case 0x76: return GB(t->gcache.cached_power, 16, 16);
 				case 0x77: return GB(t->gcache.cached_power, 24,  8);
-				case 0x7C: return t->First()->index.base();
-				case 0x7D: return GB(t->First()->index.base(), 8, 8);
+				case 0x7C: return t->Primary()->index.base();
+				case 0x7D: return GB(t->Primary()->index.base(), 8, 8);
 				case 0x7F: return 0; // Used for vehicle reversing hack in TTDP
 			}
 			break;
@@ -1172,7 +1172,7 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 		return nullptr;
 	}
 
-	const Order &order = v->First()->current_order;
+	const Order &order = v->Primary()->current_order;
 	bool not_loading = (order.GetUnloadType() == OrderUnloadType::NoUnload) && (order.GetLoadType() == OrderLoadType::NoLoad);
 	bool in_motion = !order.IsType(OT_LOADING) || not_loading;
 
@@ -1237,7 +1237,7 @@ VehicleResolverObject::VehicleResolverObject(EngineID engine_type, const Vehicle
 		CallbackID callback, uint32_t callback_param1, uint32_t callback_param2)
 	: SpecializedResolverObject<VehicleRandomTriggers>(GetEngineGrfFile(engine_type), callback, callback_param1, callback_param2),
 	self_scope(*this, engine_type, v, rotor_in_gui),
-	parent_scope(*this, engine_type, ((v != nullptr) ? v->First() : v), rotor_in_gui),
+	parent_scope(*this, engine_type, ((v != nullptr) ? v->Primary() : v), rotor_in_gui),
 	relative_scope(*this, engine_type, v, rotor_in_gui),
 	cached_relative_count(0)
 {

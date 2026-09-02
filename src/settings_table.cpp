@@ -692,6 +692,7 @@ static void TownFoundingChanged(int32_t new_value)
 static void InvalidateVehTimetableWindow(int32_t new_value)
 {
 	InvalidateWindowClassesData(WindowClass::VehicleTimetable, VIWD_MODIFY_ORDERS);
+		InvalidateWindowClassesData(WindowClass::OrderListTimetable, VIWD_MODIFY_ORDERS);
 	InvalidateWindowClassesData(WindowClass::ScheduledDispatchSlots, VIWD_MODIFY_ORDERS);
 	SetWindowClassesDirty(WindowClass::TraceRestrict);
 }
@@ -699,6 +700,7 @@ static void InvalidateVehTimetableWindow(int32_t new_value)
 static void ChangeTimetableInTicksMode(int32_t new_value)
 {
 	SetWindowClassesDirty(WindowClass::VehicleOrders);
+		SetWindowClassesDirty(WindowClass::OrderListEditor);
 	InvalidateVehTimetableWindow(new_value);
 }
 
@@ -840,7 +842,9 @@ static void EnableSingleVehSharedOrderGuiChanged(int32_t new_value)
 		InvalidateWindowClassesData(GetWindowClassForVehicleType(type));
 	}
 	SetWindowClassesDirty(WindowClass::VehicleTimetable);
+		SetWindowClassesDirty(WindowClass::OrderListEditor);
 	InvalidateWindowClassesData(WindowClass::VehicleOrders);
+		InvalidateWindowClassesData(WindowClass::OrderListTimetable);
 }
 
 static void CheckYapfRailSignalPenalties(int32_t new_value)

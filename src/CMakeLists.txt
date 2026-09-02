@@ -302,7 +302,6 @@ add_files(
     newgrf.h
     newgrf_act5.h
     newgrf_airport.cpp
-    newgrf_airtype.cpp
     newgrf_airport.h
     newgrf_airporttiles.cpp
     newgrf_airporttiles.h
@@ -405,6 +404,8 @@ add_files(
     order_serialisation.cpp
     order_serialisation.h
     order_serialisation_gui.cpp
+    orderlist_gui.cpp
+    orderlist_gui.h
     osk_gui.cpp
     palette.cpp
     palette_func.h

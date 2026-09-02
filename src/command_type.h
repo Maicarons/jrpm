@@ -36,7 +36,8 @@ DECLARE_ENUM_AS_BIT_SET(CommandCostIntlFlags)
 
 using CommandCostAllowedResultTypes = TypeList<uint32_t, struct PlanIDTag, struct VehicleIDTag, struct SignIDTag, struct GroupIDTag, struct GoalIDTag, struct TownIDTag,
 		struct StoryPageIDTag, struct StoryPageElementIDTag, struct LeagueTableElementIDTag, struct LeagueTableIDTag,
-		struct TraceRestrictSlotIDTag, struct TraceRestrictSlotGroupIDTag, struct TraceRestrictCounterIDTag>;
+		struct TraceRestrictSlotIDTag, struct TraceRestrictSlotGroupIDTag, struct TraceRestrictCounterIDTag,
+		struct OrderListIDTag>;
 using CommandCostResultTypeIndex = uint8_t;
 
 template <typename T>
@@ -566,6 +567,12 @@ enum class Commands : uint8_t {
 	MassChangeOrder,                        ///< mass change the target of an order
 	BulkOrder,                              ///< bulk order operations
 
+	CreateOrderList,                        ///< create a new player-created order list
+	RenameOrderList,                        ///< rename a player-created order list
+	DeleteOrderList,                        ///< delete a player-created order list
+	SetOrderListPublic,                     ///< change the visibility of a player-created order list
+	ExitExecuteSchedule,                    ///< stop executing the assigned schedule and return to the vehicle's own orders
+
 	ChangeServiceInterval,                  ///< change the service interval of a vehicle
 
 	BuildIndustry,                          ///< build a new industry
@@ -819,6 +826,7 @@ enum class CommandCallback : uint8_t {
 	/* order_gui.cpp */
 	InsertOrder,
 	InsertOrdersFromVehicle,
+	CreateOrderList,
 
 	/* plans_gui.cpp */
 	AddPlan,

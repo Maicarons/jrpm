@@ -102,39 +102,69 @@ private:
 	bool FindSafeCouplePositionProc(TileIndex tile, Trackdir td)
 	{
 		if (IsRailDepotTile(tile)) return false;
+
+		/* Reaching a tile occupied by the wait-for-couple partner IS the
+		 * destination -- do not try to reserve its tiles. */
+		for (const Train *t : VehiclesOnTile<VehicleType::Train>(tile)) {
+			if (ValidateCoupleCandidate(Yapf().GetVehicle(), t->First(), tile) != nullptr) return true;
+		}
 		TrackdirBits tdb = TrackdirToTrackdirBits(td);
 		TrackBits tracks = TrackdirBitsToTrackBits(tdb);
-		if (HasReservedTracks(tile, tracks)) {
+
+		/* For station tiles, search for a waiting train directly across the
+		 * entire platform, without requiring a reservation. Block signals do
+		 * not create reservations, but a train waiting for coupling is a valid
+		 * safe position regardless. */
+		if (IsRailStationTile(tile)) {
 			Train *best = nullptr;
 			Train *second_best = nullptr;
 			auto check_train_on_tile = [&](TileIndex t) {
 				for (Train *tr : VehiclesOnTile<VehicleType::Train>(t)) {
-					if (tr->vehstatus.Test(VehState::Crashed)) continue;
+					if (tr->vehstatus.Test(VehState::Crashed) || tr->Primary()->vehstatus.Test(VehState::Stopped)) continue;
 					if (tr->track == TRACK_BIT_WORMHOLE || HasBit((TrackBits)tr->track, TrackdirToTrack(td))) {
-						Train *head = tr->First();
+						Train *head = tr->Primary();
 						if (best != nullptr && head->index != best->index) second_best = head;
-						/* ALWAYS take the lowest ID (anti-desync!) */
 						if (best == nullptr || head->index < best->index) best = head;
 					}
 				}
 			};
-			if (IsRailStationTile(tile)) {
-				TileIndexDiff diff = TileOffsByDiagDir(TrackdirToExitdir(ReverseTrackdir(td)));
-				for (TileIndex st_tile = tile + diff; IsCompatibleTrainStationTile(st_tile, tile); st_tile += diff) {
-					check_train_on_tile(st_tile);
-				}
+			TileIndexDiff diff = TileOffsByDiagDir(TrackdirToExitdir(ReverseTrackdir(td)));
+			for (TileIndex st_tile = tile + diff; IsCompatibleTrainStationTile(st_tile, tile); st_tile += diff) {
+				check_train_on_tile(st_tile);
 			}
 			check_train_on_tile(tile);
 			if (best != nullptr) {
-				if (!best->current_order.IsType(OT_WAIT_COUPLE)) return false;
-				if (second_best != nullptr) return false;
-				/* look behind station too */
 				Vehicle *other_train = nullptr;
 				FollowTrainReservation(best, &other_train);
-				if (other_train != nullptr && other_train != best) return false;
+				if (other_train != nullptr && other_train != best) {
+					return false;
+				}
+			}
+		} else if (HasReservedTracks(tile, tracks)) {
+			Train *best = nullptr;
+			Train *second_best = nullptr;
+			auto check_train_on_tile = [&](TileIndex t) {
+				for (Train *tr : VehiclesOnTile<VehicleType::Train>(t)) {
+					if (tr->vehstatus.Test(VehState::Crashed) || tr->Primary()->vehstatus.Test(VehState::Stopped)) continue;
+					if (tr->track == TRACK_BIT_WORMHOLE || HasBit((TrackBits)tr->track, TrackdirToTrack(td))) {
+						Train *head = tr->Primary();
+						if (best != nullptr && head->index != best->index) second_best = head;
+						if (best == nullptr || head->index < best->index) best = head;
+					}
+				}
+			};
+			check_train_on_tile(tile);
+			if (best != nullptr) {
+				Vehicle *other_train = nullptr;
+				FollowTrainReservation(best, &other_train);
+				if (other_train != nullptr && other_train != best) {
+					return false;
+				}
 			}
 		} else if (GetReservedTrackbits(tile) != TRACK_BIT_NONE) {
-			if (!TryReserveRailTrack(tile, TrackdirToTrack(td))) return false;
+			if (!TryReserveRailTrack(tile, TrackdirToTrack(td))) {
+				return false;
+			}
 			UnreserveRailTrack(tile, TrackdirToTrack(td));
 		}
 		return true;
@@ -150,9 +180,19 @@ private:
 	{
 		TileIndex     start = tile;
 		TileIndexDiff diff = TileOffsByDiagDir(dir);
+		const Train *v = Yapf().GetVehicle();
+
+		/* The strict couple semantics: the partner must be alone in its
+		 * signal block before anything is reserved towards it. */
+		if (v->current_order.IsType(OT_GOTO_COUPLE) && !IsCoupleTargetBlockClear(v)) return false;
 
 		do {
-			if (HasStationReservation(tile)) return false;
+			/* Tiles of the claimed couple partner's own platform are shared:
+			 * the partner's arrival reservation covers the whole strip, also
+			 * the empty tiles in front of and behind its body. Any other
+			 * reservation on the platform (another train standing in the same
+			 * block) still blocks. */
+			if (HasStationReservation(tile) && !IsCouplePartnerTile(v, tile)) return false;
 			SetRailStationReservation(tile, true);
 			MarkTileDirtyByTile(tile, VMDF_NOT_MAP_MODE);
 			tile = TileAdd(tile, diff);
@@ -208,8 +248,11 @@ private:
 		if (IsRailStationTile(tile)) {
 			TileIndex     start = tile;
 			TileIndexDiff diff = TileOffsByDiagDir(TrackdirToExitdir(ReverseTrackdir(td)));
+			const Train *v = Yapf().GetVehicle();
 			while ((tile != this->res_fail_tile || td != this->res_fail_td) && IsCompatibleTrainStationTile(tile, start)) {
-				SetRailStationReservation(tile, false);
+				/* Never clear the tiles of the claimed couple partner's own
+				 * platform: its arrival reservation must stay intact. */
+				if (!IsCouplePartnerTile(v, tile)) SetRailStationReservation(tile, false);
 				tile = TileAdd(tile, diff);
 			}
 		} else if (tile != this->res_fail_tile || td != this->res_fail_td) {
@@ -287,7 +330,9 @@ public:
 		/* Don't bother if the target is reserved. */
 		PBSWaitingPositionRestrictedSignalState restricted_signal_state;
 		restricted_signal_state.defer_test_if_slot_conditional = true;
-		if (!unsafe_pos && !IsWaitingPositionFree(Yapf().GetVehicle(), this->res_dest_tile, this->res_dest_td, false, &restricted_signal_state)) return false;
+		if (!unsafe_pos && !IsWaitingPositionFree(Yapf().GetVehicle(), this->res_dest_tile, this->res_dest_td, false, &restricted_signal_state)) {
+			return false;
+		}
 
 		/* The temporary slot state only needs to be pushed to the stack (i.e. activated) on first use */
 		static TraceRestrictSlotTemporaryState temporary_slot_state;
@@ -466,16 +511,28 @@ public:
 		return 't';
 	}
 
-	static Trackdir stFindNearestCoupleTrain(const Train *v, bool dont_reserve)
+	static Trackdir stFindNearestCoupleTrain(const Train *v, bool dont_reserve, Train **couple_target, uint32_t *couple_cost)
 	{
 		/* Create pathfinder instance */
 		Tpf pf1;
 		pf1.DisableCache(true);
-		return pf1.FindNearestCoupleTrain(v, dont_reserve);
+		Trackdir ret = pf1.FindNearestCoupleTrain(v, dont_reserve);
+		if (couple_target != nullptr) {
+			*couple_target = (ret != INVALID_TRACKDIR) ? pf1.couple_target_found : nullptr;
+		}
+		if (couple_cost != nullptr) {
+			*couple_cost = (ret != INVALID_TRACKDIR) ? pf1.couple_cost_found : 0;
+		}
+		return ret;
 	}
+
+	Train *couple_target_found = nullptr; ///< Contact-end vehicle of the waiting train found at the best node
+	uint32_t couple_cost_found = 0;       ///< Path cost of the best node the couple target was found at
 
 	Trackdir FindNearestCoupleTrain(const Train *v, bool dont_reserve)
 	{
+		this->couple_target_found = nullptr;
+
 		PBSTileInfo origin = FollowTrainReservation(v, nullptr, FollowTrainReservationFlag::IgnoreLookahead);
 		/* Set origin and destination. */
 		Yapf().SetOrigin(origin.tile, origin.trackdir);
@@ -487,24 +544,40 @@ public:
 		/* Found a destination, set as reservation target. */
 		Node *pNode = Yapf().GetBestNode();
 		this->SetReservationTarget(pNode, pNode->GetLastTile(), pNode->GetLastTrackdir());
+		this->couple_cost_found = static_cast<uint32_t>(pNode->GetCost());
+
+		/* Resolve the concrete coupling target at the chosen destination so the
+		 * caller can brake for the exact contact point. The claim of another
+		 * approaching consist on a waiting train makes the train re-select. */
+		{
+			TileIndex dest_tile = pNode->GetLastTile();
+			Trackdir dest_td = pNode->GetLastTrackdir();
+			Train *target = ResolveCoupleTargetStation(v, dest_tile, dest_td, true, this->couple_cost_found);
+			if (target == nullptr && !IsRailStationTile(dest_tile)) {
+				target = GetTrainForReservation(dest_tile, TrackdirToTrack(dest_td));
+				if (target != nullptr) target = ValidateCoupleCandidate(v, target->First(), dest_tile, true, this->couple_cost_found);
+			}
+			this->couple_target_found = target;
+		}
 
 		/* Walk through the path back to the origin. */
 		Trackdir next_trackdir = INVALID_TRACKDIR;
 		Node *pPrev = nullptr;
+		int safe_checks = 0, safe_fails = 0;
 		while (pNode->parent != nullptr) {
 			pPrev = pNode;
 			pNode = pNode->parent;
 
 			if (!this->CheckSafePositionOnNode(pPrev)) {
-				return INVALID_TRACKDIR;
+				safe_fails++;
+				break;
 			}
+			safe_checks++;
 		}
 
-		/* [FIX-couple-upstream] Destination is at the origin (path length 0):
-		 * the reservation already reaches the waiting train, so the walk-back
-		 * loop never executes and pPrev stays nullptr. Return the origin's
-		 * trackdir so the train follows its existing reservation instead of
-		 * dereferencing a null pointer. Ported from pulsexlb ba9c745b0d. */
+		/* Destination is at the origin (path length 0). The reservation
+		 * already reaches the waiting train. Return the origin's trackdir
+		 * so the train can follow its existing reservation. */
 		if (pPrev == nullptr) return origin.trackdir;
 
 		next_trackdir = pPrev->GetTrackdir();
@@ -939,6 +1012,7 @@ Track YapfTrainChooseTrack(const Train *v, TileIndex tile, DiagDirection enterdi
 		? CYapfRailNo90::stChooseRailTrack(v, tile, enterdir, tracks, path_found, reserve_track, target, dest)
 		: CYapfRail::stChooseRailTrack(v, tile, enterdir, tracks, path_found, reserve_track, target, dest);
 
+
 	return (td_ret != INVALID_TRACKDIR) ? TrackdirToTrack(td_ret) : FindFirstTrack(tracks);
 }
 
@@ -951,11 +1025,13 @@ struct CYapfCoupleRailNo90 : CYapfRailBase<CYapfRail_TypesT<CYapfCoupleRailNo90,
  * @param dont_reserve Whether to skip making a reservation.
  * @return The track to take, or #INVALID_TRACK if no path was found.
  */
-Track YapfTrainCoupleTrack(const Train *v, bool dont_reserve)
+Track YapfTrainCoupleTrack(const Train *v, bool dont_reserve, Train **couple_target, uint32_t *couple_cost)
 {
+	if (couple_target != nullptr) *couple_target = nullptr;
+	if (couple_cost != nullptr) *couple_cost = 0;
 	Trackdir ret = _settings_game.pf.forbid_90_deg
-		? CYapfCoupleRailNo90::stFindNearestCoupleTrain(v, dont_reserve)
-		: CYapfCoupleRail::stFindNearestCoupleTrain(v, dont_reserve);
+		? CYapfCoupleRailNo90::stFindNearestCoupleTrain(v, dont_reserve, couple_target, couple_cost)
+		: CYapfCoupleRail::stFindNearestCoupleTrain(v, dont_reserve, couple_target, couple_cost);
 
 	return (ret != INVALID_TRACKDIR) ? TrackdirToTrack(ret) : INVALID_TRACK;
 }
@@ -1000,14 +1076,20 @@ bool YapfTrainCheckReverse(const Train *v)
 
 	int reverse_penalty = 0;
 
-	/* Consider whether the train might back up at reduced speed. */
-	if (_settings_game.difficulty.train_flip_reverse_allowed == TrainFlipReversingAllowed::None && !v->Last()->CanLeadTrain()
+	/* Consider whether the train might change its speed by backing up instead
+	 * of flipping: each end leads in one direction, and only ends without a
+	 * driving cab restrict the speed. */
+	const bool driving_backwards = v->vehicle_flags.Test(VehicleFlag::DrivingBackwards);
+	const bool leading_end_fast = driving_backwards ? v->Last()->CanLeadTrain() : v->First()->CanLeadTrain();
+	const bool flipped_end_fast = driving_backwards ? v->First()->CanLeadTrain() : v->Last()->CanLeadTrain();
+	if (_settings_game.difficulty.train_flip_reverse_allowed == TrainFlipReversingAllowed::None
+			&& leading_end_fast != flipped_end_fast
 			&& moving_front->track != TRACK_BIT_DEPOT && moving_back->track != TRACK_BIT_DEPOT) {
-		if (!v->vehicle_flags.Test(VehicleFlag::DrivingBackwards)) {
-			/* We're currently driving forwards at full speed, and would rather not reverse if possible. */
+		if (leading_end_fast) {
+			/* We're currently driving at full speed, and would rather not reverse if possible. */
 			reverse_penalty += DRIVING_BACKWARDS_PENALTY;
 		} else {
-			/* We're currently driving backwards slowly, prefer reversing. */
+			/* We're currently driving slowly, prefer reversing. */
 			reverse_penalty -= DRIVING_BACKWARDS_PENALTY;
 		}
 	}
@@ -1049,7 +1131,11 @@ bool YapfTrainCheckReverse(const Train *v)
 bool YapfTrainCheckDepotReverse(const Train *v, TileIndex forward_depot, TileIndex reverse_depot)
 {
 	int reverse_penalty = 1;
-	if (_settings_game.difficulty.train_flip_reverse_allowed == TrainFlipReversingAllowed::None && !v->Last()->CanLeadTrain()) {
+	/* Prefer the exit orientation whose leading end has a driving cab;
+	 * a preference only exists when exactly one end can lead. */
+	const bool front_can_lead_d = v->First()->CanLeadTrain();
+	const bool back_can_lead_d = v->Last()->CanLeadTrain();
+	if (_settings_game.difficulty.train_flip_reverse_allowed == TrainFlipReversingAllowed::None && front_can_lead_d != back_can_lead_d) {
 		/* Apply penalties to prefer driving out in forward direction. */
 		if (v->vehicle_flags.Test(VehicleFlag::DrivingBackwards)) {
 			/* Prefer reverse depot. */

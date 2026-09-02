@@ -5,18 +5,15 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file air.cpp Implementation of air specific functions. */
+/** @file orderlist_edit.h Entry points to edit standalone (player-created) order lists. */
 
-#include "stdafx.h"
-#include "air.h"
-#include "company_func.h"
+#ifndef ORDERLIST_EDIT_H
+#define ORDERLIST_EDIT_H
 
-/**
- * Validate functions for air building.
- * @param air the airtype to check.
- * @return true if the current company may build the air.
- */
-bool ValParamAirType(const AirType air)
-{
-	return air < AIRTYPE_END;
-}
+#include "order_type.h"
+
+void ShowOrderListEditor(OrderListID id);
+void ShowOrderListTimetable(OrderListID id);
+void ShowSchdispatchWindowForList(OrderListID id);
+
+#endif /* ORDERLIST_EDIT_H */

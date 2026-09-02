@@ -34,6 +34,8 @@ void GroundVehicle<T, Type>::PowerChanged()
 	uint16_t max_track_speed = this->vcache.cached_max_speed; // Max track speed in internal units.
 
 	this->CalculatePower(total_power, max_te, false);
+	if (this->index.base() <= 6 && Type == VehicleType::Train) {
+	}
 
 	for (const T *u = v; u != nullptr; u = u->Next()) {
 		number_of_parts++;
@@ -60,7 +62,9 @@ void GroundVehicle<T, Type>::PowerChanged()
 
 	if (this->gcache.cached_power != total_power || this->gcache.cached_max_te != max_te) {
 		/* Stop the vehicle if it has no power, unless it is a front wagon (can be coupled/decoupled). */
-		if (total_power == 0 && !this->IsFrontWagon()) this->vehstatus.Set(VehState::Stopped);
+		if (total_power == 0 && !this->IsFrontWagon()) {
+			this->vehstatus.Set(VehState::Stopped);
+		}
 
 		this->gcache.cached_power = total_power;
 		this->gcache.cached_max_te = max_te;
@@ -268,6 +272,8 @@ GroundVehicleAcceleration GroundVehicle<T, Type>::GetAcceleration()
 		this->breakdown_chance_factor = Clamp<uint64_t>(breakdown_factor >> 16, 5, 255);
 	}
 
+	if (mass == 0) {
+	}
 	int braking_accel;
 	if (Type == VehicleType::Train && Train::From(this)->UsingRealisticBraking()) {
 		/* Assume that every part of a train is braked, not just the engine.

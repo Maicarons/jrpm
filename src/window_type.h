@@ -868,6 +868,30 @@ enum class WindowClass : uint16_t {
 	 */
 	Plans,
 
+	/**
+	 * Order list manager window; %Window numbers:
+	 *   - 0 = #OrderListWidgets
+	 */
+	OrderList,
+
+	/**
+	 * Player-created order list editor (reuses #OrdersWindow); %Window numbers:
+	 *   - id = #OrderListWidgets-based editor window
+	 */
+	OrderListEditor,
+
+	/**
+	 * Player-created order list timetable (reuses #TimetableWindow); %Window numbers:
+	 *   - id = #VehicleTimetableWidgets-based window
+	 */
+	OrderListTimetable,
+
+	/**
+	 * Player-created order list scheduled dispatch (reuses #SchdispatchWindow); %Window numbers:
+	 *   - id = target order list id
+	 */
+	OrderListSchedule,
+
 	TemplateReplacementGuiMain,
 	BuildVirtualTrain,
 	TemplateReplacementCreateTemplate,

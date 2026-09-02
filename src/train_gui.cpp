@@ -10,6 +10,7 @@
 #include "stdafx.h"
 #include "window_gui.h"
 #include "command_func.h"
+#include "company_func.h"
 #include "train.h"
 #include "train_cmd.h"
 #include "strings_func.h"
@@ -285,7 +286,7 @@ static void TrainDetailsInfoTab(const Train *v, int left, int right, int y, uint
 						breakdown_status = STR_VEHICLE_STATUS_BROKEN_DOWN_VEL_SHORT;
 						p1 = STR_BREAKDOWN_TYPE_CRITICAL + v->breakdown_type;
 						if (v->breakdown_type == BREAKDOWN_LOW_SPEED) {
-							p2 = std::min<int>(v->First()->GetCurrentMaxSpeed(), v->breakdown_severity);
+							p2 = std::min<int>(v->Primary()->GetCurrentMaxSpeed(), v->breakdown_severity);
 						} else if (v->breakdown_type == BREAKDOWN_LOW_POWER) {
 							p2 = v->breakdown_severity * 100 / 256;
 						}
@@ -295,7 +296,7 @@ static void TrainDetailsInfoTab(const Train *v, int left, int right, int y, uint
 				} else {
 					if (v->flags.Test(VehicleRailFlag::NeedRepair)) {
 						breakdown_status = STR_NEED_REPAIR;
-						p1 = GetTrainVehicleMaxSpeed(v, v->GetEngine()->VehInfo<RailVehicleInfo>(), v->First());
+						p1 = GetTrainVehicleMaxSpeed(v, v->GetEngine()->VehInfo<RailVehicleInfo>(), v->Primary());
 					} else {
 						breakdown_status = STR_RUNNING;
 					}
@@ -392,7 +393,7 @@ int GetTrainDetailsWndVScroll(VehicleID veh_id, TrainDetailsWindowTabs det_tab)
 
 	if (det_tab == TDW_TAB_TOTALS) { // Total cargo tab
 		CargoArray max_cargo{};
-		for (const Vehicle *v = Vehicle::Get(veh_id); v != nullptr; v = v->Next()) {
+		for (const Vehicle *v = Vehicle::Get(veh_id)->First(); v != nullptr; v = v->Next()) {
 			max_cargo[v->cargo_type] += v->cargo_cap;
 		}
 
@@ -404,7 +405,7 @@ int GetTrainDetailsWndVScroll(VehicleID veh_id, TrainDetailsWindowTabs det_tab)
 			num += 3; // needs three more: speed, power/weight ratio, TE/weight ratio
 		}
 	} else {
-		for (const Train *v = Train::Get(veh_id); v != nullptr; v = v->GetNextVehicle()) {
+		for (const Train *v = Train::Get(veh_id)->First(); v != nullptr; v = v->GetNextVehicle()) {
 			GetCargoSummaryOfArticulatedVehicle(v, _cargo_summary);
 			num += std::max(1u, (unsigned)_cargo_summary.size());
 
@@ -435,11 +436,24 @@ void DrawTrainDetails(const Train *v, const Rect &r, int vscroll_pos, uint16_t v
 
 	/* draw the first 3 details tabs */
 	if (det_tab != TDW_TAB_TOTALS && det_tab != TDW_TAB_PERF) {
+		int bar_width = ScaleGUITrad(4);
+		Rect content = rtl ? Rect{r.left, r.top, r.right - bar_width, r.bottom} : Rect{r.left + bar_width, r.top, r.right, r.bottom};
 		Direction dir = rtl ? Direction::E : Direction::W;
-		int x = rtl ? r.right : r.left;
+		int x = rtl ? content.right : content.left;
 		uint8_t line_number = 0;
-		for (; v != nullptr && vscroll_pos > -vscroll_cap; v = v->GetNextVehicle()) {
+		for (v = v->First(); v != nullptr && vscroll_pos > -vscroll_cap; v = v->GetNextVehicle()) {
 			GetCargoSummaryOfArticulatedVehicle(v, _cargo_summary);
+
+			/* Draw company colour bar on the left edge of this unit's row */
+			{
+				PixelColour col = GetColourGradient(_company_colours[v->owner], Shade::Normal);
+				if (!rtl) {
+					GfxFillRect(r.left, r.top - line_height * vscroll_pos, r.left + bar_width - 1, r.top - line_height * vscroll_pos + line_height - 1, col);
+				} else {
+					GfxFillRect(r.right - bar_width, r.top - line_height * vscroll_pos, r.right - 1, r.top - line_height * vscroll_pos + line_height - 1, col);
+				}
+			}
+
 
 			/* Draw sprites */
 			uint dx = 0;
@@ -516,7 +530,7 @@ void DrawTrainDetails(const Train *v, const Rect &r, int vscroll_pos, uint16_t v
 		int y = r.top;
 		int empty_weight = 0;
 		int loaded_weight = 0;
-		for (const Train *u = v; u != nullptr; u = u->Next()) {
+		for (const Train *u = v->First(); u != nullptr; u = u->Next()) {
 			const auto weight_without_cargo = u->GetWeightWithoutCargo();
 			empty_weight  += weight_without_cargo;
 			loaded_weight += weight_without_cargo + u->GetCargoWeight(u->cargo_cap);
@@ -555,7 +569,7 @@ void DrawTrainDetails(const Train *v, const Rect &r, int vscroll_pos, uint16_t v
 		CargoArray max_cargo{};
 		Money feeder_share = 0;
 
-		for (const Train *u = v; u != nullptr; u = u->Next()) {
+		for (const Train *u = v->First(); u != nullptr; u = u->Next()) {
 			act_cargo[u->cargo_type] += u->cargo.StoredCount();
 			max_cargo[u->cargo_type] += u->cargo_cap;
 			feeder_share             += u->cargo.GetFeederShare();

@@ -88,6 +88,7 @@ void ClearOrderDestinationRefcountMap();
  * OrderConditionVariable::CargoWaitingAmount: Bits 0-15: Station ID to test + 1
  * OrderConditionVariable::CargoWaitingAmountPercentage: Bits 0-15: Station ID to test + 1, Bit 16: Refit mode
  * OrderConditionVariable::DispatchSlot: OCDM_ROUTE_ID: Bits 0-15: Route ID
+ * OT_GOTO_COUPLE: Bits 0-15: Couple station ID + 1 (0 = any)
  */
 
 struct OrderExtraInfo {
@@ -288,6 +289,7 @@ public:
 	void MakeReleaseSlotGroup();
 	void MakeChangeCounter();
 	void MakeLabel(OrderLabelSubType subtype);
+	void MakeExecuteSchedule();
 
 	/**
 	 * Is this a 'goto' order with a real destination?
@@ -388,6 +390,31 @@ public:
 	 * @param slot the slot, or #TraceRestrictSlotID::Invalid() for any slot.
 	 */
 	inline void SetCoupleSlot(TraceRestrictSlotID slot) { SB(this->GetXDataRef(), 0, 16, slot.base()); }
+
+	/**
+	 * Does the couple order restrict coupling to a specific station?
+	 * @pre IsType(OT_GOTO_COUPLE)
+	 * @return true if a specific station is set.
+	 */
+	inline bool HasCoupleStation() const { return this->GetXData2Low() != 0; }
+
+	/**
+	 * Get the station the train must couple at.
+	 * @pre IsType(OT_GOTO_COUPLE)
+	 * @return the station, or #StationID::Invalid() if unrestricted.
+	 */
+	inline StationID GetCoupleStation() const
+	{
+		if (!this->HasCoupleStation()) return StationID::Invalid();
+		return StationID{(uint16_t)(this->GetXData2Low() - 1)};
+	}
+
+	/**
+	 * Set the station the train must couple at.
+	 * @pre IsType(OT_GOTO_COUPLE)
+	 * @param station the station, or #StationID::Invalid() for any station.
+	 */
+	inline void SetCoupleStation(StationID station) { this->SetXData2Low(station == StationID::Invalid() ? 0 : station.base() + 1); }
 
 	/**
 	 * Update the jump_counter of this order.
@@ -544,12 +571,27 @@ public:
 	inline uint8_t GetNumDecouple() const { return GB(this->decouple_flags, 1, 7); }
 	/** What kind of train are we looking for */
 	inline OrderCoupleFlags GetCoupleLoad() const { return (OrderCoupleFlags)GB(this->flags, 0, 3); }
+	/** Does the consist take over the waiting consist's schedule at coupling? */
+	inline bool GetCoupleUseWaitingSchedule() const { return HasBit(this->flags, 3); }
+	/** Set whether the consist takes over the waiting consist's schedule at coupling. */
+	inline void SetCoupleUseWaitingSchedule(bool on) { SB(this->flags, 3, 1, on ? 1 : 0); }
 	/** How many wagons are we taking */
 	inline uint8_t GetNumCouple() const { return GB(this->decouple_flags, 1, 7); }
 	/** What orders should first part get */
-	inline OrderDecoupleOrdersFlags GetDecoupleFirstOrdersType() const { return (OrderDecoupleOrdersFlags)GB(this->flags, 0, 3); }
+	inline OrderDecoupleOrdersFlags GetDecoupleFirstOrdersType() const
+	{
+		auto type = (OrderDecoupleOrdersFlags)GB(this->flags, 0, 3);
+		/* Clamp legacy (ODOF_INHERIT_ORDERS == 2) and out-of-range values. */
+		if (type == (OrderDecoupleOrdersFlags)2 || type >= ODOF_END) return ODOF_KEEP_ORDERS;
+		return type;
+	}
 	/** What orders should second part get */
-	inline OrderDecoupleOrdersFlags GetDecoupleSecondOrdersType() const { return (OrderDecoupleOrdersFlags)GB(this->flags, 4, 3); }
+	inline OrderDecoupleOrdersFlags GetDecoupleSecondOrdersType() const
+	{
+		auto type = (OrderDecoupleOrdersFlags)GB(this->flags, 4, 3);
+		if (type == (OrderDecoupleOrdersFlags)2 || type >= ODOF_END) return ODOF_KEEP_ORDERS;
+		return type;
+	}
 	/** Get counter for the 'jump xx% of times' option */
 	inline int8_t GetJumpCounter() const { return GB(this->GetXData(), 0, 8); }
 	/** Get counter operation */
@@ -667,6 +709,14 @@ public:
 	inline void SetDecoupleFirstOrdersType(OrderDecoupleOrdersFlags orders_type) { SB(this->flags, 0, 3, to_underlying(orders_type)); }
 	/** Set what orders second part should get */
 	inline void SetDecoupleSecondOrdersType(OrderDecoupleOrdersFlags orders_type) { SB(this->flags, 4, 3, to_underlying(orders_type)); }
+	/** Get the schedule the first part adopts after decoupling (ODOF_EXECUTE_SCHEDULE only). */
+	inline OrderListID GetDecoupleFirstScheduleID() const { return OrderListID{(uint16_t)this->GetXData()}; }
+	/** Set the schedule the first part adopts after decoupling. */
+	inline void SetDecoupleFirstScheduleID(OrderListID id) { SB(this->GetXDataRef(), 0, 16, id.base()); }
+	/** Get the schedule the second part adopts after decoupling (ODOF_EXECUTE_SCHEDULE only). */
+	inline OrderListID GetDecoupleSecondScheduleID() const { return OrderListID{(uint16_t)this->GetXData2Low()}; }
+	/** Set the schedule the second part adopts after decoupling. */
+	inline void SetDecoupleSecondScheduleID(OrderListID id) { this->SetXData2Low(id.base()); }
 	/** Set counter for the 'jump xx% of times' option */
 	inline void SetJumpCounter(int8_t jump_counter) { SB(this->GetXDataRef(), 0, 8, jump_counter); }
 	/** Set counter operation */
@@ -686,9 +736,10 @@ public:
 	 * explicitly set (but travel_time is actually unused for conditionals). */
 
 	inline bool IsSlotCounterOrder() const { return this->IsType(OT_COUNTER) || this->IsType(OT_SLOT) || this->IsType(OT_SLOT_GROUP); }
+	inline bool IsExecuteScheduleOrder() const { return this->IsType(OT_EXECUTE_SCHEDULE); }
 
 	/** Does this order not have any associated travel or wait times */
-	inline bool HasNoTimetableTimes() const { return this->IsSlotCounterOrder() || this->IsType(OT_LABEL); }
+	inline bool HasNoTimetableTimes() const { return this->IsSlotCounterOrder() || this->IsType(OT_LABEL) || this->IsExecuteScheduleOrder(); }
 
 	/**
 	 * Does this order have an explicit wait time set?
@@ -1267,6 +1318,12 @@ private:
 
 	Colours route_overlay_colour = Colours::White;
 
+	std::string name{};               ///< Name of the order list. Empty for vehicle-owned order lists.
+	Owner company = INVALID_OWNER;    ///< Company owning this player-created order list. INVALID_OWNER for vehicle-owned order lists.
+	bool is_public = false;           ///< Whether this player-created order list is public.
+	bool dispatch_enabled = false;    ///< Whether scheduled dispatch is enabled (mirrors VehicleFlag::ScheduledDispatch).
+	bool separation_enabled = false;  ///< Whether auto timetable separation is enabled (mirrors VehicleFlag::TimetableSeparation).
+
 	VehicleOrderID num_manual_orders = 0; ///< NOSAVE: How many manually added orders are there in the list.
 	uint num_vehicles = 0;                ///< NOSAVE: Number of vehicles that share this order list.
 	Vehicle *first_shared = nullptr;      ///< NOSAVE: pointer to the first vehicle in the shared order chain.
@@ -1325,6 +1382,13 @@ public:
 	void CopyOrderListContents(const OrderList &other);
 
 	void Initialize(Vehicle *v);
+
+	/**
+	 * Recompute the derived counters of a player-created order list that has no
+	 * vehicles. Such lists are never passed to #Initialize, so after loading a
+	 * savegame their manual order count and durations would stay zero otherwise.
+	 */
+	void InitializePlayerCreated();
 
 	void RecalculateTimetableDuration();
 
@@ -1452,6 +1516,13 @@ public:
 	 */
 	inline void AddVehicle([[maybe_unused]] Vehicle *v) { ++this->num_vehicles; }
 
+	/**
+	 * Make the given vehicle follow this order list, inserting it into this list's shared chain.
+	 * The vehicle must have been removed from its previous list first.
+	 * @param v vehicle to add
+	 */
+	void AssignVehicle(Vehicle *v);
+
 	void RemoveVehicle(Vehicle *v);
 
 	bool IsCompleteTimetable() const;
@@ -1508,6 +1579,42 @@ public:
 	void SetRouteOverlayColour(Colours colour)
 	{
 		this->route_overlay_colour = colour;
+	}
+
+	/**
+	 * Is this a player-created order list (not owned by a specific vehicle)?
+	 * A player-created order list has a company set, and is not subject to
+	 * the normal order list lifecycle (it is not freed when the last vehicle
+	 * using it is deleted). The name may still be empty; it will be shown
+	 * as the default name then.
+	 * @return whether this order list is player-created
+	 */
+	inline bool IsPlayerCreated() const { return this->company != INVALID_OWNER; }
+
+
+	inline const std::string &GetName() const { return this->name; }
+	inline void SetName(const std::string &name) { this->name = name; }
+
+	inline Owner GetCompany() const { return this->company; }
+	inline void SetCompany(Owner owner) { this->company = owner; }
+
+	inline bool IsPublic() const { return this->is_public; }
+	inline void SetPublic(bool is_public) { this->is_public = is_public; }
+
+	inline bool IsDispatchEnabled() const { return this->dispatch_enabled; }
+	inline void SetDispatchEnabled(bool enabled) { this->dispatch_enabled = enabled; }
+
+	inline bool IsSeparationEnabled() const { return this->separation_enabled; }
+	inline void SetSeparationEnabled(bool enabled) { this->separation_enabled = enabled; }
+
+	/**
+	 * Is this order list visible to the given company (either owned by them or public)?
+	 * @param owner company to check visibility for
+	 * @return whether the order list is visible to the company
+	 */
+	inline bool IsVisibleToCompany(Owner owner) const
+	{
+		return this->IsPlayerCreated() && (this->company == owner || this->is_public);
 	}
 
 	/**

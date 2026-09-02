@@ -251,6 +251,7 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 
 		if (part_of_load) v->fill_percent_te_id = INVALID_TE_ID;
 		v->first = nullptr;
+		v->primary = nullptr;
 		v->last = nullptr;
 		if (v->IsGroundVehicle()) v->GetGroundVehicleCache()->first_engine = EngineID::Invalid();
 	}
@@ -303,6 +304,25 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 				}
 			}
 		}
+
+		if (!SlXvIsFeaturePresent(XSLFI_VEHICLE_PRIMARY_ORDER)) {
+			/* Older savegames do not know about the primary order list: every
+			 * vehicle simply belongs to the order list it currently has. */
+			for (Vehicle *v : Vehicle::Iterate()) {
+				si_v = v;
+				if (v->orders != nullptr && v->primary_order == OrderListID::Invalid()) {
+					v->primary_order = v->orders->index;
+				}
+			}
+		}
+
+		/* Player-created order lists usually have no vehicles and are therefore
+		 * never passed to Initialize(); recompute their derived counters, which
+		 * are not saved and would stay zero (or get corrupted by later edits). */
+		for (OrderList *ol : OrderList::Iterate()) {
+			if (!ol->IsPlayerCreated() || ol->GetNumVehicles() != 0) continue;
+			ol->InitializePlayerCreated();
+		}
 	}
 
 	for (Vehicle *v : Vehicle::Iterate()) {
@@ -320,6 +340,33 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 				u->last = v;
 			}
 		}
+
+		/* Fill the primary pointers. The flag is only saved with XSLFI_TRAIN_PRIMARY,
+		 * for older savegames it is zero and primary defaults to first. */
+		if (v->Previous() == nullptr) {
+			/* Locate the flagged primary carrier first (there is exactly one per
+			 * chain; vehicles ahead of it must not receive an intermediate
+			 * value), then assign it to every member of the chain. */
+			Vehicle *primary = v;
+			for (Vehicle *u = v; u != nullptr; u = u->Next()) {
+				if (u->consist_primary != 0) {
+					primary = u;
+					break;
+				}
+			}
+			for (Vehicle *u = v; u != nullptr; u = u->Next()) {
+				u->primary = primary;
+			}
+			if (v->type == VehicleType::Train && v->index.base() <= 40) {
+				for (Vehicle *u = v; u != nullptr; u = u->Next()) {
+				}
+				for (Vehicle *u = v; u != nullptr; u = u->Next()) {
+					/* Note: first/last are not necessarily filled yet at this
+					 * point in the iteration (tails may come later), so only
+					 * next/previous are dumped here. */
+				}
+			}
+		}
 	}
 
 	if (part_of_load) {
@@ -327,7 +374,7 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 			/* Before 105 there was no order for shared orders, thus it messed up horribly */
 			for (Vehicle *v : Vehicle::Iterate()) {
 				si_v = v;
-				if (v->First() != v || v->orders != nullptr || v->previous_shared != nullptr || v->next_shared == nullptr) continue;
+				if (v->Primary() != v || v->orders != nullptr || v->previous_shared != nullptr || v->next_shared == nullptr) continue;
 
 				/* As above, allocating OrderList here is safe. */
 				assert(OrderList::CanAllocateItem());
@@ -433,9 +480,13 @@ void AfterLoadVehiclesPhase2(bool part_of_load)
 		switch (v->type) {
 			case VehicleType::Train: {
 				Train *t = Train::From(v);
-				if (t->IsFrontEngine() || t->IsFreeWagon() || t->IsFrontWagon()) {
+				/* Every chain needs its caches recomputed after load. The gate
+				 * runs on the primary vehicle (which may sit mid-chain when it
+				 * is not the chain head), while the cache recomputation itself
+				 * is always anchored on the physical chain head. */
+				if (t->Primary()->IsPrimaryVehicle() || t->IsFreeWagon()) {
 					t->gcache.last_speed = t->cur_speed; // update displayed train speed
-					t->ConsistChanged(CCF_SAVELOAD);
+					t->First()->ConsistChanged(CCF_SAVELOAD);
 				}
 				break;
 			}
@@ -715,6 +766,9 @@ struct VehicleCommonStructHandler final : public TypedSaveLoadStructHandler<Vehi
 
 	void Save(Vehicle *v) const override
 	{
+		v->consist_primary = (v->Primary() == v) ? 1 : 0;
+		if (v->type == VehicleType::Train && v->index.base() <= 40 && v->Primary()->index.base() <= 40) {
+		}
 		SlObjectSaveFiltered(v, this->GetLoadDescription());
 	}
 
@@ -1002,6 +1056,7 @@ NamedSaveLoadTable GetVehicleDescription(VehicleType vt)
 		NSL("progress",                       SLE_VAR(Vehicle, progress,                  SLE_UINT8)),
 
 		NSL("vehstatus",                      SLE_VAR(Vehicle, vehstatus,                 SLE_UINT8)),
+		NSL("consist_primary",          SLE_CONDVAR_X(Vehicle, consist_primary,           SLE_UINT8,                  SL_MIN_VERSION, SL_MAX_VERSION, SlXvFeatureTest(XSLFTO_OR, XSLFI_TRAIN_PRIMARY))),
 		NSL("wait_counter",               SLE_CONDVAR(Vehicle, wait_counter,              SLE_UINT16,                 SLV_CUSTOM_SUBSIDY_DURATION, SL_MAX_VERSION)),
 		NSL("last_station_visited",       SLE_CONDVAR(Vehicle, last_station_visited,      SLE_FILE_U8  | SLE_VAR_U16, SL_MIN_VERSION, SLV_5)),
 		NSL("last_station_visited",       SLE_CONDVAR(Vehicle, last_station_visited,      SLE_UINT16,                 SLV_5, SL_MAX_VERSION)),
@@ -1069,6 +1124,9 @@ NamedSaveLoadTable GetVehicleDescription(VehicleType vt)
 		NSL("orders",                    SLEG_CONDVAR(_old_order_item_ref,                SLE_FILE_U16 | SLE_VAR_U32, SL_MIN_VERSION, SLV_69)),
 		NSL("orders",                    SLEG_CONDVAR(_old_order_item_ref,                SLE_UINT32,                 SLV_69, SLV_105)),
 		NSL("orders",                     SLE_CONDREF(Vehicle, orders,                    REF_ORDERLIST,              SLV_105, SL_MAX_VERSION)),
+
+		NSL("primary_order",            SLE_CONDVAR_X(Vehicle, primary_order,              SLE_UINT16,                 SL_MIN_VERSION, SL_MAX_VERSION, SlXvFeatureTest(XSLFTO_OR, XSLFI_VEHICLE_PRIMARY_ORDER))),
+		NSL("primary_order_index",      SLE_CONDVAR_X(Vehicle, primary_order_index,        SLE_UINT16,                 SL_MIN_VERSION, SL_MAX_VERSION, SlXvFeatureTest(XSLFTO_OR, XSLFI_VEHICLE_PRIMARY_ORDER))),
 
 		NSL("age",                        SLE_CONDVAR(Vehicle, age,                       SLE_FILE_U16 | SLE_VAR_I32, SL_MIN_VERSION, SLV_31)),
 		NSL("age",                        SLE_CONDVAR(Vehicle, age,                       SLE_INT32,                  SLV_31, SL_MAX_VERSION)),
@@ -1716,10 +1774,10 @@ static void LogVehicleVENCMessage(const Vehicle *v, const char *var)
 
 	extern void WriteVehicleInfo(format_target &buffer, const Vehicle *u, const Vehicle *v, uint length);
 	uint length = 0;
-	for (const Vehicle *u = v->First(); u != v; u = u->Next()) {
+	for (const Vehicle *u = v->Primary(); u != v; u = u->Next()) {
 		length++;
 	}
-	WriteVehicleInfo(buffer, v, v->First(), length);
+	WriteVehicleInfo(buffer, v, v->Primary(), length);
 	debug_print(DebugLevelID::desync, 0, buffer);
 	LogDesyncMsg(buffer.to_string());
 }

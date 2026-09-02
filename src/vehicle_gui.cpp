@@ -1106,7 +1106,7 @@ struct RefitWindow : public Window {
 	{
 		std::string name = this->ship_part_names[v->index];
 		if (name.empty()) {
-			const Vehicle *front = v->First();
+			const Vehicle *front = v->Primary();
 			uint offset = 0;
 			for (const Vehicle *u = front; u != v; u = u->Next()) offset++;
 			uint16_t callback = GetVehicleCallback(XCBID_SHIP_REFIT_PART_NAME, offset, 0, front->engine_type, front);
@@ -1593,7 +1593,7 @@ struct CargoTypesWindow : public Window {
 			case WID_VCT_SET: // set button
 				if (this->sel != CARGO_NO_REFIT) {
 					const Vehicle *v = Vehicle::Get(this->window_number);
-					if (Command<Commands::ModifyOrder>::Post(STR_ERROR_CAN_T_MODIFY_THIS_ORDER, v->tile, v->index, this->order, MOF_COUPLE_CARGO, {}, this->sel, {})) this->Close();
+					if (Command<Commands::ModifyOrder>::Post(STR_ERROR_CAN_T_MODIFY_THIS_ORDER, v->tile, OrderTargetType::Vehicle, v->index.base(), this->order, MOF_COUPLE_CARGO, {}, this->sel, {})) this->Close();
 				}
 				break;
 		}
@@ -2127,7 +2127,7 @@ static void DrawSmallOrderList(OrderIterateWrapper<const Order> orders, int left
 void DrawVehicleImage(const Vehicle *v, const Rect &r, VehicleID selection, EngineImageType image_type, int skip)
 {
 	switch (v->type) {
-		case VehicleType::Train:    DrawTrainImage(Train::From(v), r, selection, image_type, skip); break;
+		case VehicleType::Train:    DrawTrainImage(Train::From(v)->First(), r, selection, image_type, skip); break;
 		case VehicleType::Road:     DrawRoadVehImage(v, r, selection, image_type, skip);  break;
 		case VehicleType::Ship:     DrawShipImage(v, r, selection, image_type);     break;
 		case VehicleType::Aircraft: DrawAircraftImage(v, r, selection, image_type); break;
@@ -2209,11 +2209,14 @@ void BaseVehicleListWindow::DrawVehicleListItems(VehicleID selected_vehicle, int
 		const GUIVehicleGroup &vehgroup = *it;
 		if (this->grouping == GB_NONE) {
 			const Vehicle *v = vehgroup.GetSingleVehicle();
+			/* Identity fields (age, lifetime, profit, ...) come from the
+			 * primary vehicle, which may differ from the chain head. */
+			const Vehicle *ident = v->Primary();
 
 			std::array<StringParameter, 5> params = {
 				EconTime::UsingWallclockUnits() ? STR_VEHICLE_LIST_PROFIT_THIS_PERIOD_LAST_PERIOD : STR_VEHICLE_LIST_PROFIT_THIS_YEAR_LAST_YEAR,
-				v->GetDisplayProfitThisYear(),
-				v->GetDisplayProfitLastYear(),
+				ident->GetDisplayProfitThisYear(),
+				ident->GetDisplayProfitLastYear(),
 				std::monostate{},
 				std::monostate{}
 			};
@@ -2221,9 +2224,9 @@ void BaseVehicleListWindow::DrawVehicleListItems(VehicleID selected_vehicle, int
 			StringID str;
 			switch (this->vehgroups.SortType()) {
 				case VST_AGE: {
-					str = (v->age + DAYS_IN_YEAR < v->max_age) ? STR_VEHICLE_LIST_AGE : STR_VEHICLE_LIST_AGE_RED;
-					params[3] = DateDeltaToYearDelta(v->age);
-					params[4] = DateDeltaToYearDelta(v->max_age);
+					str = (ident->age + DAYS_IN_YEAR < ident->max_age) ? STR_VEHICLE_LIST_AGE : STR_VEHICLE_LIST_AGE_RED;
+					params[3] = DateDeltaToYearDelta(ident->age);
+					params[4] = DateDeltaToYearDelta(ident->max_age);
 					break;
 				}
 
@@ -2238,21 +2241,21 @@ void BaseVehicleListWindow::DrawVehicleListItems(VehicleID selected_vehicle, int
 				}
 
 				case VST_RELIABILITY: {
-					str = ToPercent16(v->reliability) >= 50 ? STR_VEHICLE_LIST_RELIABILITY : STR_VEHICLE_LIST_RELIABILITY_RED;
-					params[3] = ToPercent16(v->reliability);
+					str = ToPercent16(ident->reliability) >= 50 ? STR_VEHICLE_LIST_RELIABILITY : STR_VEHICLE_LIST_RELIABILITY_RED;
+					params[3] = ToPercent16(ident->reliability);
 					break;
 				}
 
 				case VST_MAX_SPEED: {
 					str = STR_VEHICLE_LIST_MAX_SPEED;
-					params[3] = v->GetDisplayMaxSpeed();
+					params[3] = ident->GetDisplayMaxSpeed();
 					break;
 				}
 
 				case VST_MODEL: {
 					str = STR_VEHICLE_LIST_ENGINE_BUILT;
-					params[3] = v->engine_type;
-					params[4] = v->build_year;
+					params[3] = ident->engine_type;
+					params[4] = ident->build_year;
 					break;
 				}
 
@@ -2276,25 +2279,25 @@ void BaseVehicleListWindow::DrawVehicleListItems(VehicleID selected_vehicle, int
 				}
 
 				case VST_TIME_TO_LIVE: {
-					auto years_remaining = (v->max_age / DAYS_IN_LEAP_YEAR) - (v->age / DAYS_IN_LEAP_YEAR);
+					auto years_remaining = (ident->max_age / DAYS_IN_LEAP_YEAR) - (ident->age / DAYS_IN_LEAP_YEAR);
 					str = (years_remaining > 1) ? STR_VEHICLE_LIST_TIME_TO_LIVE : ((years_remaining < 0) ? STR_VEHICLE_LIST_TIME_TO_LIVE_OVERDUE : STR_VEHICLE_LIST_TIME_TO_LIVE_RED);
 					params[3] = std::abs(years_remaining.base());
 					break;
 				}
 
 				case VST_TIMETABLE_DELAY: {
-					if (v->lateness_counter == 0 || (!_settings_client.gui.timetable_in_ticks && v->lateness_counter / TimetableDisplayUnitSize() == 0)) {
+					if (ident->lateness_counter == 0 || (!_settings_client.gui.timetable_in_ticks && ident->lateness_counter / TimetableDisplayUnitSize() == 0)) {
 						str = STR_VEHICLE_LIST_TIMETABLE_DELAY_ON_TIME;
 					} else {
-						str = v->lateness_counter > 0 ? STR_VEHICLE_LIST_TIMETABLE_DELAY_LATE : STR_VEHICLE_LIST_TIMETABLE_DELAY_EARLY;
-						std::tie(params[3], params[4]) = GetTimetableParameters(std::abs(v->lateness_counter));
+						str = ident->lateness_counter > 0 ? STR_VEHICLE_LIST_TIMETABLE_DELAY_LATE : STR_VEHICLE_LIST_TIMETABLE_DELAY_EARLY;
+						std::tie(params[3], params[4]) = GetTimetableParameters(std::abs(ident->lateness_counter));
 					}
 					break;
 				}
 
 				case VST_PROFIT_LIFETIME: {
 					str = STR_VEHICLE_LIST_PROFIT_THIS_YEAR_LAST_YEAR_LIFETIME;
-					params[3] = v->GetDisplayProfitLifetime();
+					params[3] = ident->GetDisplayProfitLifetime();
 					break;
 				}
 
@@ -3613,8 +3616,9 @@ struct VehicleDetailsWindow : Window {
 						}
 					}
 					uint8_t total_engines = Train::From(v)->tcache.cached_num_engines;
-					assert(total_engines > 0);
-					DrawString(tr, GetString(STR_VEHICLE_INFO_RELIABILITY_BREAKDOWNS, ToPercent16(total_reliability / total_engines), ToPercent16(total_max_reliability / total_engines), total_breakdowns));
+					if (total_engines > 0) {
+						DrawString(tr, GetString(STR_VEHICLE_INFO_RELIABILITY_BREAKDOWNS, ToPercent16(total_reliability / total_engines), ToPercent16(total_max_reliability / total_engines), total_breakdowns));
+					}
 				} else {
 					DrawString(tr, GetString(STR_VEHICLE_INFO_RELIABILITY_BREAKDOWNS, ToPercent16(v->reliability), ToPercent16(v->GetEngine()->reliability), v->breakdowns_since_last_service));
 				}
@@ -3930,6 +3934,10 @@ static WindowDesc _nontrain_vehicle_details_desc(__FILE__, __LINE__,
  */
 static void ShowVehicleDetailsWindow(const Vehicle *v)
 {
+	/* Trains without any engine (e.g. after full uncoupling) cannot be viewed. */
+	if (v->type == VehicleType::Train && Train::From(v)->tcache.cached_num_engines == 0) {
+		return;
+	}
 	CloseWindowById(WindowClass::VehicleOrders, v->index, false);
 	CloseWindowById(WindowClass::VehicleTimetable, v->index, false);
 	AllocateWindowDescFront<VehicleDetailsWindow>((v->type == VehicleType::Train) ? _train_vehicle_details_desc : _nontrain_vehicle_details_desc, v->index);
@@ -4413,7 +4421,7 @@ public:
 				breakdown_str = STR_BREAKDOWN_TYPE_CRITICAL + w->breakdown_type;
 
 				if (w->breakdown_type == BREAKDOWN_LOW_SPEED) {
-					breakdown_param = std::min(w->First()->GetDisplayMaxSpeed(), w->breakdown_severity >> ((v->type == VehicleType::Train) ? 0 : 1));
+					breakdown_param = std::min(w->Primary()->GetDisplayMaxSpeed(), w->breakdown_severity >> ((v->type == VehicleType::Train) ? 0 : 1));
 				} else if (w->breakdown_type == BREAKDOWN_LOW_POWER) {
 					if (v->type == VehicleType::Train) {
 						uint32_t power, te;
@@ -4988,7 +4996,7 @@ bool VehicleClicked(const Vehicle *v)
 	assert(v != nullptr);
 	if (!(_thd.place_mode & HT_VEHICLE)) return false;
 
-	v = v->First();
+	v = v->Primary();
 	if (!v->IsPrimaryVehicle()) return false;
 
 	return _thd.GetCallbackWnd()->OnVehicleSelect(v);

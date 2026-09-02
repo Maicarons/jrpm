@@ -1515,7 +1515,7 @@ Money CargoPayment::PayTransfer(CargoType cargo, CargoPacket *cp, uint count, Ti
  */
 static OrderLoadType GetLoadType(const Vehicle *v)
 {
-	return v->First()->current_order.GetCargoLoadType(v->cargo_type);
+	return v->Primary()->current_order.GetCargoLoadType(v->cargo_type);
 }
 
 /**
@@ -1527,7 +1527,7 @@ static OrderLoadType GetLoadType(const Vehicle *v)
  */
 static OrderUnloadType GetUnloadType(const Vehicle *v)
 {
-	return v->First()->current_order.GetCargoUnloadType(v->cargo_type);
+	return v->Primary()->current_order.GetCargoUnloadType(v->cargo_type);
 }
 
 /**
@@ -1537,7 +1537,12 @@ static OrderUnloadType GetUnloadType(const Vehicle *v)
 void PrepareUnload(Vehicle *front_v)
 {
 	Station *curr_station = Station::Get(front_v->last_station_visited);
-	curr_station->loading_vehicles.push_back(front_v);
+	/* Guard against duplicate queue entries when BeginLoading runs twice for
+	 * the same vehicle without an intervening LeaveStation. */
+	auto &loading_queue = curr_station->loading_vehicles;
+	if (std::find(loading_queue.begin(), loading_queue.end(), front_v) == loading_queue.end()) {
+		loading_queue.push_back(front_v);
+	}
 
 	/* At this moment loading cannot be finished */
 	front_v->vehicle_flags.Reset(VehicleFlag::LoadingFinished);
@@ -1805,12 +1810,12 @@ static void HandleStationRefit(Vehicle *v, Vehicle *v_start, CargoArray &consist
 	IterateVehicleParts(v_start, PrepareRefitAction(consist_capleft, refit_mask));
 
 	bool is_auto_refit = new_cid == CARGO_AUTO_REFIT;
-	bool check_order = (v->First()->current_order.GetLoadType() == OrderLoadType::CargoTypeLoad);
+	bool check_order = (v->Primary()->current_order.GetLoadType() == OrderLoadType::CargoTypeLoad);
 	if (is_auto_refit) {
 		/* Get a refittable cargo type with waiting cargo for next_station or StationID::Invalid(). */
 		new_cid = v_start->cargo_type;
 		for (CargoType cid : refit_mask) {
-			if (check_order && v->First()->current_order.GetCargoLoadType(cid) == OrderLoadType::NoLoad) continue;
+			if (check_order && v->Primary()->current_order.GetCargoLoadType(cid) == OrderLoadType::NoLoad) continue;
 			if (st->goods[cid].data != nullptr && st->goods[cid].data->cargo.HasCargoFor(next_station.Get(cid))) {
 				/* Try to find out if auto-refitting would succeed. In case the refit is allowed,
 				 * the returned refit capacity will be greater than zero. */
@@ -1838,13 +1843,13 @@ static void HandleStationRefit(Vehicle *v, Vehicle *v_start, CargoArray &consist
 		 * misrouting it. */
 		IterateVehicleParts(v_start, ReturnCargoAction(st, StationID::Invalid()));
 		CommandCost cost = Command<Commands::RefitVehicle>::Do(DoCommandFlag::Execute, v_start->index, new_cid, 0xFF, true, false, 1); // Auto-refit and only this vehicle including artic parts.
-		if (cost.Succeeded()) v->First()->profit_this_year -= cost.GetCost() << 8;
+		if (cost.Succeeded()) v->Primary()->profit_this_year -= cost.GetCost() << 8;
 	}
 
 	/* Add new capacity to consist capacity and reserve cargo */
 	IterateVehicleParts(v_start, FinalizeRefitAction(consist_capleft, st, next_station,
-			is_auto_refit || v->First()->current_order.IsFullLoadOrder(),
-			(v->First()->current_order.GetLoadType() == OrderLoadType::CargoTypeLoad) ? v->First() : nullptr));
+			is_auto_refit || v->Primary()->current_order.IsFullLoadOrder(),
+			(v->Primary()->current_order.GetLoadType() == OrderLoadType::CargoTypeLoad) ? v->Primary() : nullptr));
 }
 
 /**
@@ -2401,6 +2406,10 @@ static void LoadUnloadVehicle(Vehicle *front)
 		if (!finished_loading) LinkRefresher::Run(front, true, true);
 
 		front->vehicle_flags.Set(VehicleFlag::LoadingFinished, finished_loading);
+		{
+			int cap_total = 0, stored_total = 0;
+			for (const Vehicle *w = front->First(); w != nullptr; w = w->Next()) { cap_total += w->cargo_cap; stored_total += w->cargo.StoredCount(); }
+		}
 
 		if (finished_loading && may_leave_early()) {
 			front->current_order.SetLeaveType(OLT_LEAVE_EARLY);
@@ -2459,6 +2468,8 @@ void LoadUnloadStation(Station *st)
 	for (Vehicle *v : st->loading_vehicles) {
 		if (v->vehstatus.Any({VehState::Stopped, VehState::Crashed}) || v->current_order.IsType(OT_LOADING_ADVANCE)) continue;
 
+		if (v->load_unload_ticks == 0) {
+		}
 		assert(v->load_unload_ticks != 0);
 		if (--v->load_unload_ticks == 0) last_loading = v;
 	}

@@ -176,6 +176,8 @@ enum SlXvFeatureIndex {
 	XSLFI_ENGINE_MULTI_RAILTYPE,                  ///< See: SLV_ENGINE_MULTI_RAILTYPE (PR #14357)
 	XSLFI_TOWN_SUPPLY_HISTORY,                    ///< See: SLV_TOWN_SUPPLY_HISTORY (PR #14461)
 	XSLFI_DRIVE_BACKWARDS,                        ///< See: SLV_DRIVE_BACKWARDS (PR#15379)
+	XSLFI_TRAIN_SERVICE_AT_STATION,              ///< Trains can be serviced at stations
+	XSLFI_TRAIN_NO_DEPOT_TEMPORARY_STOP,        ///< Trains do not temporarily stop in / route through depots
 
 	XSLFI_PR_13745_APPLIED,                       ///< Tag to indicate that the fix in PR #13745 has been already applied
 	XSLFI_SIGNAL_STATE_FIX,                       ///< Tag for signal state fixes
@@ -209,6 +211,8 @@ enum SlXvFeatureIndex {
 	XSLFI_ORDER_DECOUPLE,                         ///< Couple/decouple train orders
 	XSLFI_PLANE_TAXI_SPEED,                       ///< Configurable plane taxiing speed
 	XSLFI_COMPANY_CARGO_INCOME,                   ///< Per-cargo company income (cmclient port)
+	XSLFI_TRAIN_PRIMARY,                          ///< Trains have a separate primary (consist info carrier) vehicle
+	XSLFI_VEHICLE_PRIMARY_ORDER,                  ///< Vehicles remember their primary order list while executing another one
 
 	XSLFI_SIZE,                                   ///< Total count of features, including null feature
 };

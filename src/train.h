@@ -79,7 +79,7 @@ static constexpr ConsistChangeFlags CCF_ARRANGE{ConsistChangeFlag::Length, Consi
 static constexpr ConsistChangeFlags CCF_SAVELOAD{ConsistChangeFlag::Length}; ///< Valid changes when loading a savegame. (Everything that is not stored in the save.)
 static constexpr ConsistChangeFlags CCF_ARRANGE_STATION{ConsistChangeFlag::Capacity}; ///< Valid changes for arranging the consist in a station.
 static constexpr ConsistChangeFlags CCF_ARRANGE_CHECK{ConsistChangeFlag::Capacity, ConsistChangeFlag::CheckOnly}; ///< Check whether arranging the consist in a station would be possible.
-static constexpr ConsistChangeFlags CCF_COUPLE{ConsistChangeFlag::Length, ConsistChangeFlag::Capacity}; ///< Valid changes when coupling/decoupling trains at a station (rebuild length + capacity caches). Ported from pulsexlb 4864063662.
+static constexpr ConsistChangeFlags CCF_COUPLE{ConsistChangeFlag::Length, ConsistChangeFlag::Capacity}; ///< Valid changes when coupling/decoupling trains at a station.
 
 enum RealisticBrakingConstants {
 	RBC_BRAKE_FORCE_PER_LENGTH      = 2400,      ///< Additional force-based brake force per unit of train length
@@ -112,6 +112,12 @@ void DeleteVisibleTrain(Train *v);
 void CheckBreakdownFlags(Train *v);
 void GetTrainSpriteSize(EngineID engine, uint &width, uint &height, int &xoffs, int &yoffs, EngineImageType image_type);
 bool TrainFitStation(const Train *v);
+bool IsCoupleArrangementValid(Train *v_phys, Train *u_phys);
+Train *ValidateCoupleCandidate(const Train *moving, Train *waiting_first, TileIndex contact_tile,
+		bool respect_claim = false, uint32_t claim_cost = 0);
+Train *ResolveCoupleTargetStation(const Train *moving, TileIndex tile, Trackdir td,
+		bool respect_claim = false, uint32_t claim_cost = 0);
+void ClaimCoupleTarget(Train *moving, Train *carrier, uint32_t claim_cost);
 
 bool TrainOnCrossing(TileIndex tile);
 void NormalizeTrainVehInDepot(const Train *u);
@@ -123,7 +129,7 @@ enum TrainCacheFlags : uint8_t {
 	TCF_RL_BRAKING        = 0x02,  ///< Train realistic braking (movement physics) in effect for this vehicle
 	TCF_SPD_RAILTYPE      = 0x04,  ///< Train speed varies depending on railtype
 	TCF_MOVING_UNIT_START = 0x08,  ///< Start of an articulated unit in the movement direction
-	TCF_NO_DRIVING_CAB    = 0x10,  ///< No driving cab in forward direction, restricted speed
+	TCF_NO_DRIVING_CAB    = 0x10,  ///< No driving cab at the leading end of the consist, restricted speed
 
 	TCF_ACCEL_TYPE_MASK   = 0xC0,  ///< Acceleration type: 0 - 2 for corresponding value, 3 for mixed
 };
@@ -166,6 +172,20 @@ struct Train final : public GroundVehicle<Train, VehicleType::Train> {
 	Train *other_multiheaded_part = nullptr;
 
 	std::unique_ptr<TrainReservationLookAhead> lookahead{};
+
+	/* Transient coupling-approach state (not saved): the physical end vehicle of
+	 * the consist we are approaching, resolved by the couple pathfinder. */
+	VehicleID couple_target = VehicleID::Invalid();
+	/* Transient couple-claim state (not saved): which approaching consist has
+	 * claimed this (waiting) consist as its couple target. Only one moving
+	 * train may home onto a waiting train; a challenger with a cheaper path
+	 * takes the claim over. Kept on the consist Primary. */
+	VehicleID couple_claimant = VehicleID::Invalid();
+	uint32_t couple_claim_cost = 0;
+	/* Transient couple state (not saved): the waiting consist has released
+	 * everything beyond its body once, so its partner can reserve up to the
+	 * contact point with the regular reservation machinery. */
+	bool couple_body_hold = false;
 
 	RailTypes railtypes{}; ///< On which rail types the train can run.
 	RailTypes compatible_railtypes{}; ///< With which rail types the train is compatible.

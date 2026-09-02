@@ -91,6 +91,7 @@ STR_SETTINGS_MENU_MONEY_TEXT_EFFECTS                            :Income/cost tex
 STR_SETTINGS_MENU_SHOW_HIDDEN_SIGNS                             :Hidden signs and names displayed
 
 STR_MAP_MENU_PLAN_LIST                                          :Plan list
+STR_MAP_MENU_ORDER_LIST_MANAGER                                 :Order list manager
 
 STR_VEHICLE_TYPE_TRAINS                                         :Trains
 STR_VEHICLE_TYPE_ROAD_VEHICLES                                  :Road Vehicles
@@ -237,6 +238,12 @@ STR_CONFIG_SETTING_ROADVEH_CANT_QUANTUM_TUNNEL_HELPTEXT         :Disable road ve
 
 STR_CONFIG_SETTING_DRIVE_THROUGH_TRAIN_DEPOT                    :Drive-through train depots: {STRING2}
 STR_CONFIG_SETTING_DRIVE_THROUGH_TRAIN_DEPOT_HELPTEXT           :Enable emulation of drive-through train depots. Trains can move between depots placed back to back, optionally with intermediary depots in between.{}When enabled, trains are not forced to leave depots driving forward.
+
+STR_CONFIG_SETTING_TRAIN_SERVICE_AT_STATION                    :Service trains at stations: {STRING2}
+STR_CONFIG_SETTING_TRAIN_SERVICE_AT_STATION_HELPTEXT           :When enabled, trains are serviced automatically at any station they stop at, instead of being routed to a depot.
+
+STR_CONFIG_SETTING_TRAIN_NO_DEPOT_TEMPORARY_STOP               :No temporary stop in train depots: {STRING2}
+STR_CONFIG_SETTING_TRAIN_NO_DEPOT_TEMPORARY_STOP_HELPTEXT      :When enabled, trains stop in a depot when they enter one and do not leave on their own. Depots are also impassable in pathfinding unless the train is currently ordered to a specific depot.
 
 STR_CONFIG_SETTING_WARN_RESTRICTION_WAIT_VEHICLE                :Warn if train is stuck due to a routing restriction: {STRING2}
 STR_CONFIG_SETTING_WARN_RESTRICTION_WAIT_VEHICLE_HELPTEXT       :Trigger messages about trains which are stuck waiting at a path signal for a long time because of a routing restriction.
@@ -563,6 +570,7 @@ STR_CONFIG_SETTING_ENABLE_REMOVE_WATER                          :Enable removing
 STR_CONFIG_SETTING_ENABLE_REMOVE_WATER_HELPTEXT                 :Enable removing sea and rivers outside of the scenario editor
 
 STR_CONFIG_SETTING_SHARING_RAIL                                 :Enable sharing of railways: {STRING2}
+STR_CONFIG_SETTING_COUPLING_OTHER_COMPANY_TRAINS                :Allow coupling with trains owned by other companies: {STRING2}
 STR_CONFIG_SETTING_SHARING_ROAD                                 :Enable sharing of road stops and depots: {STRING2}
 STR_CONFIG_SETTING_SHARING_WATER                                :Enable sharing of docks and ship depots: {STRING2}
 STR_CONFIG_SETTING_SHARING_AIR                                  :Enable sharing of airports: {STRING2}
@@ -1852,6 +1860,14 @@ STR_ORDER_IMPORT_ORDER_LIST_INSERT_REVERSED                     :Import order li
 STR_ORDER_INSERT_FROM_VEHICLE                                   :Insert vehicle's orders
 
 STR_ORDER_TRY_ACQUIRE_SLOT_BUTTON                               :Try acquire slot
+STR_ORDER_EXECUTE_SCHEDULE_BUTTON                               :Execute schedule
+STR_ORDER_EXECUTE_SCHEDULE                                      :Execute schedule: {RAW_STRING}
+STR_ORDER_EXECUTE_SCHEDULE_UNDEFINED                             :Execute schedule: {STRING}
+STR_ORDER_EXECUTE_SCHEDULE_TOOLTIP                              :{BLACK}The order list to execute when this order is reached
+STR_ORDERS_END_OF_EXECUTE_SCHEDULE                              :- - {RAW_STRING} execution finished - -
+STR_ORDERS_EXIT_EXECUTE_BUTTON                                  :{BLACK}Exit execution
+STR_ORDERS_EXIT_EXECUTE_TOOLTIP                                 :{BLACK}Exit the currently executed schedule and return to this vehicle's own orders
+STR_ERROR_CAN_T_EXIT_EXECUTE_SCHEDULE                           :{WHITE}Can't exit execution of schedule...
 STR_ORDER_RELEASE_SLOT_BUTTON                                   :Release slot
 STR_ORDER_RELEASE_SLOT_GROUP_BUTTON                             :Release slot group
 STR_ORDER_CHANGE_COUNTER_BUTTON                                 :Change counter
@@ -2063,6 +2079,40 @@ STR_PLANS_OWN_ONLY_TOOLTIP                                      :{BLACK}Own show
 STR_SORT_BY_PLAN_ID                                             :Plan ID
 STR_SORT_BY_OWNER                                               :Owner
 STR_SORT_BY_DATE                                                :Date
+
+# Order list manager window
+STR_ORDER_LIST_CAPTION                                          :{WHITE}Order lists
+STR_ORDER_LIST_NEW                                              :{BLACK}New
+STR_ORDER_LIST_NEW_TOOLTIP                                      :{BLACK}Create a new order list
+STR_ORDER_LIST_EDIT                                             :{BLACK}Edit
+STR_ORDER_LIST_DELETE                                           :{BLACK}Delete
+STR_ORDER_LIST_DELETE_TOOLTIP                                   :{BLACK}Delete the selected order list
+STR_ORDER_LIST_PUBLIC                                           :{BLACK}Public
+STR_ORDER_LIST_PUBLIC_TOOLTIP                                   :{BLACK}Toggle the visibility of an order list. A public order list will be shown to the other companies.
+STR_ORDER_LIST_MAKE_PUBLIC                                      :{BLACK}Make public
+STR_ORDER_LIST_MAKE_PRIVATE                                     :{BLACK}Make private
+STR_ORDER_LIST_LIST_TOOLTIP                                     :{BLACK}Click the edit button to open the order list in the order window
+STR_ORDER_LIST_QUERY_RENAME                                     :{WHITE}Rename order list
+STR_ORDER_LIST_DEFAULT_NAME                                     :Order list {NUM}
+STR_SORT_BY_ORDER_LIST_ID                                      :Order list ID
+STR_ERROR_CAN_T_RENAME_ORDER_LIST                               :{WHITE}Can't rename order list...
+STR_ERROR_CAN_T_DELETE_ORDER_LIST                               :{WHITE}Can't delete order list...
+STR_ERROR_ORDER_LIST_IN_USE                                     :{WHITE}It is used by other vehicles
+STR_ORDER_LIST_ORDERS_CAPTION                                  :{WHITE}{RAW_STRING} (Orders)
+
+# Order list timetable window
+STR_ORDER_LIST_TIMETABLE_CAPTION                                :{WHITE}Timetable
+STR_ORDER_LIST_TIMETABLE_LIST_TOOLTIP                           :{BLACK}Click on an order to select it
+STR_ORDER_LIST_TIMETABLE_WAIT                                   :{BLACK}Wait time
+STR_ORDER_LIST_TIMETABLE_WAIT_TOOLTIP                           :{BLACK}Set the wait time of the selected order
+STR_ORDER_LIST_TIMETABLE_TRAVEL                                 :{BLACK}Travel time
+STR_ORDER_LIST_TIMETABLE_TRAVEL_TOOLTIP                         :{BLACK}Set the travel time of the selected order
+STR_ORDER_LIST_TIMETABLE_WAIT_FIXED                             :{BLACK}Lock wait time
+STR_ORDER_LIST_TIMETABLE_WAIT_UNFIX                             :{BLACK}Unlock wait time
+STR_ORDER_LIST_TIMETABLE_TRAVEL_FIXED                           :{BLACK}Lock travel time
+STR_ORDER_LIST_TIMETABLE_TRAVEL_UNFIX                           :{BLACK}Unlock travel time
+STR_ORDER_LIST_TIMETABLE_WAIT_QUERY                             :{WHITE}Wait time for selected order
+STR_ORDER_LIST_TIMETABLE_TRAVEL_QUERY                           :{WHITE}Travel time for selected order
 
 STR_WARNING_LOADGAME_REMOVED_UNCORRECTABLE_VEHICLES             :{WHITE}Removed {NUM} vehicles found to be uncorrectably invalid during load
 

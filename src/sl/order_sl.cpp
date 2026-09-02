@@ -521,6 +521,12 @@ NamedSaveLoadTable GetOrderListDescription()
 
 		NSLT("route_overlay_colour", SLE_VAR(OrderList, route_overlay_colour, SLE_UINT8)),
 
+		NSL("name",              SLE_SSTR(OrderList, name, SLE_STR)),
+		NSL("company",           SLE_VAR(OrderList, company, SLE_UINT8)),
+		NSL("is_public",         SLE_VAR(OrderList, is_public, SLE_BOOL)),
+		NSL("dispatch_enabled",  SLE_VAR(OrderList, dispatch_enabled, SLE_BOOL)),
+		NSL("separation_enabled", SLE_VAR(OrderList, separation_enabled, SLE_BOOL)),
+
 		NSLT_STRUCTLIST<OrderListDispatchScheduleStructHandler>("dispatch_schedule"),
 		NSLT_STRUCTLIST<OrderListOrderVectorStructHandler>("order_vector"),
 	};

@@ -23,6 +23,15 @@ struct OrderListIDTag : public PoolIDTraits<uint16_t, 64000, 0xFFFF> {};
 using OrderListID = PoolID<OrderListIDTag>;
 typedef uint32_t TimetableTicks;
 
+/** What kind of target an order-editing command refers to. */
+enum class OrderTargetType : uint8_t {
+	Vehicle,   ///< The orders of a vehicle (shared order chain).
+	OrderList, ///< A player-created standalone order list.
+};
+
+static const uint MAX_LENGTH_ORDERLIST_NAME_CHARS = 64; ///< The maximum length of an order list name in characters
+
+
 struct DestinationID {
 	static inline constexpr bool fmt_as_base = true;
 	static inline constexpr bool serialisation_as_base = true;
@@ -40,12 +49,14 @@ struct DestinationID {
 	constexpr DestinationID(TraceRestrictSlotID slot) : value(slot.base()) {}
 	constexpr DestinationID(TraceRestrictSlotGroupID sg) : value(sg.base()) {}
 	constexpr DestinationID(TraceRestrictCounterID ctr) : value(ctr.base()) {}
+	constexpr DestinationID(OrderListID ol) : value(ol.base()) {}
 
 	constexpr DepotID ToDepotID() const noexcept { return static_cast<DepotID>(this->value); }
 	constexpr StationID ToStationID() const noexcept { return static_cast<StationID>(this->value); }
 	constexpr TraceRestrictSlotID ToSlotID() const noexcept { return static_cast<TraceRestrictSlotID>(this->value); }
 	constexpr TraceRestrictSlotGroupID ToSlotGroupID() const noexcept { return static_cast<TraceRestrictSlotGroupID>(this->value); }
 	constexpr TraceRestrictCounterID ToCounterID() const noexcept { return static_cast<TraceRestrictCounterID>(this->value); }
+	constexpr OrderListID ToOrderListID() const noexcept { return static_cast<OrderListID>(this->value); }
 	constexpr BaseType base() const noexcept { return this->value; }
 	constexpr const BaseType &base_ref() const noexcept { return this->value; }
 	constexpr BaseType &edit_base() { return this->value; }
@@ -91,6 +102,7 @@ enum OrderType : uint8_t {
 	OT_GOTO_COUPLE,  ///< Go to the station where the train will couple with another train.
 	OT_WAIT_COUPLE,  ///< Wait for another train to couple with this one.
 	OT_DECOUPLE,     ///< Decouple some of the wagons from the train.
+	OT_EXECUTE_SCHEDULE, ///< Execute another order list: switch this vehicle to the target player-created order list.
 	OT_END
 };
 
@@ -114,9 +126,12 @@ enum OrderCoupleFlags : uint8_t {
 enum OrderDecoupleOrdersFlags : uint8_t {
 	ODOF_KEEP_ORDERS         = 0, ///< Keep the orders.
 	ODOF_KEEP_ORDERS_NO_LOAD = 1, ///< Keep the orders, but do not load.
-	ODOF_INHERIT_ORDERS      = 2, ///< Inherit the orders of the other part.
+	/* Value 2 was ODOF_INHERIT_ORDERS in earlier savegames; it is no longer
+	 * supported and clamps back to ODOF_KEEP_ORDERS when loaded. */
 	ODOF_WAIT_FOR_COUPLE     = 3, ///< Wait for a couple.
-	ODOF_END                 = 4,
+	ODOF_LOAD_AND_WAIT       = 4, ///< Load/unload at this station, then wait for a couple.
+	ODOF_EXECUTE_SCHEDULE    = 5, ///< Adopt a player-created order list as the part's own schedule.
+	ODOF_END                 = 6,
 };
 
 enum OrderSlotSubType : uint8_t {
@@ -332,8 +347,13 @@ enum ModifyOrderFlags : uint8_t {
 	MOF_COUPLE_CARGO,    ///< Change cargo parameter for desired train.
 	MOF_COUPLE_VALUE,    ///< Change number of coupled units.
 	MOF_COUPLE_SLOT,    ///< Change trace restrict slot to couple with.
+	MOF_COUPLE_STATION, ///< Change the station to couple at.
+	MOF_COUPLE_USE_WAITING_SCHEDULE, ///< Take over the waiting consist's schedule at coupling.
 	MOF_FIRST_ORDERS,    ///< Change orders of first part of train after decoupling.
 	MOF_SECOND_ORDERS,   ///< Change orders of second part of train after decoupling.
+	MOF_EXECUTE_SCHEDULE, ///< Change the target order list of an execute-schedule order.
+	MOF_DECOUPLE_FIRST_SCHEDULE,  ///< Change the schedule the first part adopts after decoupling.
+	MOF_DECOUPLE_SECOND_SCHEDULE, ///< Change the schedule the second part adopts after decoupling.
 	MOF_END
 };
 

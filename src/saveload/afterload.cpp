@@ -1842,7 +1842,6 @@ bool AfterLoadGame()
 	for (Company *c : Company::Iterate()) {
 		c->avail_railtypes = GetCompanyRailTypes(c->index);
 		c->avail_roadtypes = GetCompanyRoadTypes(c->index);
-		c->avail_airtypes = GetCompanyAirTypes(c->index);
 	}
 
 	AfterLoadStations();
@@ -3524,7 +3523,7 @@ bool AfterLoadGame()
 				 * Set it to the reliability of the front engine or the maximum, whichever is lower. */
 				const Engine *e = Engine::Get(v->engine_type);
 				v->reliability_spd_dec = e->reliability_spd_dec;
-				v->reliability = std::min(v->First()->reliability, e->reliability);
+				v->reliability = std::min(v->Primary()->reliability, e->reliability);
 			}
 		}
 	}
@@ -3567,7 +3566,7 @@ bool AfterLoadGame()
 	if (SlXvIsFeatureMissing(XSLFI_CONSIST_BREAKDOWN_FLAG)) {
 		for (Train *v : Train::Iterate()) {
 			if (v->breakdown_ctr != 0 && (v->IsEngine() || v->IsMultiheaded())) {
-				v->First()->flags.Set(VehicleRailFlag::ConsistBreakdown);
+				v->Primary()->flags.Set(VehicleRailFlag::ConsistBreakdown);
 			}
 		}
 	}
@@ -4193,7 +4192,7 @@ bool AfterLoadGame()
 	if (IsSavegameVersionBefore(SLV_127)) {
 		for (Station *st : Station::Iterate()) UpdateStationAcceptance(st, false);
 	}
-	
+
 
 	// setting moved from game settings to company settings
 	if (SlXvIsFeaturePresent(XSLFI_ORDER_OCCUPANCY, 1, 1)) {
@@ -4344,7 +4343,7 @@ bool AfterLoadGame()
 	if (SlXvIsFeatureMissing(XSLFI_CONSIST_SPEED_RD_FLAG)) {
 		for (Train *t : Train::Iterate()) {
 			if ((t->track & TRACK_BIT_WORMHOLE && !t->vehstatus.Test(VehState::Hidden)) || t->track == TRACK_BIT_DEPOT) {
-				t->First()->flags.Set(VehicleRailFlag::ConsistSpeedReduction);
+				t->Primary()->flags.Set(VehicleRailFlag::ConsistSpeedReduction);
 			}
 		}
 	}

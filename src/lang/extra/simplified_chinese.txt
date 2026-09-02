@@ -54,6 +54,7 @@ STR_SETTINGS_MENU_MONEY_TEXT_EFFECTS                            :显示收入/�
 STR_SETTINGS_MENU_SHOW_HIDDEN_SIGNS                             :隐藏所显示的标志名
 
 STR_MAP_MENU_PLAN_LIST                                          :计划列表
+STR_MAP_MENU_ORDER_LIST_MANAGER                                 :调度表列表
 
 STR_VEHICLE_TYPE_TRAINS                                         :列车
 STR_VEHICLE_TYPE_ROAD_VEHICLES                                  :汽车
@@ -199,6 +200,12 @@ STR_CONFIG_SETTING_ROADVEH_CANT_QUANTUM_TUNNEL_HELPTEXT         :即使道路长
 
 STR_CONFIG_SETTING_DRIVE_THROUGH_TRAIN_DEPOT                    :直通车辆段：{STRING}
 STR_CONFIG_SETTING_DRIVE_THROUGH_TRAIN_DEPOT_HELPTEXT           :启用直通车辆段{}列车可以在背对背的两个车库之间穿越，并且可以穿越两个车库之间的所有车库{}这需要启用 YAPF 寻路器
+
+STR_CONFIG_SETTING_TRAIN_SERVICE_AT_STATION                    :在车站为列车提供维修：{STRING}
+STR_CONFIG_SETTING_TRAIN_SERVICE_AT_STATION_HELPTEXT           :启用后，列车会在停靠的任何车站自动接受维修，而不会被路由到车辆段。
+
+STR_CONFIG_SETTING_TRAIN_NO_DEPOT_TEMPORARY_STOP               :禁止列车在车辆段临时停留：{STRING}
+STR_CONFIG_SETTING_TRAIN_NO_DEPOT_TEMPORARY_STOP_HELPTEXT      :启用后，列车进入车辆段时会停止，不会自行离开。在路径搜索中，除非列车当前有明确的车辆段指令，否则车辆段将被视为不可通行。
 
 STR_CONFIG_SETTING_WARN_RESTRICTION_WAIT_VEHICLE                :在列车因为寻路限制长时间等待时提示：{STRING}
 STR_CONFIG_SETTING_WARN_RESTRICTION_WAIT_VEHICLE_HELPTEXT       :启用时，如果列车长时间在路径信号处等待，给出提示
@@ -518,6 +525,7 @@ STR_CONFIG_SETTING_ENABLE_REMOVE_WATER                          :允许移除海
 STR_CONFIG_SETTING_ENABLE_REMOVE_WATER_HELPTEXT                 :允许在场景编辑器外移除海洋和河流
 
 STR_CONFIG_SETTING_SHARING_RAIL                                 :共享铁路设施：{STRING}
+STR_CONFIG_SETTING_COUPLING_OTHER_COMPANY_TRAINS                :共享列车车底：{STRING}
 STR_CONFIG_SETTING_SHARING_ROAD                                 :共享道路设施：{STRING}
 STR_CONFIG_SETTING_SHARING_WATER                                :共享水运设施：{STRING}
 STR_CONFIG_SETTING_SHARING_AIR                                  :共享航空设施：{STRING}
@@ -1784,6 +1792,14 @@ STR_ORDER_IMPORT_ORDER_LIST_INSERT_REVERSED                     :导入调度计
 STR_ORDER_INSERT_FROM_VEHICLE                                   :插入载具调度计划
 
 STR_ORDER_TRY_ACQUIRE_SLOT_BUTTON                               :尝试领取路签
+STR_ORDER_EXECUTE_SCHEDULE_BUTTON                               :执行调度计划
+STR_ORDER_EXECUTE_SCHEDULE                                      :执行调度计划：{STRING}
+STR_ORDER_EXECUTE_SCHEDULE_UNDEFINED                             :执行调度计划：{STRING}
+STR_ORDER_EXECUTE_SCHEDULE_TOOLTIP                              :{BLACK}到达该指令后要执行的调度计划
+STR_ORDERS_END_OF_EXECUTE_SCHEDULE                              :- - {STRING} 执行结束 - -
+STR_ORDERS_EXIT_EXECUTE_BUTTON                                  :{BLACK}退出当前执行
+STR_ORDERS_EXIT_EXECUTE_TOOLTIP                                 :{BLACK}退出当前正在执行的调度计划，返回本载具自己的调度计划
+STR_ERROR_CAN_T_EXIT_EXECUTE_SCHEDULE                           :{WHITE}不能退出调度计划执行……
 STR_ORDER_RELEASE_SLOT_BUTTON                                   :返还路签
 STR_ORDER_RELEASE_SLOT_GROUP_BUTTON                             :返还路签组路签
 STR_ORDER_CHANGE_COUNTER_BUTTON                                 :更改计数器
@@ -1861,6 +1877,10 @@ STR_ORDER_CONDITIONAL_INVALID_COUNTER                           :跳至 #{COMMA}
 STR_ORDER_CONDITIONAL_TIME_HHMM                                 :跳至 #{COMMA} [如果 {STRING} {STRING} {TIME_HHMM}]
 STR_ORDER_CONDITIONAL_TIMETABLE                                 :跳至 #{COMMA} [如果{STRING}{STRING}{TT_TICKS}]
 STR_ORDER_CONDITIONAL_DISPATCH_SLOT_DISPLAY                     :跳至 #{COMMA} [如果 {STRING} {STRING} {STRING}]
+STR_ORDER_CONDITIONAL_DECOUPLE_PART_DISPLAY                     :跳至 #{COMMA} [如果解挂部分 {STRING} {STRING}]
+STR_ORDER_CONDITIONAL_DECOUPLE_PART_NONE                        :无
+STR_ORDER_CONDITIONAL_DECOUPLE_PART_FIRST                       :第一部分
+STR_ORDER_CONDITIONAL_DECOUPLE_PART_SECOND                      :第二部分
 
 STR_ORDER_CONDITIONAL_CARGO_WAITING_PERCENT_CAPACITY            :列车{1:STRING}容量的 {0:COMMA}%
 STR_ORDER_CONDITIONAL_CARGO_WAITING_PERCENT_CAPACITY_REFIT      :列车改装为{1:STRING}类型时容量的 {0:COMMA}%
@@ -1987,6 +2007,40 @@ STR_PLANS_OWN_ONLY_TOOLTIP                                      :{BLACK}仅显�
 STR_SORT_BY_PLAN_ID                                             :计划编号
 STR_SORT_BY_OWNER                                               :所有者
 STR_SORT_BY_DATE                                                :日期
+
+# Order list manager window
+STR_ORDER_LIST_CAPTION                                          :{WHITE}调度表列表
+STR_ORDER_LIST_NEW                                              :{BLACK}新建
+STR_ORDER_LIST_NEW_TOOLTIP                                      :{BLACK}创建新的调度表
+STR_ORDER_LIST_EDIT                                             :{BLACK}编辑
+STR_ORDER_LIST_DELETE                                           :{BLACK}删除
+STR_ORDER_LIST_DELETE_TOOLTIP                                   :{BLACK}删除选中的调度表
+STR_ORDER_LIST_PUBLIC                                           :{BLACK}公开
+STR_ORDER_LIST_PUBLIC_TOOLTIP                                   :{BLACK}切换调度表的可见性。公开的调度表会对其他公司显示。
+STR_ORDER_LIST_MAKE_PUBLIC                                      :{BLACK}设为公开
+STR_ORDER_LIST_MAKE_PRIVATE                                     :{BLACK}设为私有
+STR_ORDER_LIST_LIST_TOOLTIP                                     :{BLACK}点击编辑按钮在订单窗口打开该调度表
+STR_ORDER_LIST_QUERY_RENAME                                     :{WHITE}重命名调度表
+STR_ORDER_LIST_DEFAULT_NAME                                     :调度表 {NUM}
+STR_SORT_BY_ORDER_LIST_ID                                      :调度表编号
+STR_ERROR_CAN_T_RENAME_ORDER_LIST                               :{WHITE}无法重命名调度表...
+STR_ERROR_CAN_T_DELETE_ORDER_LIST                               :{WHITE}无法删除调度表...
+STR_ERROR_ORDER_LIST_IN_USE                                     :{WHITE}正在其它载具中使用
+STR_ORDER_LIST_ORDERS_CAPTION                                  :{WHITE}{STRING}（调度计划）
+
+# Order list timetable window
+STR_ORDER_LIST_TIMETABLE_CAPTION                                :{WHITE}时刻表
+STR_ORDER_LIST_TIMETABLE_LIST_TOOLTIP                           :{BLACK}点击调度命令进行选择
+STR_ORDER_LIST_TIMETABLE_WAIT                                   :{BLACK}等待时间
+STR_ORDER_LIST_TIMETABLE_WAIT_TOOLTIP                           :{BLACK}设置选中命令的等待时间
+STR_ORDER_LIST_TIMETABLE_TRAVEL                                 :{BLACK}行驶时间
+STR_ORDER_LIST_TIMETABLE_TRAVEL_TOOLTIP                         :{BLACK}设置选中命令的行驶时间
+STR_ORDER_LIST_TIMETABLE_WAIT_FIXED                             :{BLACK}锁定等待时间
+STR_ORDER_LIST_TIMETABLE_WAIT_UNFIX                             :{BLACK}解锁等待时间
+STR_ORDER_LIST_TIMETABLE_TRAVEL_FIXED                           :{BLACK}锁定行驶时间
+STR_ORDER_LIST_TIMETABLE_TRAVEL_UNFIX                           :{BLACK}解锁行驶时间
+STR_ORDER_LIST_TIMETABLE_WAIT_QUERY                             :{WHITE}选中命令的等待时间
+STR_ORDER_LIST_TIMETABLE_TRAVEL_QUERY                           :{WHITE}选中命令的行驶时间
 
 STR_WARNING_LOADGAME_REMOVED_UNCORRECTABLE_VEHICLES             :{WHITE}由于在加载过程中无可挽回的错误，已经移除了{NUM} 辆车
 

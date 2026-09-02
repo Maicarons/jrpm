@@ -887,6 +887,8 @@ struct VehicleSettings {
 	bool                   roadveh_articulated_overtaking;        ///< enable articulated road vehicles overtaking other vehicles
 	bool                   roadveh_cant_quantum_tunnel;           ///< enable or disable vehicles quantum tunnelling through other vehicles when blocked
 	bool                   drive_through_train_depot;             ///< enable drive-through train depot emulation
+	bool     train_service_at_station;          ///< allow trains to be serviced at stations (requires infrastructure maintenance)
+	bool     train_no_depot_temporary_stop;     ///< forbid trains from temporarily stopping in depots and routing through them
 	uint16_t               through_load_speed_limit;              ///< maximum speed for through load
 	uint16_t               rail_depot_speed_limit;                ///< maximum speed entering/existing rail depots
 	bool                   non_leading_engines_keep_name;         ///< allow engines moved to a non-leading position to retain their custom name
@@ -937,6 +939,7 @@ struct EconomySettings {
 	bool     station_noise_level;            ///< build new airports when the town noise level is still within accepted limits
 	uint16_t town_noise_population[3];       ///< population to base decision on noise evaluation (@see town_council_tolerance)
 	bool     infrastructure_sharing[4];      ///< enable infrastructure sharing for rail/road/water/air
+	bool     allow_coupling_other_company_trains; ///< allow coupling with trains owned by other companies
 	uint     sharing_fee[4];                 ///< fees for infrastructure sharing for rail/road/water/air
 	bool     sharing_payment_in_debt;        ///< allow fee payment for companies with more loan than money (switch off to prevent MP exploits)
 	bool     allow_town_level_crossings;     ///< towns are allowed to build level crossings

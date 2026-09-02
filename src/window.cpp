@@ -1259,6 +1259,11 @@ Window *GetMainWindow()
  * @param force force closing; if false don't close when stickied
  * @param data Arbitrary data to pass to the Close function.
  */
+const OrderList *GeneralVehicleWindow::GetTargetOrders() const
+{
+	return this->HasVehicle() ? this->vehicle->orders : this->order_list;
+}
+
 void CloseWindowById(WindowClass cls, WindowNumber number, bool force, int data)
 {
 	Window *w = FindWindowById(cls, number);
@@ -1346,6 +1351,10 @@ void ChangeWindowOwner(Owner old_owner, Owner new_owner)
 			case WindowClass::Company:
 			case WindowClass::CompanyInfrastructure:
 			case WindowClass::VehicleOrders: // Changing owner would also require changing WindowDesc, which is not possible; however keeping the old one crashes because of missing widgets etc.. See ShowOrdersWindow().
+			case WindowClass::OrderList: // Company-owned windows; closed via company cleanup instead.
+			case WindowClass::OrderListEditor:
+			case WindowClass::OrderListTimetable:
+			case WindowClass::OrderListSchedule:
 				continue;
 
 			default:
