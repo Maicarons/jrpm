@@ -151,7 +151,7 @@ static const SaveLoad _growth_tile_desc[] = {
 };
 
 struct GRWTChunkHandler : ChunkHandler {
-	GRWTChunkHandler() : ChunkHandler('GRWT', CH_TABLE) {}
+	GRWTChunkHandler() : ChunkHandler('GRWT', ChunkType::Table) {}
 
 	void Save() const override
 	{

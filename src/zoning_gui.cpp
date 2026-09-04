@@ -175,7 +175,7 @@ struct ZoningWindow : public Window {
 		int x = r.left + WidgetDimensions::scaled.framerect.left;
 		int y = r.top;
 
-		DrawString(rtl ? r.left : x + clk_dif + 1, (rtl ? r.right + clk_dif : r.right), y + 1 + clk_dif, strid, TextColour::FromString, SA_LEFT);
+		DrawString(rtl ? r.left : x + clk_dif + 1, (rtl ? r.right + clk_dif : r.right), y + 1 + clk_dif, strid, TextColour::FromString, AlignmentH::Start);
 	}
 
 	void UpdateWidgetSize(WidgetID widget, Dimension &size, const Dimension &padding, Dimension & /* fill */, Dimension & /* resize */) override

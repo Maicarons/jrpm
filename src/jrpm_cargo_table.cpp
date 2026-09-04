@@ -43,7 +43,7 @@ enum CargoPeriod {
 
 static void DrawPrice(Money amount, int left, int right, int top)
 {
-	DrawString(left, right, top, GetString(STR_FINANCES_POSITIVE_INCOME, amount), TextColour::FromString, SA_RIGHT);
+	DrawString(left, right, top, GetString(STR_FINANCES_POSITIVE_INCOME, amount), TextColour::FromString, AlignmentH::End);
 }
 
 struct CompanyCargosWindow : Window {
@@ -135,10 +135,10 @@ struct CompanyCargosWindow : Window {
 			case WID_CT_HEADER_CARGO:
 				break;
 			case WID_CT_HEADER_AMOUNT:
-				DrawString(r.left, r.right, y, GetString(this->period == CP_TOTAL ? STR_JRPM_CARGOS_HEADER_TOTAL : STR_JRPM_CARGOS_HEADER_MONTH), TextColour::FromString, SA_RIGHT);
+				DrawString(r.left, r.right, y, GetString(this->period == CP_TOTAL ? STR_JRPM_CARGOS_HEADER_TOTAL : STR_JRPM_CARGOS_HEADER_MONTH), TextColour::FromString, AlignmentH::End);
 				break;
 			case WID_CT_HEADER_INCOME:
-				DrawString(r.left, r.right, y, GetString(STR_JRPM_CARGOS_HEADER_INCOME), TextColour::FromString, SA_RIGHT);
+				DrawString(r.left, r.right, y, GetString(STR_JRPM_CARGOS_HEADER_INCOME), TextColour::FromString, AlignmentH::End);
 				break;
 
 			case WID_CT_LIST: {
@@ -154,7 +154,7 @@ struct CompanyCargosWindow : Window {
 
 				GfxFillRect(r.left, y + 1, r.right, y + 1, PC_BLACK);
 				y += CT_LINESPACE;
-				DrawString(r.left, r.right, y, GetString(this->period == CP_TOTAL ? STR_JRPM_CARGOS_HEADER_TOTAL : STR_JRPM_CARGOS_HEADER_MONTH), TextColour::FromString, SA_RIGHT);
+				DrawString(r.left, r.right, y, GetString(this->period == CP_TOTAL ? STR_JRPM_CARGOS_HEADER_TOTAL : STR_JRPM_CARGOS_HEADER_MONTH), TextColour::FromString, AlignmentH::End);
 				break;
 			}
 			case WID_CT_AMOUNT: {
@@ -163,12 +163,12 @@ struct CompanyCargosWindow : Window {
 					auto &economy = (this->period == CP_MONTH && c->num_valid_stat_ent > 0) ? c->old_economy[0] : c->cur_economy;
 					uint32_t amount = economy.delivered_cargo[cs->Index()];
 					total += amount;
-					DrawString(r.left, r.right, y + text_y_ofs, GetString(STR_JRPM_CARGOS_UNITS, amount), TextColour::FromString, SA_RIGHT);
+					DrawString(r.left, r.right, y + text_y_ofs, GetString(STR_JRPM_CARGOS_UNITS, amount), TextColour::FromString, AlignmentH::End);
 					y += line_height;
 				}
 				GfxFillRect(r.left, y + 1, r.right, y + 1, PC_BLACK);
 				y += CT_LINESPACE;
-				DrawString(r.left, r.right, y, GetString(STR_JRPM_CARGOS_UNITS_TOTAL, total), TextColour::FromString, SA_RIGHT);
+				DrawString(r.left, r.right, y, GetString(STR_JRPM_CARGOS_UNITS_TOTAL, total), TextColour::FromString, AlignmentH::End);
 				break;
 			}
 			case WID_CT_INCOME: {

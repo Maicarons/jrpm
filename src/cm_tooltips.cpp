@@ -153,16 +153,16 @@ struct LandTooltipsWindow : public Window
                 const HouseSpec *hs = HouseSpec::Get((HouseID)this->objIndex);
                 if(hs == nullptr) break;
 
-                DrawString(ir, GetString(CM_STR_LAND_TOOLTIPS_HOUSE_NAME, hs->building_name), TextColour::Black, SA_CENTER);
+                DrawString(ir, GetString(CM_STR_LAND_TOOLTIPS_HOUSE_NAME, hs->building_name), TextColour::Black, {AlignmentH::Centre, AlignmentV::Middle});
                 ir.top += text_height;
-                DrawString(ir, GetString(CM_STR_LAND_TOOLTIPS_HOUSE_POPULATION, hs->population), TextColour::Black, SA_CENTER);
+                DrawString(ir, GetString(CM_STR_LAND_TOOLTIPS_HOUSE_POPULATION, hs->population), TextColour::Black, {AlignmentH::Centre, AlignmentV::Middle});
                 break;
             }
             case TileType::Industry: {
                 const Industry *ind = Industry::GetIfValid((IndustryID)this->objIndex);
                 if(ind == nullptr) break;
 
-                DrawString(ir, GetString(CM_STR_LAND_TOOLTIPS_INDUSTRY_NAME, ind->index), TextColour::Black, SA_CENTER);
+                DrawString(ir, GetString(CM_STR_LAND_TOOLTIPS_INDUSTRY_NAME, ind->index), TextColour::Black, {AlignmentH::Centre, AlignmentV::Middle});
                 ir.top += text_height;
 
                 for (uint8_t i = 0; i < ind->produced_cargo_count; i++) {
@@ -186,7 +186,7 @@ struct LandTooltipsWindow : public Window
                 const Station *st = Station::GetIfValid((StationID)this->objIndex);
                 if(st == nullptr) break;
 
-                DrawString(ir, GetString(CM_STR_LAND_TOOLTIPS_STATION_NAME, st->index), TextColour::Black, SA_CENTER);
+                DrawString(ir, GetString(CM_STR_LAND_TOOLTIPS_STATION_NAME, st->index), TextColour::Black, {AlignmentH::Centre, AlignmentV::Middle});
                 ir.top += text_height;
 
                 for (const CargoSpec *cs : _sorted_standard_cargo_specs) {

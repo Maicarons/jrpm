@@ -377,7 +377,7 @@ struct DepotWindow : Window {
 				Rect count = text.WithWidth(this->count_width - WidgetDimensions::scaled.hsep_normal, !rtl);
 				DrawString(count.left, count.right, count.bottom - GetCharacterHeight(FontSize::Small) + 1,
 						GetString(STR_JUST_DECIMAL, CeilDiv(length * 10, TILE_SIZE), 1),
-						TextColour::Black, SA_RIGHT | SA_FORCE, false, FontSize::Small); // Draw the counter
+						TextColour::Black, AlignmentH::ForceRight, false, FontSize::Small); // Draw the counter
 				break;
 			}
 
@@ -406,7 +406,7 @@ struct DepotWindow : Window {
 			 * primary vehicle; the drawn images come from the chain head. */
 			const Vehicle *ident = v->Primary();
 			Rect flag = r.WithWidth(this->flag_size.width, rtl).WithHeight(this->flag_size.height).Translate(0, diff_y);
-			DrawSpriteIgnorePadding((ident->vehstatus.Test(VehState::Stopped)) ? SPR_FLAG_VEH_STOPPED : SPR_FLAG_VEH_RUNNING, PAL_NONE, flag, SA_CENTER);
+			DrawSpriteIgnorePadding((ident->vehstatus.Test(VehState::Stopped)) ? SPR_FLAG_VEH_STOPPED : SPR_FLAG_VEH_RUNNING, PAL_NONE, flag, {AlignmentH::Centre, AlignmentV::Middle});
 
 			DrawString(text, GetString(STR_JUST_COMMA, ident->unitnumber), (ident->max_age - DAYS_IN_LEAP_YEAR) >= ident->age || (ident->type == VehicleType::Train && Train::From(ident)->IsFrontWagon()) ? TextColour::Black : TextColour::Red);
 		}

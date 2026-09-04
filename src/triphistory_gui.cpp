@@ -131,7 +131,7 @@ public:
 				for (int i = 0; i <= this->valid_rows; i++, y += line_height) {
 					if (v->trip_history.t[i].date > EconTime::Date{0}) {
 						DrawString(r.left + WidgetDimensions::scaled.matrix.left, r.right - WidgetDimensions::scaled.matrix.right, r.top + y,
-								GetString(STR_TRIP_HISTORY_DATE, v->trip_history.t[i].date), TextColour::Black, SA_RIGHT);
+								GetString(STR_TRIP_HISTORY_DATE, v->trip_history.t[i].date), TextColour::Black, AlignmentH::End);
 					}
 				}
 				break;
@@ -140,10 +140,10 @@ public:
 					if (v->trip_history.t[i].date > EconTime::Date{0}) {
 						if (v->trip_history.t[i].profit > 0) {
 							DrawString(r.left + WidgetDimensions::scaled.matrix.left, r.right - WidgetDimensions::scaled.matrix.right, r.top + y,
-									GetString(STR_TRIP_HISTORY_PROFIT, v->trip_history.t[i].profit), TextColour::Black, SA_RIGHT);
+									GetString(STR_TRIP_HISTORY_PROFIT, v->trip_history.t[i].profit), TextColour::Black, AlignmentH::End);
 						} else {
 							DrawString(r.left + WidgetDimensions::scaled.matrix.left, r.right - WidgetDimensions::scaled.matrix.right, r.top + y,
-									GetString(STR_TRIP_HISTORY_VIRTUAL_PROFIT, -v->trip_history.t[i].profit), TextColour::Black, SA_RIGHT);
+									GetString(STR_TRIP_HISTORY_VIRTUAL_PROFIT, -v->trip_history.t[i].profit), TextColour::Black, AlignmentH::End);
 						}
 					}
 				}
@@ -153,7 +153,7 @@ public:
 					if (v->trip_history.t[i + 1].date > EconTime::Date{0}) {
 						DrawString(r.left + WidgetDimensions::scaled.matrix.left, r.right - WidgetDimensions::scaled.matrix.right, r.top + y,
 								GetString(v->trip_history.t[i].profit_change >= 0 ? STR_TRIP_HISTORY_PROFITCHANGEPOS : STR_TRIP_HISTORY_PROFITCHANGENEG, v->trip_history.t[i].profit_change),
-								TextColour::Black, SA_RIGHT);
+								TextColour::Black, AlignmentH::End);
 					}
 				}
 				break;
@@ -161,7 +161,7 @@ public:
 				for (int i = 0; i <= this->valid_rows; i++, y += line_height) {
 					if (v->trip_history.t[i].date > EconTime::Date{0}) {
 						DrawString(r.left + WidgetDimensions::scaled.matrix.left, r.right - WidgetDimensions::scaled.matrix.right, r.top + y,
-								GetString(STR_TRIP_HISTORY_TBT, v->trip_history.t[i].TBT), TextColour::Black, SA_RIGHT);
+								GetString(STR_TRIP_HISTORY_TBT, v->trip_history.t[i].TBT), TextColour::Black, AlignmentH::End);
 					}
 				}
 				break;
@@ -170,7 +170,7 @@ public:
 					if (v->trip_history.t[i + 1].date > EconTime::Date{0}) {
 						DrawString(r.left + WidgetDimensions::scaled.matrix.left, r.right - WidgetDimensions::scaled.matrix.right, r.top + y,
 								GetString(v->trip_history.t[i].TBT_change > 0 ? STR_TRIP_HISTORY_TBTCHANGEPOS : STR_TRIP_HISTORY_TBTCHANGENEG, v->trip_history.t[i].TBT_change),
-								TextColour::Black, SA_RIGHT);
+								TextColour::Black, AlignmentH::End);
 					}
 				}
 				break;
@@ -178,7 +178,7 @@ public:
 				for (int i = 0; i <= this->valid_rows; i++, y += line_height) {
 					if (v->trip_history.t[i + 1].date > EconTime::Date{0} && v->trip_history.t[i].occupancy >= 0) {
 						DrawString(r.left + WidgetDimensions::scaled.matrix.left, r.right - WidgetDimensions::scaled.matrix.right, r.top + y,
-								GetString(STR_TRIP_HISTORY_OCCUPANCY, v->trip_history.t[i].occupancy), TextColour::Black, SA_RIGHT);
+								GetString(STR_TRIP_HISTORY_OCCUPANCY, v->trip_history.t[i].occupancy), TextColour::Black, AlignmentH::End);
 					}
 				}
 				break;

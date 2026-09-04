@@ -1209,13 +1209,13 @@ struct StationPreivewResolverObject : public StationResolverObject {
         this->preview_station_scope.cargo_type = this->station_scope.cargo_type = ctype;
     }
 
-    ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, VarSpriteGroupScopeOffset relative = 0) override
+    ScopeResolver *GetScope(VarSpriteGroupScope scope = VarSpriteGroupScope::Self, VarSpriteGroupScopeOffset relative = 0) override
     {
         switch (scope) {
-            case VSG_SCOPE_SELF:
+            case VarSpriteGroupScope::Self:
                 return &this->preview_station_scope;
 
-            case VSG_SCOPE_PARENT: {
+            case VarSpriteGroupScope::Parent: {
                 if (!this->town_scope.has_value()) {
                     auto t = ClosestTownFromTile(this->tile, UINT_MAX);
                     this->town_scope.emplace(*this, t, true);
@@ -1623,11 +1623,11 @@ struct IndustryTilePreviewResolverObject : public ResolverObject {
         this->root_spritegroup = GetIndustryTileSpec(gfx)->grf_prop.spritegroups[0];
     }
 
-    ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, VarSpriteGroupScopeOffset relative = 0) override {
+    ScopeResolver *GetScope(VarSpriteGroupScope scope = VarSpriteGroupScope::Self, VarSpriteGroupScopeOffset relative = 0) override {
         // Debug(misc, 0, "Scope requested {} {}", (int)scope, (int)relative);
         switch (scope) {
-            case VSG_SCOPE_SELF: return &indtile_scope;
-            case VSG_SCOPE_PARENT: return &ind_scope;
+            case VarSpriteGroupScope::Self: return &indtile_scope;
+            case VarSpriteGroupScope::Parent: return &ind_scope;
             default: return ResolverObject::GetScope(scope, relative);
         }
     }
