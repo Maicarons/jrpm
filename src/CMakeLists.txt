@@ -503,6 +503,7 @@ add_files(
     signs_type.h
     slider.cpp
     slider_func.h
+    slope_constants.h
     slope_func.h
     slope_type.h
     smallmap_colours.h
@@ -523,6 +524,7 @@ add_files(
     source_type.h
     sprite.cpp
     sprite.h
+    sprite_id_type.h
     spritecache.cpp
     spritecache.h
     station.cpp

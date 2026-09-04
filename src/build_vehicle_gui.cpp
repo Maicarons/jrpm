@@ -33,6 +33,7 @@
 #include "dropdown_func.h"
 #include "engine_gui.h"
 #include "cargotype.h"
+#include "core/backup_type.hpp"
 #include "core/geometry_func.hpp"
 #include "autoreplace_func.h"
 #include "train.h"
@@ -407,11 +408,8 @@ static bool EnginePowerVsRunningCostSorter(const GUIEngineListItem &a, const GUI
 /** Determines order of train engines by capacity. @copydoc GUIList::Sorter */
 static bool TrainEngineCapacitySorter(const GUIEngineListItem &a, const GUIEngineListItem &b, const GUIEngineListSortCache &cache)
 {
-	const RailVehicleInfo *rvi_a = RailVehInfo(a.engine_id);
-	const RailVehicleInfo *rvi_b = RailVehInfo(b.engine_id);
-
-	int va = cache.GetArticulatedCapacity(a.engine_id, rvi_a->railveh_type == RailVehicleType::Multihead);
-	int vb = cache.GetArticulatedCapacity(b.engine_id, rvi_b->railveh_type == RailVehicleType::Multihead);
+	int va = cache.GetArticulatedCapacity(a.engine_id);
+	int vb = cache.GetArticulatedCapacity(b.engine_id);
 	int r = va - vb;
 
 	/* Use EngineID to sort instead since we want consistent sorting */
@@ -422,11 +420,8 @@ static bool TrainEngineCapacitySorter(const GUIEngineListItem &a, const GUIEngin
 /** Determines order of train engines by cargo capacity / running costs. @copydoc GUIList::Sorter */
 static bool TrainEngineCapacityVsRunningCostSorter(const GUIEngineListItem &a, const GUIEngineListItem &b, const GUIEngineListSortCache &cache)
 {
-	const RailVehicleInfo *rvi_a = RailVehInfo(a.engine_id);
-	const RailVehicleInfo *rvi_b = RailVehInfo(b.engine_id);
-
-	uint va = cache.GetArticulatedCapacity(a.engine_id, rvi_a->railveh_type == RailVehicleType::Multihead);
-	uint vb = cache.GetArticulatedCapacity(b.engine_id, rvi_b->railveh_type == RailVehicleType::Multihead);
+	uint va = cache.GetArticulatedCapacity(a.engine_id);
+	uint vb = cache.GetArticulatedCapacity(b.engine_id);
 
 	return GenericEngineValueVsRunningCostSorter(a, va, b, vb, cache);
 }
@@ -1157,7 +1152,7 @@ void DrawEngineList(VehicleType type, const Rect &r, const GUIEngineList &eng_li
 	const int offset = (rtl ? -circle_width : circle_width) / 2;
 	const int level_width = rtl ? -WidgetDimensions::scaled.hsep_indent : WidgetDimensions::scaled.hsep_indent;
 
-	for (auto it = first; it != last; ++it) {
+	for (auto it = first; it != last; ++it, ir = ir.Translate(0, step_size)) {
 		const auto &item = *it;
 		const Engine *e = Engine::Get(item.engine_id);
 
@@ -1165,6 +1160,13 @@ void DrawEngineList(VehicleType type, const Rect &r, const GUIEngineList &eng_li
 		bool has_variants = item.flags.Test(EngineDisplayFlag::HasVariants);
 		bool is_folded    = item.flags.Test(EngineDisplayFlag::IsFolded);
 		bool shaded       = item.flags.Test(EngineDisplayFlag::Shaded);
+
+		/* Set up clipping area for the row, keeping coordinates relative to the window. */
+		DrawPixelInfo tmp_dpi;
+		if (!FillDrawPixelInfo(&tmp_dpi, ir)) continue;
+		tmp_dpi.left += ir.left;
+		tmp_dpi.top += ir.top;
+		AutoRestoreBackup dpi_backup(_cur_dpi, &tmp_dpi);
 
 		Rect textr = ir.Shrink(WidgetDimensions::scaled.matrix);
 		Rect tr = ir.Indent(indent, rtl);
@@ -1184,7 +1186,7 @@ void DrawEngineList(VehicleType type, const Rect &r, const GUIEngineList &eng_li
 
 		if (has_variants) {
 			Rect fr = tr.WithWidth(circle_width, rtl);
-			DrawSpriteIgnorePadding(is_folded ? SPR_CIRCLE_FOLDED : SPR_CIRCLE_UNFOLDED, PAL_NONE, fr.WithY(textr), SA_CENTER);
+			DrawSpriteIgnorePadding(is_folded ? SPR_CIRCLE_FOLDED : SPR_CIRCLE_UNFOLDED, PAL_NONE, fr.WithY(textr), {AlignmentH::Centre, AlignmentV::Middle});
 		}
 
 		tr = tr.Indent(circle_width + WidgetDimensions::scaled.hsep_normal, rtl);
@@ -1218,10 +1220,10 @@ void DrawEngineList(VehicleType type, const Rect &r, const GUIEngineList &eng_li
 			Rect cr = tr.WithWidth(count_width, !rtl);
 			tr = tr.Indent(count_width + WidgetDimensions::scaled.hsep_normal, !rtl);
 
-			DrawString(cr.left, cr.right, textr.top + small_text_y_offset, GetString(STR_JUST_COMMA, num_engines), TextColour::Black, SA_RIGHT | SA_FORCE, false, FontSize::Small);
+			DrawString(cr.left, cr.right, textr.top + small_text_y_offset, GetString(STR_JUST_COMMA, num_engines), TextColour::Black, AlignmentH::ForceRight, false, FontSize::Small);
 
 			if (EngineHasReplacementForCompany(Company::Get(_local_company), item.engine_id, selected_group)) {
-				DrawSpriteIgnorePadding(SPR_GROUP_REPLACE_ACTIVE, num_engines == 0 ? PALETTE_CRASH : PAL_NONE, rr, SA_CENTER);
+				DrawSpriteIgnorePadding(SPR_GROUP_REPLACE_ACTIVE, num_engines == 0 ? PALETTE_CRASH : PAL_NONE, rr, {AlignmentH::Centre, AlignmentV::Middle});
 			}
 		}
 
@@ -1293,7 +1295,7 @@ void DrawEngineList(VehicleType type, const Rect &r, const GUIEngineList &eng_li
 					uint total_capacity = 0;
 					switch (type) {
 						case VehicleType::Train:
-							total_capacity = eng_list.SortParameterData().GetArticulatedCapacity(item.engine_id, e->VehInfo<RailVehicleInfo>().railveh_type == RailVehicleType::Multihead);
+							total_capacity = eng_list.SortParameterData().GetArticulatedCapacity(item.engine_id);
 							break;
 						case VehicleType::Road:
 						case VehicleType::Ship:
@@ -1334,7 +1336,7 @@ void DrawEngineList(VehicleType type, const Rect &r, const GUIEngineList &eng_li
 
 		int sort_detail_width = 0;
 		if (!sort_prop_detail.empty()) {
-			DrawString(tr.left, tr.right, textr.top + normal_text_y_offset, sort_prop_detail, tc, SA_RIGHT, false, FontSize::Small);
+			DrawString(tr.left, tr.right, textr.top + normal_text_y_offset, sort_prop_detail, tc, AlignmentH::End, false, FontSize::Small);
 
 			/* If we have sort detail to show, also measure its width so that we can adjust the
 			 * main name drawing rectangle to not overlap. */
@@ -1347,8 +1349,6 @@ void DrawEngineList(VehicleType type, const Rect &r, const GUIEngineList &eng_li
 
 		/* The left/right bounds are adjusted to not overlap with the sort detail that is on the left/right depending on the RTL setting. */
 		DrawString(tr.left + (rtl ? sort_detail_width : 0), tr.right - (rtl ? 0 : sort_detail_width), textr.top + normal_text_y_offset, name, tc);
-
-		ir = ir.Translate(0, step_size);
 	}
 }
 
@@ -1570,7 +1570,7 @@ void GUIEngineListSortCache::UpdateCargoFilter(const BuildVehicleWindowBase *par
 	}
 }
 
-uint GUIEngineListSortCache::GetArticulatedCapacity(EngineID eng, bool dual_headed) const
+uint GUIEngineListSortCache::GetArticulatedCapacity(EngineID eng) const
 {
 	auto iter = this->capacities.insert({ eng, 0 });
 	if (iter.second) {
@@ -1582,7 +1582,7 @@ uint GUIEngineListSortCache::GetArticulatedCapacity(EngineID eng, bool dual_head
 			this->parent->FillTestedEngineCapacity(eng, this->current_cargo, te);
 			iter.first->second = te.all_capacities.GetSum<uint>();
 		} else {
-			iter.first->second = GetTotalCapacityOfArticulatedParts(eng, this->current_cargo) * (dual_headed ? 2 : 1);
+			iter.first->second = GetTotalCapacityOfArticulatedParts(eng, this->current_cargo);
 		}
 	}
 	return iter.first->second;

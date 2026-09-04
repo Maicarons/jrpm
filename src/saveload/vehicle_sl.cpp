@@ -93,7 +93,7 @@ public:
 		SLE_CONDVAR(Vehicle, refit_cap,             SLE_UINT16,                 SLV_182, SL_MAX_VERSION),
 		SLEG_CONDVAR("cargo_count", _cargo_count,   SLE_UINT16,                   SL_MIN_VERSION,  SLV_68),
 		SLE_CONDREFRING(Vehicle, cargo.packets,     REF_CARGO_PACKET,            SLV_68, SL_MAX_VERSION),
-		SLE_CONDARR(Vehicle, cargo.action_counts,   SLE_UINT, to_underlying(VehicleCargoList::MoveToAction::End), SLV_181, SL_MAX_VERSION),
+		SLE_CONDARR(Vehicle, cargo.action_counts,   SLE_UINT32, to_underlying(VehicleCargoList::MoveToAction::End), SLV_181, SL_MAX_VERSION),
 		SLE_CONDVAR(Vehicle, cargo_age_counter,     SLE_UINT16,                 SLV_162, SL_MAX_VERSION),
 
 		    SLE_VAR(Vehicle, day_counter,           SLE_UINT8),
@@ -558,7 +558,7 @@ static const SaveLoad _vehicle_desc[] = {
 };
 
 struct VEHSChunkHandler : ChunkHandler {
-	VEHSChunkHandler() : ChunkHandler('VEHS', CH_SPARSE_TABLE) {}
+	VEHSChunkHandler() : ChunkHandler('VEHS', ChunkType::SparseTable) {}
 
 	void Save() const override
 	{

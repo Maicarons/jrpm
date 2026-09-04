@@ -44,7 +44,7 @@ SaveLoadTable GetOrderDescription()
 }
 
 struct ORDRChunkHandler : ChunkHandler {
-	ORDRChunkHandler() : ChunkHandler('ORDR', CH_TABLE) {}
+	ORDRChunkHandler() : ChunkHandler('ORDR', ChunkType::ReadOnly) {}
 
 	void Save() const override
 	{
@@ -109,7 +109,7 @@ SaveLoadTable GetOrderListDescription()
 }
 
 struct ORDLChunkHandler : ChunkHandler {
-	ORDLChunkHandler() : ChunkHandler('ORDL', CH_TABLE) {}
+	ORDLChunkHandler() : ChunkHandler('ORDL', ChunkType::Table) {}
 
 	void Save() const override
 	{
@@ -160,7 +160,7 @@ SaveLoadTable GetOrderBackupDescription()
 }
 
 struct BKORChunkHandler : ChunkHandler {
-	BKORChunkHandler() : ChunkHandler('BKOR', CH_TABLE) {}
+	BKORChunkHandler() : ChunkHandler('BKOR', ChunkType::Table) {}
 
 	void Save() const override
 	{

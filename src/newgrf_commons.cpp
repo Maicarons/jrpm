@@ -40,11 +40,8 @@
  * @param invalid is the ID used to identify an invalid entity id
  */
 OverrideManagerBase::OverrideManagerBase(uint16_t offset, uint16_t maximum, uint16_t invalid)
+	: max_offset(offset), max_entities(maximum), invalid_id(invalid)
 {
-	this->max_offset = offset;
-	this->max_entities = maximum;
-	this->invalid_id = invalid;
-
 	this->mappings.resize(this->max_entities);
 	this->entity_overrides.resize(this->max_offset);
 	std::fill(this->entity_overrides.begin(), this->entity_overrides.end(), this->invalid_id);
@@ -120,7 +117,7 @@ uint16_t OverrideManagerBase::AddEntityID(uint16_t grf_local_id, uint32_t grfid,
 	for (id = this->max_offset; id < this->max_entities; id++) {
 		EntityIDMapping *map = &this->mappings[id];
 
-		if (CheckValidNewID(id) && map->entity_id == 0 && map->grfid == 0) {
+		if (map->entity_id == 0 && map->grfid == 0) {
 			map->entity_id     = grf_local_id;
 			map->grfid         = grfid;
 			map->substitute_id = substitute_id;
@@ -349,7 +346,7 @@ uint32_t GetTerrainType(TileIndex tile, TileContext context)
 					/* During map generation the snowstate may not be valid yet, as the tileloop may not have run yet. */
 					if (_generating_world) goto genworld; // we do not care about foundations here
 					RailGroundType ground = GetRailGroundType(tile);
-					has_snow = (ground == RailGroundType::SnowOrDesert || (context == TCX_UPPER_HALFTILE && ground == RailGroundType::HalfTileSnow));
+					has_snow = (ground == RailGroundType::SnowOrDesert || (context == TileContext::UpperHalftile && ground == RailGroundType::HalfTileSnow));
 					break;
 				}
 
@@ -368,7 +365,7 @@ uint32_t GetTerrainType(TileIndex tile, TileContext context)
 				}
 
 				case TileType::TunnelBridge:
-					if (context == TCX_ON_BRIDGE) {
+					if (context == TileContext::OnBridge) {
 						has_snow = (GetBridgeHeight(tile) > GetSnowLine());
 					} else {
 						/* During map generation the snowstate may not be valid yet, as the tileloop may not have run yet. */
@@ -424,7 +421,7 @@ TileIndex GetNearbyTile(uint8_t parameter, TileIndex tile, bool signed_offsets, 
 }
 
 /**
- * Common part of station var 0x67, house var 0x62, indtile var 0x60, industry var 0x62.
+ * Common part of station var 0x67, house var 0x62, indtile var 0x60, industry var 0x62, town var 0x60.
  *
  * @param tile the tile of interest.
  * @param grf_version8 True, if we are dealing with a new NewGRF which uses GRF version >= 8.

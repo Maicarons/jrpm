@@ -22,10 +22,10 @@
 struct GRFFile;
 
 /** Context for tile accesses */
-enum TileContext : uint8_t {
-	TCX_NORMAL,         ///< Nothing special.
-	TCX_UPPER_HALFTILE, ///< Querying information about the upper part of a tile with halftile foundation.
-	TCX_ON_BRIDGE,      ///< Querying information about stuff on the bridge (via some bridgehead).
+enum class TileContext : uint8_t {
+	Normal, ///< Nothing special.
+	UpperHalftile, ///< Querying information about the upper part of a tile with halftile foundation.
+	OnBridge, ///< Querying information about stuff on the bridge (via some bridgehead).
 };
 
 /**
@@ -205,17 +205,9 @@ protected:
 	std::vector<uint16_t> entity_overrides;
 	std::vector<uint32_t> grfid_overrides;
 
-	uint16_t max_offset;   ///< what is the length of the original entity's array of specs
-	uint16_t max_entities; ///< what is the amount of entities, old and new summed
-
-	uint16_t invalid_id;   ///< ID used to detected invalid entities
-
-	/**
-	 * Checks whether the given ID is valid in the context of this override manager.
-	 * @param testid The ID to test.
-	 * @return Whether the ID is valid.
-	 */
-	virtual bool CheckValidNewID(uint16_t testid) { return true; }
+	const uint16_t max_offset;   ///< what is the length of the original entity's array of specs
+	const uint16_t max_entities; ///< what is the amount of entities, old and new summed
+	const uint16_t invalid_id;   ///< ID used to detected invalid entities
 
 public:
 	std::vector<EntityIDMapping> mappings; ///< mapping of ids from grf files.  Public out of convenience
@@ -263,8 +255,6 @@ public:
 
 struct IndustryTileSpec;
 class IndustryTileOverrideManager : public OverrideManagerBase {
-protected:
-	bool CheckValidNewID(uint16_t testid) override { return testid != 0xFF; }
 public:
 	IndustryTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}
@@ -283,8 +273,6 @@ public:
 
 struct AirportTileSpec;
 class AirportTileOverrideManager : public OverrideManagerBase {
-protected:
-	bool CheckValidNewID(uint16_t testid) override { return testid != 0xFF; }
 public:
 	AirportTileOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}
@@ -294,8 +282,6 @@ public:
 
 struct ObjectSpec;
 class ObjectOverrideManager : public OverrideManagerBase {
-protected:
-	bool CheckValidNewID(uint16_t testid) override { return testid != 0xFF; }
 public:
 	ObjectOverrideManager(uint16_t offset, uint16_t maximum, uint16_t invalid) :
 			OverrideManagerBase(offset, maximum, invalid) {}
@@ -310,7 +296,7 @@ extern AirportOverrideManager _airport_mngr;
 extern AirportTileOverrideManager _airporttile_mngr;
 extern ObjectOverrideManager _object_mngr;
 
-uint32_t GetTerrainType(TileIndex tile, TileContext context = TCX_NORMAL);
+uint32_t GetTerrainType(TileIndex tile, TileContext context = TileContext::Normal);
 TileIndex GetNearbyTile(uint8_t parameter, TileIndex tile, bool signed_offsets = true, Axis axis = Axis::Invalid);
 uint32_t GetNearbyTileInformation(TileIndex tile, bool grf_version8, uint32_t mask);
 uint32_t GetCompanyInfo(CompanyID owner, const struct Livery *l = nullptr);

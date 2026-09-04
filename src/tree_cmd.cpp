@@ -78,7 +78,8 @@ static bool CanPlantTreesOnTile(TileIndex tile, bool allow_desert)
 
 	switch (GetTileType(tile)) {
 		case TileType::Water:
-			return !IsBridgeAbove(tile) && IsCoast(tile) && !IsSlopeWithOneCornerRaised(GetTileSlope(tile));
+			/* Consistency with normal rocky tiles, coast with rocks is not eligible for trees. */
+			return !IsBridgeAbove(tile) && GetWaterTileType(tile) == WaterTileType::Coast && !IsSlopeWithOneCornerRaised(GetTileSlope(tile));
 
 		case TileType::Clear:
 			return !IsBridgeAbove(tile) && !IsClearGround(tile, ClearGround::Fields) && !IsClearGround(tile, ClearGround::Rocks) &&
@@ -1346,7 +1347,7 @@ static void TileLoop_Trees(TileIndex tile)
 							const TreeType tree_type = GetTreeType(tile);
 							const TileIndex old_tile = tile;
 
-							tile += TileOffsByDir(static_cast<Direction>(RandomRange(to_underlying(Direction::End))));
+							tile += TileOffsByDir(RandomRange(Direction::End));
 
 							if (!CanPlantTreesOnTile(tile, false)) return;
 
