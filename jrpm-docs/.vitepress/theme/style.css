@@ -291,3 +291,36 @@
   .VPHero .name { font-size: 44px; }
   .VPHero .text { font-size: 22px; }
 }
+
+/* ====================================================================
+ * RTL (Arabic) support
+ * ==================================================================== */
+
+[dir="rtl"] .VPNavBarMenuLink,
+[dir="rtl"] .VPSidebarItem .item .link,
+[dir="rtl"] .VPDocFooter .prev-next a,
+[dir="rtl"] .vp-doc table th,
+[dir="rtl"] .vp-doc table td {
+  text-align: right;
+}
+
+[dir="rtl"] .VPHero .name,
+[dir="rtl"] .VPHero .text {
+  background: linear-gradient(240deg, var(--jrpm-navy) 0%, var(--jrpm-cyan) 60%, var(--jrpm-cyan-soft) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+[dir="rtl"] .vp-doc code {
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
+[dir="rtl"] .vp-doc pre {
+  direction: ltr;
+}
+
+[dir="rtl"] .VPSocialLinks {
+  margin-left: 0;
+  margin-right: auto;
+}
