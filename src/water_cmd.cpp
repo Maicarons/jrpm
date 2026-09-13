@@ -30,6 +30,8 @@
 #include "clear_map.h"
 #include "tree_map.h"
 #include "aircraft.h"
+#include "air.h"
+#include "air_map.h"
 #include "effectvehicle_func.h"
 #include "tunnelbridge_map.h"
 #include "station_base.h"
@@ -1425,6 +1427,9 @@ void TileLoopWaterFlooding(FloodingBehaviour flooding_behaviour, TileIndex tile)
 
 				/* Buoys and docks cannot be flooded, and when removed turn into flooding water. */
 				if (IsTileType(dest, TileType::Station) && (IsBuoy(dest) || IsDock(dest))) continue;
+
+				/* Airports built on water cannot be flooded, they are built on the water surface. */
+				if (IsAirportTile(dest) && GetAirTypeInfo(GetAirType(dest))->build_on_water) continue;
 
 				/* This neighbour tile might be floodable later if the tile is cleared, so allow flooding to continue. */
 				continue_flooding = true;
