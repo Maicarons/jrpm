@@ -873,6 +873,7 @@ STR_NEWS_AIRCRAFT_CAN_T_LAND                                    :{WHITE}{VEHICLE
 STR_NEWS_AIRCRAFT_CRASH                                         :{BIG_FONT}{BLACK}飞机坠毁！{}{COMMA} 人在 {STATION} 的事故中罹难！
 STR_NEWS_PLANE_CRASH_OUT_OF_FUEL                                :{BIG_FONT}{BLACK}飞机坠毁！{}燃油不足，{COMMA} 人在事故中罹难！
 STR_NEWS_ORDER_DECOUPLE_FAILED                                  :{WHITE}无法解挂 {VEHICLE}
+STR_NEWS_ORDER_DECOUPLE_FAILED_REASON                           :{WHITE}无法解挂 {VEHICLE}：{STRING}
 STR_NEWS_ORDER_COUPLE_FAILED                                    :{WHITE}无法连接 {VEHICLE} 和 {VEHICLE}
 
 STR_NEWS_DISASTER_ZEPPELIN                                      :{BIG_FONT}{BLACK}齐柏林飞艇在 {STATION} 失事！
@@ -4883,19 +4884,24 @@ STR_ORDER_TOGGLE_COUPLE_LOAD                                    :{BLACK}连接�
 STR_ORDERS_COUPLE_LOAD_ANY                                      :连接任意
 STR_ORDERS_COUPLE_LOAD_EMPTY                                    :连接空车
 STR_ORDERS_COUPLE_LOAD_FULL                                     :连接满载
-STR_ORDERS_DECOUPLE_FIRST_KEEP_ORDERS_BUTTON                    :{BLACK}第一部分：保留调度计划
-STR_ORDERS_DECOUPLE_SECOND_KEEP_ORDERS_BUTTON                   :{BLACK}第二部分：保留调度计划
-STR_ORDERS_DECOUPLE_KEEP_ORDERS                                 :保留调度计划
+STR_ORDERS_DECOUPLE_FIRST_KEEP_ORDERS_BUTTON                    :{BLACK}第一部分：解挂后调度计划
+STR_ORDERS_DECOUPLE_SECOND_KEEP_ORDERS_BUTTON                   :{BLACK}第二部分：解挂后调度计划
+STR_ORDER_DECOUPLE_FIRST_ORDERS_TOOLTIP                         :{BLACK}第一部分在解挂后要执行的调度计划
+STR_ORDER_DECOUPLE_SECOND_ORDERS_TOOLTIP                        :{BLACK}第二部分在解挂后要执行的调度计划
+STR_ORDERS_DECOUPLE_KEEP_ORDERS                                 :装卸并保留调度计划
 STR_ORDERS_DECOUPLE_KEEP_ORDERS_NO_LOAD                         :保留调度计划不装卸
-STR_ORDERS_DECOUPLE_WAIT_FOR_COUPLE                             :等待连接
-STR_ORDERS_DECOUPLE_LOAD_AND_WAIT                              :装卸并等待连接
-STR_ORDERS_DECOUPLE_EXECUTE_SCHEDULE                            :使用调度计划
+STR_ORDERS_DECOUPLE_WAIT_FOR_COUPLE                             :等待连接不装卸
+STR_ORDERS_DECOUPLE_LOAD_AND_SCHEDULE                           :装卸并使用调度计划
+STR_ORDERS_DECOUPLE_LOAD_AND_WAIT                               :装卸并等待连接
+STR_ORDERS_DECOUPLE_EXECUTE_SCHEDULE                            :使用调度计划不装卸
+STR_ERROR_NO_SCHEDULE_AVAILABLE                                 :没有可选择的调度计划
 STR_ORDERS_COUPLE_VALUE_BUTTON                                  :{BLACK}连接数量
 STR_ORDERS_DECOUPLE_VALUE_BUTTON                                :{BLACK}解挂数量
 STR_ORDERS_DECOUPLE_BUTTON                                      :{BLACK}解挂
 STR_ORDERS_DECOUPLE_DROP                                        :解挂
 STR_ORDERS_DECOUPLE_VALUE                                       :解挂数量
 STR_ORDERS_DECOUPLE_TOOLTIP                                     :{BLACK}在车站解挂列车
+STR_ORDER_COUPLE_VALUE_CAPT                                     :{WHITE}输入要连接的列车应该具有的车厢数量
 STR_ORDER_DECOUPLE_VALUE_CAPT                                   :{WHITE}输入解挂后列车保留的车厢数量
 STR_ORDERS_GO_TO_COUPLE                                         :前往连接
 STR_ORDER_WAIT_FOR_COUPLE                                       :等待连接
@@ -4907,6 +4913,10 @@ STR_ORDER_COUPLE_FULL                                           :满载
 STR_ORDER_COUPLE_SLOT                                          :且有路签 {STRING}
 STR_ORDER_COUPLE_STATION_BUTTON                                :{BLACK}车站
 STR_ORDER_COUPLE_STATION_TOOLTIP                               :{BLACK}在地图上选择一个车站作为对接目标车站。再次点击清除
+STR_ORDER_COUPLE_LOAD_TOOLTIP                                   :{BLACK}选择可以连接的列车：任意、空车或满载
+STR_ORDER_COUPLE_CARGO_TOOLTIP                                  :{BLACK}限制只连接能运载所选货物类型的列车。再次点击清除
+STR_ORDER_COUPLE_VALUE_TOOLTIP                                  :{BLACK}限制只连接具有指定车厢数量的列车（0 表示不限）
+STR_ORDER_DECOUPLE_VALUE_TOOLTIP                                :{BLACK}解挂后本列车保留的车厢数量
 STR_ORDER_COUPLE_USE_WAITING_SCHEDULE                          :使用等待对接列车的调度计划
 STR_ORDER_COUPLE_USE_WAITING_SCHEDULE_SUFFIX                   :（并使用等待对接列车的调度计划）
 STR_ORDER_COUPLE_ANY_SLOT                                     :任意路签
@@ -4914,11 +4924,40 @@ STR_ORDER_DECOUPLE                                              :（解挂）
 STR_ORDER_DECOUPLE_DETAILS                                      :[解挂并保留 {COMMA} 节车厢] 第一部分 {STRING} 第二部分 {STRING}
 STR_ORDER_DECOUPLE_DETAILS_AUTO                                 :[解挂并保留 {COMMA}(自动) 节车厢] 第一部分 {STRING} 第二部分 {STRING}
 STR_ORDER_COUPLE_UNITS                                          :（{COMMA} 节车厢）
-STR_ORDER_DECOUPLE_KEEP_ORDERS                                  :（保留调度计划）
+STR_ORDER_DECOUPLE_KEEP_ORDERS                                  :（装卸并保留调度计划）
 STR_ORDER_DECOUPLE_KEEP_ORDERS_NO_LOAD                          :（保留调度计划不装卸）
-STR_ORDER_DECOUPLE_LOAD_AND_WAIT                               :（装卸并等待连接）
-STR_ORDER_DECOUPLE_WAIT_FOR_COUPLE                              :（等待连接)
+STR_ORDER_DECOUPLE_LOAD_AND_WAIT                                :（装卸并等待连接）
+STR_ORDER_DECOUPLE_WAIT_FOR_COUPLE                              :（等待连接不装卸）
+STR_ORDER_DECOUPLE_LOAD_AND_SCHEDULE                            :（装卸并使用调度计划 {STRING}）
 STR_ORDER_DECOUPLE_USE_SCHEDULE                                 :（使用调度计划 {STRING}）
+STR_COUPLE_DIAGNOSTIC_BUTTON                                   :{BLACK}诊断
+STR_COUPLE_DIAGNOSTIC_TOOLTIP                                  :{BLACK}显示当前接挂目标、预约关系和候选排除原因
+STR_COUPLE_DIAGNOSTIC_CAPTION                                  :{WHITE}接挂诊断
+STR_COUPLE_DIAGNOSTIC_TARGET                                   :当前目标：{VEHICLE}
+STR_COUPLE_DIAGNOSTIC_CLAIM_SELF                               :预约：已为本列车保留
+STR_COUPLE_DIAGNOSTIC_CLAIM_OTHER                              :预约：已为 {VEHICLE} 保留
+STR_COUPLE_DIAGNOSTIC_CLAIM_NONE                               :预约：无
+STR_COUPLE_DIAGNOSTIC_PATH_UNKNOWN                             :存在符合筛选条件的列车；路径状态未知
+STR_COUPLE_DIAGNOSTIC_NO_CANDIDATE                             :未找到符合条件的列车
+STR_COUPLE_DIAGNOSTIC_REJECTION                                :{STRING}：{COMMA}
+STR_COUPLE_DIAGNOSTIC_NOT_WAITING                              :未处于等待接挂状态
+STR_COUPLE_DIAGNOSTIC_CLAIMED                                  :已被其他列车预约
+STR_COUPLE_DIAGNOSTIC_CRASHED                                  :列车已损毁
+STR_COUPLE_DIAGNOSTIC_STOPPED                                  :列车已手动停车
+STR_COUPLE_DIAGNOSTIC_OWNER                                    :所有权不允许接挂
+STR_COUPLE_DIAGNOSTIC_LOAD                                     :空车或满载筛选不匹配
+STR_COUPLE_DIAGNOSTIC_CARGO                                    :货种不匹配
+STR_COUPLE_DIAGNOSTIC_UNIT_COUNT                               :节数不匹配
+STR_COUPLE_DIAGNOSTIC_SLOT                                     :槽位不匹配
+STR_COUPLE_DIAGNOSTIC_STATION                                  :车站不匹配
+STR_COUPLE_DIAGNOSTIC_PLATFORM                                 :列车未完整容纳在同一站台
+STR_COUPLE_DIAGNOSTIC_ARRANGEMENT                              :编组或 NewGRF 兼容性检查失败
+STR_COUPLE_DIAGNOSTIC_NOT_ACTIVE                               :所选订单尚未执行；仅显示该订单的候选筛选结果
+STR_ORDERS_DECOUPLE_PREVIEW_TOOLTIP                            :{BLACK}点击白色标记选择切点，或点击保留数量手动输入。Ctrl+点击恢复自动解挂。客货仍随原车厢保留。
+STR_DECOUPLE_DIAGNOSTIC_PLATFORM                              :列车未完整容纳在同一站台
+STR_DECOUPLE_DIAGNOSTIC_TOO_SHORT                             :列车不足两个可拆分车辆单位
+STR_DECOUPLE_DIAGNOSTIC_CUT                                   :所选切点会拆开铰接或多头车辆单位
+STR_DECOUPLE_DIAGNOSTIC_ARRANGEMENT                           :编组或 NewGRF 兼容性检查失败
 
 STR_INVALID_ORDER                                               :{RED}（无效命令）
 
@@ -5598,8 +5637,8 @@ STR_ERROR_NO_STOP_ARTICULATED_VEHICLE                           :{WHITE}铰接�
 STR_ERROR_AIRPORT_NO_PLANES                                     :{WHITE}这架飞机不能降落在这个直升机场
 STR_ERROR_AIRPORT_NO_HELICOPTERS                                :{WHITE}这架直升机不能降落在这个机场
 STR_BUILD_HELIPORT_CAPTION                                      :{WHITE}直升机场方向
-STR_BUILD_AIRPORT_INFRA_NO_CATCH_CAPTION                    :{WHITE}无货运吸引范围的基础设施
-STR_BUILD_AIRPORT_INFRA_WITH_CATCH_CAPTION                  :{WHITE}有货运吸引范围的基础设施
+STR_BUILD_AIRPORT_INFRA_NO_CATCH_CAPTION                    :{WHITE}机场基础设施
+STR_BUILD_AIRPORT_INFRA_WITH_CATCH_CAPTION                  :{WHITE}机场航站楼
 STR_BUILD_AIRPORT_INFRA_TOOLTIP                             :{BLACK}选择一段基础设施及其方向
 STR_BUILD_HANGAR_CAPTION                                    :{WHITE}机库方向
 STR_BUILD_HELIPORT_ORIENTATION_TOOLTIP                          :{BLACK}选择直升机场方向
@@ -6145,25 +6184,25 @@ STR_TOOLBAR_AIRPORT_WATER_MENU_TEXT                             :水上机场建
 STR_TOOLBAR_AIRPORT_DARK_MENU_TEXT                              :深色机场建设
 STR_TOOLBAR_AIRPORT_YELLOW_MENU_TEXT                            :划线跑道机场建设
 STR_TOOLBAR_AIRPORT_CAPTION                                    :{WHITE}机场
-STR_TOOLBAR_AIRPORT_BUILD_AIRPORT_TOOLTIP                      :{BLACK}建设机场。Ctrl+点击选择另一个车站加入。按 Shift 仅显示费用估算
-STR_TOOLBAR_AIRPORT_ADD_TILES                                  :{BLACK}向机场添加或移除图块
-STR_TOOLBAR_AIRPORT_INFRASTRUCTURE_CATCHMENT                   :{BLACK}设为有货运吸引范围的基础设施
-STR_TOOLBAR_AIRPORT_INFRASTRUCTURE_NO_CATCHMENT                :{BLACK}设为无货运吸引范围的基础设施
-STR_TOOLBAR_AIRPORT_SET_TRACKS                                 :{BLACK}设置跑道
-STR_TOOLBAR_AIRPORT_DEFINE_RUNWAY_LANDING                      :{BLACK}定义为允许降落的跑道
-STR_TOOLBAR_AIRPORT_DEFINE_RUNWAY_NO_LANDING                   :{BLACK}定义为禁止降落的跑道
+STR_TOOLBAR_AIRPORT_BUILD_AIRPORT_TOOLTIP                      :{BLACK}建设机场。Ctrl+点击选择另一个车站合并。按 Shift 仅显示费用估算
+STR_TOOLBAR_AIRPORT_ADD_TILES                                  :{BLACK}设置机场范围
+STR_TOOLBAR_AIRPORT_INFRASTRUCTURE_CATCHMENT                   :{BLACK}建设航站楼
+STR_TOOLBAR_AIRPORT_INFRASTRUCTURE_NO_CATCHMENT                :{BLACK}建设机场基础设施
+STR_TOOLBAR_AIRPORT_SET_TRACKS                                 :{BLACK}设置滑行道
+STR_TOOLBAR_AIRPORT_DEFINE_RUNWAY_LANDING                      :{BLACK}建设起降跑道
+STR_TOOLBAR_AIRPORT_DEFINE_RUNWAY_NO_LANDING                   :{BLACK}建设起飞跑道
 STR_TOOLBAR_AIRPORT_BUILD_APRON                                :{BLACK}建设停机坪
 STR_TOOLBAR_AIRPORT_BUILD_HELIPAD                              :{BLACK}建设直升机停机坪
 STR_TOOLBAR_AIRPORT_BUILD_HELIPORT                             :{BLACK}建设直升机场
 STR_TOOLBAR_AIRPORT_BUILD_HANGAR_STANDARD                      :{BLACK}建设标准机库
 STR_TOOLBAR_AIRPORT_BUILD_HANGAR_EXTENDED                      :{BLACK}建设扩建机库
-STR_TOOLBAR_AIRPORT_TOGGLE_BUILD_REMOVE                        :{BLACK}切换机场图块、基础设施、停机坪和机库的建设/移除模式
+STR_TOOLBAR_AIRPORT_TOGGLE_BUILD_REMOVE                        :{BLACK}切换机场区域、基础设施、停机坪和机库的建设/移除模式
 STR_TOOLBAR_AIRPORT_BUILD_PRE_AIRPORT_TOOLTIP                  :{BLACK}建设预定义的机场布局。Ctrl 启用加入车站。Shift 切换建设/显示费用估算
-STR_TOOLBAR_AIRPORT_CHANGE_AIRTYPE                             :{BLACK}更改机场的航空类型
+STR_TOOLBAR_AIRPORT_CHANGE_AIRTYPE                             :{BLACK}更改机场类型
 STR_TOOLBAR_AIRPORT_ROTATE_GRAPHICS                            :{BLACK}更改地面图形
-STR_TOOLBAR_AIRPORT_ROTATE_GRAPHICS_TOOLTIP                    :{BLACK}点击简单机场图块以更改其图形（实验性功能；仅适用于划线跑道航空类型）
+STR_TOOLBAR_AIRPORT_ROTATE_GRAPHICS_TOOLTIP                    :{BLACK}点击机场区域以更改其图形
 STR_TOOLBAR_AIRPORT_TOGGLE_GROUND                              :{BLACK}切换地面硬化
-STR_TOOLBAR_AIRPORT_TOGGLE_GROUND_TOOLBAR                      :{BLACK}点击简单机场图块以显示或隐藏航空类型地面精灵。
+STR_TOOLBAR_AIRPORT_TOGGLE_GROUND_TOOLBAR                      :{BLACK}点击机场地面切换地面硬化
 
 STR_BADGE_NAME_LIST                                             :{STRING}：{GOLD}{STRING}
 STR_BADGE_CONFIG_MENU_TOOLTIP                                   :开启徽章设定
@@ -6207,3 +6246,5 @@ STR_CONFIG_SETTING_JRPM_ENABLE_DECOUPLE_HELPTEXT                   :启用机车
 STR_CONFIG_SETTING_JRPM_ENABLE_MODULAR_AIRPORT                     :模块化机场
 STR_CONFIG_SETTING_JRPM_ENABLE_MODULAR_AIRPORT_HELPTEXT            :启用多格模块化机场建造。关闭后仅使用标准机场。
 STR_JRPM_FEATURE_DISABLED :{WHITE}{STRING} 已在设置中关闭（jrpm 功能开关）。
+
+STR_DECOUPLE_PREVIEW_COUNT                                    :保留 {COMMA} 节（点击手动输入；0 为自动）

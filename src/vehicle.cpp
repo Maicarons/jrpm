@@ -3467,7 +3467,10 @@ void Vehicle::DeleteUnreachedImplicitOrders()
  */
 static void VehicleIncreaseStats(const Vehicle *front)
 {
-	for (const Vehicle *v = front; v != nullptr; v = v->Next()) {
+	/* The primary may sit mid-chain or at the physical tail (decoupled parts
+	 * driving away reversed), so start at the physical head to cover the
+	 * whole consist. */
+	for (const Vehicle *v = front->First(); v != nullptr; v = v->Next()) {
 		StationID last_loading_station = front->vehicle_flags.Test(VehicleFlag::LastLoadStationSeparate) ? v->last_loading_station : front->last_loading_station;
 		StateTicks loading_tick = front->vehicle_flags.Test(VehicleFlag::LastLoadStationSeparate) ? v->last_loading_tick : front->last_loading_tick;
 		if (v->refit_cap > 0 &&
@@ -3637,7 +3640,9 @@ void Vehicle::BeginLoading()
  */
 void Vehicle::CancelReservation(StationID next, Station *st)
 {
-	for (Vehicle *v = this; v != nullptr; v = v->next) {
+	/* Start at the physical head: the primary may sit mid-chain or at the
+	 * physical tail of a decoupled part. */
+	for (Vehicle *v = this->First(); v != nullptr; v = v->next) {
 		VehicleCargoList &cargo = v->cargo;
 		if (cargo.ActionCount(VehicleCargoList::MoveToAction::Load) > 0) {
 			Debug(misc, 1, "cancelling cargo reservation");
@@ -3653,7 +3658,9 @@ CargoTypes Vehicle::GetLastLoadingStationValidCargoMask() const
 		return (this->last_loading_station != StationID::Invalid()) ? ALL_CARGOTYPES : CargoTypes{};
 	} else {
 		CargoTypes cargo_mask{};
-		for (const Vehicle *u = this; u != nullptr; u = u->Next()) {
+		/* The primary may sit mid-chain or at the physical tail, so start at
+		 * the physical head to cover the whole consist. */
+		for (const Vehicle *u = this->First(); u != nullptr; u = u->Next()) {
 			if (u->cargo_type < NUM_CARGO && u->last_loading_station != StationID::Invalid()) {
 				cargo_mask.Set(u->cargo_type);
 			}
@@ -3680,7 +3687,9 @@ void Vehicle::LeaveStation()
 
 	if (this->type == VehicleType::Train) {
 		station_tile = Train::From(this)->GetStationLoadingVehicle()->tile;
-		for (Train *v = Train::From(this); v != nullptr; v = v->Next()) {
+		/* Start at the physical head: the primary may sit mid-chain or at the
+		 * physical tail of a decoupled part. */
+		for (Train *v = Train::From(this)->First(); v != nullptr; v = v->Next()) {
 			v->flags.Reset({VehicleRailFlag::BeyondPlatformEnd, VehicleRailFlag::NotYetInPlatform});
 			v->vehicle_flags.Reset(VehicleFlag::CargoUnloading);
 		}
@@ -3726,7 +3735,9 @@ void Vehicle::LeaveStation()
 			/* NB: this is saved here as we overwrite it on the first iteration of the loop below */
 			StationID head_last_loading_station = this->last_loading_station;
 			StateTicks head_last_loading_tick = this->last_loading_tick;
-			for (Vehicle *u = this; u != nullptr; u = u->Next()) {
+			/* Start at the physical head: the primary may sit mid-chain or at
+			 * the physical tail of a decoupled part. */
+			for (Vehicle *u = this->First(); u != nullptr; u = u->Next()) {
 				StationID last_loading_station = this->vehicle_flags.Test(VehicleFlag::LastLoadStationSeparate) ? u->last_loading_station : head_last_loading_station;
 				StateTicks last_loading_tick = this->vehicle_flags.Test(VehicleFlag::LastLoadStationSeparate) ? u->last_loading_tick : head_last_loading_tick;
 				if (u->cargo_type < NUM_CARGO && cargoes_can_load_unload.Test(u->cargo_type)) {
@@ -3878,6 +3889,11 @@ static bool ShouldVehicleContinueWaiting(Vehicle *v)
 	if (v->cur_implicit_order_index < v->GetNumOrders() && v->GetOrder(v->cur_implicit_order_index)->IsType(OT_IMPLICIT)) return false;
 
 	/* If conditional orders lead back to this order, just keep waiting without leaving the order */
+	/* Advancing past the end of the list is a normal pass-end wrap, not a
+	 * conditional self-loop: without this check a one-order list would always
+	 * be treated as "the next order leads back here" and the vehicle would
+	 * never depart (and, while executing a schedule, never return home). */
+	if (v->cur_implicit_order_index + 1 >= v->GetNumOrders()) return false;
 	bool loop = AdvanceOrderIndexDeferred(v, v->cur_implicit_order_index + 1) == v->cur_implicit_order_index;
 	FlushAdvanceOrderIndexDeferred(v, loop);
 	if (loop) v->vehicle_flags.Set(VehicleFlag::ConditionalOrderWait);

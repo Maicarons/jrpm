@@ -271,6 +271,12 @@ public:
 	void InvalidateGuiOnRemove();
 	void Free();
 
+	/**
+	 * Convert the order type field from the layout used by savegames which store it in a single
+	 * byte, i.e. savegames which do not have the XSLFI_ORDER_DECOUPLE feature.
+	 */
+	void ConvertLegacyTypeLayout();
+
 	void MakeGoToStation(StationID destination);
 	void MakeGoToDepot(DestinationID destination, OrderDepotTypeFlags order, OrderNonStopFlags non_stop_type = ONSF_NO_STOP_AT_INTERMEDIATE_STATIONS, OrderDepotActionFlags action = ODATF_SERVICE_ONLY, CargoType cargo = CARGO_NO_REFIT);
 	void MakeGoToWaypoint(StationID destination);
@@ -709,11 +715,11 @@ public:
 	inline void SetDecoupleFirstOrdersType(OrderDecoupleOrdersFlags orders_type) { SB(this->flags, 0, 3, to_underlying(orders_type)); }
 	/** Set what orders second part should get */
 	inline void SetDecoupleSecondOrdersType(OrderDecoupleOrdersFlags orders_type) { SB(this->flags, 4, 3, to_underlying(orders_type)); }
-	/** Get the schedule the first part adopts after decoupling (ODOF_EXECUTE_SCHEDULE only). */
+	/** Get the schedule the first part adopts after decoupling (ODOF_EXECUTE_SCHEDULE and ODOF_LOAD_AND_SCHEDULE only). */
 	inline OrderListID GetDecoupleFirstScheduleID() const { return OrderListID{(uint16_t)this->GetXData()}; }
 	/** Set the schedule the first part adopts after decoupling. */
 	inline void SetDecoupleFirstScheduleID(OrderListID id) { SB(this->GetXDataRef(), 0, 16, id.base()); }
-	/** Get the schedule the second part adopts after decoupling (ODOF_EXECUTE_SCHEDULE only). */
+	/** Get the schedule the second part adopts after decoupling (ODOF_EXECUTE_SCHEDULE and ODOF_LOAD_AND_SCHEDULE only). */
 	inline OrderListID GetDecoupleSecondScheduleID() const { return OrderListID{(uint16_t)this->GetXData2Low()}; }
 	/** Set the schedule the second part adopts after decoupling. */
 	inline void SetDecoupleSecondScheduleID(OrderListID id) { this->SetXData2Low(id.base()); }
@@ -1482,7 +1488,7 @@ public:
 	 */
 	inline VehicleOrderID GetNumManualOrders() const { return this->num_manual_orders; }
 
-	CargoMaskedStationIDVector GetNextStoppingStation(const Vehicle *v, CargoTypes cargo_mask, const Order *first = nullptr, uint hops = 0) const;
+	CargoMaskedStationIDVector GetNextStoppingStation(const Vehicle *v, CargoTypes cargo_mask, const Order *first = nullptr, uint hops = 0, bool in_target = false) const;
 	std::vector<const Order *> GetNextStoppingOrder(const Vehicle *v, const Order *first = nullptr, uint hops = 0) const;
 	const Order *GetNextDecisionNode(const Order *next, uint hops, CargoTypes &cargo_mask) const;
 

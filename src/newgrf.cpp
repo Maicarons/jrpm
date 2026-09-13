@@ -480,6 +480,7 @@ static const EnumIndexArray<const char *, GrfSpecFeature, GrfSpecFeature::End> _
 	"RoadStops",
 	"Badges",
 	"NewLandscape",
+	"AirTypes",
 	"FakeTowns",
 };
 

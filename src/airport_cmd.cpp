@@ -1258,6 +1258,22 @@ CommandCost CmdAirportToggleGround(DoCommandFlags flags, TileIndex start_tile, T
 	return CommandCost();
 }
 
+/**
+ * Clears an airport tile, restoring the water it was built on, if any.
+ * @param tile Airport tile to clear.
+ * @param st   Station the tile belongs to.
+ */
+static void ClearAirportTileToWater(TileIndex tile, Station *st)
+{
+	WaterClass wc = HasTileWaterClass(tile) ? GetWaterClass(tile) : WaterClass::Invalid;
+	DoClearSquare(tile);
+	/* Maybe change to water */
+	if (wc != WaterClass::Invalid) {
+		Owner o = (wc == WaterClass::Canal) ? st->owner : OWNER_WATER;
+		MakeWater(tile, o, wc, Random());
+	}
+}
+
 CommandCost RemoveAirportTiles(DoCommandFlags flags, TileIndex start_tile, TileIndex end_tile, AirType air_type)
 {
 	if (!IsValidTile(end_tile)) return CMD_ERROR;
@@ -1320,13 +1336,7 @@ CommandCost RemoveAirportTiles(DoCommandFlags flags, TileIndex start_tile, TileI
 		if (!IsSimpleTrack(tile)) cost.AddCost(AirClearCost(air_type));
 
 		if (flags.Test(DoCommandFlag::Execute)) {
-			WaterClass wc = HasTileWaterClass(tile) ? GetWaterClass(tile) : WaterClass::Invalid;
-			DoClearSquare(tile);
-			/* Maybe change to water */
-			if (wc != WaterClass::Invalid) {
-				Owner o = (wc == WaterClass::Canal) ? st->owner : OWNER_WATER;
-				MakeWater(tile, o, wc, Random());
-			}
+			ClearAirportTileToWater(tile, st);
 
 			Company *c = Company::Get(st->owner);
 			c->infrastructure.airport--;
@@ -1831,7 +1841,7 @@ CommandCost RemoveAirport(TileIndex tile, DoCommandFlags flags)
 			c->infrastructure.airport--;
 			c->infrastructure.station--;
 			DeleteAnimatedTile(tile_cur);
-			DoClearSquare(tile_cur);
+			ClearAirportTileToWater(tile_cur, st);
 			DeleteNewGRFInspectWindow(GrfSpecFeature::AirportTiles, tile_cur.base());
 			DeleteNewGRFInspectWindow(GrfSpecFeature::AirTypes, tile_cur.base());
 		}

@@ -30,6 +30,8 @@
 #include "infrastructure_func.h"
 #include "hotkeys.h"
 #include "aircraft.h"
+#include "train.h"
+#include "vehicle_gui.h"
 #include "date_func.h"
 #include "engine_func.h"
 #include "vehicle_func.h"
@@ -610,8 +612,9 @@ static const StringID _order_decouple_orders_drowdown[] = {
 	 * retired ODOF_INHERIT_ORDERS and is not selectable). */
 	STR_ORDERS_DECOUPLE_KEEP_ORDERS,          // 0
 	STR_ORDERS_DECOUPLE_KEEP_ORDERS_NO_LOAD,  // 1
+	STR_ORDERS_DECOUPLE_LOAD_AND_WAIT,        // 2
 	STR_ORDERS_DECOUPLE_WAIT_FOR_COUPLE,      // 3
-	STR_ORDERS_DECOUPLE_LOAD_AND_WAIT,        // 4
+	STR_ORDERS_DECOUPLE_LOAD_AND_SCHEDULE,    // 4
 	STR_ORDERS_DECOUPLE_EXECUTE_SCHEDULE,     // 5
 };
 
@@ -619,12 +622,25 @@ static const StringID _order_decouple_orders_drowdown[] = {
 static const OrderDecoupleOrdersFlags _order_decouple_orders_drowdown_flags[] = {
 	ODOF_KEEP_ORDERS,
 	ODOF_KEEP_ORDERS_NO_LOAD,
-	ODOF_WAIT_FOR_COUPLE,
 	ODOF_LOAD_AND_WAIT,
+	ODOF_WAIT_FOR_COUPLE,
+	ODOF_LOAD_AND_SCHEDULE,
 	ODOF_EXECUTE_SCHEDULE,
 };
 
 static_assert(lengthof(_order_decouple_orders_drowdown) == lengthof(_order_decouple_orders_drowdown_flags));
+
+/**
+ * Get the dropdown index of a decouple orders flag, so the current selection
+ * can be marked when the dropdown is opened.
+ */
+static int DecoupleOrdersDropdownIndex(OrderDecoupleOrdersFlags flag)
+{
+	for (uint i = 0; i < lengthof(_order_decouple_orders_drowdown_flags); i++) {
+		if (_order_decouple_orders_drowdown_flags[i] == flag) return i;
+	}
+	return 0; // Unreachable: the order accessors clamp to a valid flag.
+}
 
 static const StringID _order_manage_list_dropdown[] = {
 	STR_ORDER_REVERSE_ORDER_LIST,
@@ -1481,10 +1497,11 @@ void DrawOrderString(const Vehicle *v, const Order *order, int order_index, int 
 					case ODOF_KEEP_ORDERS_NO_LOAD: return GetString(STR_ORDER_DECOUPLE_KEEP_ORDERS_NO_LOAD);
 					case ODOF_WAIT_FOR_COUPLE: return GetString(STR_ORDER_DECOUPLE_WAIT_FOR_COUPLE);
 					case ODOF_LOAD_AND_WAIT: return GetString(STR_ORDER_DECOUPLE_LOAD_AND_WAIT);
-					case ODOF_EXECUTE_SCHEDULE: {
+					case ODOF_EXECUTE_SCHEDULE:
+					case ODOF_LOAD_AND_SCHEDULE: {
 						const OrderList *ol = OrderList::GetIfValid(schedule_id);
 						std::string name = (ol == nullptr || ol->GetName().empty()) ? GetString(STR_ORDER_LIST_DEFAULT_NAME, schedule_id.base() + 1) : ol->GetName();
-						return GetString(STR_ORDER_DECOUPLE_USE_SCHEDULE, name);
+						return GetString(type == ODOF_LOAD_AND_SCHEDULE ? STR_ORDER_DECOUPLE_LOAD_AND_SCHEDULE : STR_ORDER_DECOUPLE_USE_SCHEDULE, name);
 					}
 					default: NOT_REACHED();
 				}
@@ -1821,6 +1838,8 @@ private:
 	VehicleOrderID order_over = INVALID_VEH_ORDER_ID; ///< Order over which another order is dragged, \c INVALID_VEH_ORDER_ID if none.
 	OrderPlaceObjectState goto_type = OPOS_NONE;
 	Scrollbar *vscroll = nullptr;
+	Scrollbar *decouple_scroll = nullptr;
+	int current_decouple_plane = SZSP_NONE;
 	bool can_do_refit = false;     ///< Vehicle chain can be refitted in depot.
 	bool can_do_autorefit = false; ///< Vehicle chain can be auto-refitted.
 	int query_text_widget = -1;    ///< widget which most recently called ShowQueryString
@@ -1828,6 +1847,7 @@ private:
 	int current_value_plane = 0;
 	int current_mgmt_plane = 0;
 	int decouple_schedule_part = -1; ///< While the decouple schedule picker is open: 0 for the first train part, 1 for the second, -1 otherwise.
+	OrderDecoupleOrdersFlags decouple_schedule_orders_type = ODOF_EXECUTE_SCHEDULE; ///< Decouple orders type the open schedule picker applies.
 	OrderListID list_id = OrderListID::Invalid(); ///< Target list id when editing a standalone (player-created) order list.
 
 private:
@@ -2053,6 +2073,67 @@ private:
 		}
 	}
 
+	static StringID GetCoupleCandidateResultString(CoupleCandidateResult result)
+	{
+		switch (result) {
+			case CoupleCandidateResult::NotWaiting:  return STR_COUPLE_DIAGNOSTIC_NOT_WAITING;
+			case CoupleCandidateResult::Claimed:     return STR_COUPLE_DIAGNOSTIC_CLAIMED;
+			case CoupleCandidateResult::Crashed:     return STR_COUPLE_DIAGNOSTIC_CRASHED;
+			case CoupleCandidateResult::Stopped:     return STR_COUPLE_DIAGNOSTIC_STOPPED;
+			case CoupleCandidateResult::Owner:       return STR_COUPLE_DIAGNOSTIC_OWNER;
+			case CoupleCandidateResult::Load:        return STR_COUPLE_DIAGNOSTIC_LOAD;
+			case CoupleCandidateResult::Cargo:       return STR_COUPLE_DIAGNOSTIC_CARGO;
+			case CoupleCandidateResult::UnitCount:   return STR_COUPLE_DIAGNOSTIC_UNIT_COUNT;
+			case CoupleCandidateResult::Slot:        return STR_COUPLE_DIAGNOSTIC_SLOT;
+			case CoupleCandidateResult::Station:     return STR_COUPLE_DIAGNOSTIC_STATION;
+			case CoupleCandidateResult::Platform:    return STR_COUPLE_DIAGNOSTIC_PLATFORM;
+			case CoupleCandidateResult::Arrangement: return STR_COUPLE_DIAGNOSTIC_ARRANGEMENT;
+			default:                                  return STR_NULL;
+		}
+	}
+
+	/** Build the coupling report on demand; no pathfinder or claim state is changed. */
+	void ShowCoupleDiagnostics()
+	{
+		const Order *order = this->OrderAt(this->OrderGetSel());
+		if (!this->HasVehicle() || this->vehicle->type != VehicleType::Train || order == nullptr || !order->IsType(OT_GOTO_COUPLE)) return;
+
+		const Train *moving = Train::From(this->vehicle)->Primary();
+		constexpr size_t RESULT_COUNT = to_underlying(CoupleCandidateResult::Arrangement) + 1;
+		std::array<uint, RESULT_COUNT> counts{};
+
+		for (Train *candidate : Train::Iterate()) {
+			if (candidate != candidate->First() || candidate == moving->First()) continue;
+			CoupleCandidateResult result = GetCoupleCandidateResult(moving, *order, candidate, candidate->tile, true, UINT32_MAX);
+			counts[to_underlying(result)]++;
+		}
+
+		std::string report;
+		const Train *target = Train::GetIfValid(moving->couple_target);
+		bool active = moving->current_order.IsType(OT_GOTO_COUPLE) && moving->cur_implicit_order_index == this->OrderGetSel();
+		if (active && target != nullptr) {
+			report = GetString(STR_COUPLE_DIAGNOSTIC_TARGET, target->Primary()->index);
+			const Train *claimant = GetCoupleClaimant(target);
+			report += "\n";
+			report += claimant == moving ? GetString(STR_COUPLE_DIAGNOSTIC_CLAIM_SELF) :
+					(claimant != nullptr ? GetString(STR_COUPLE_DIAGNOSTIC_CLAIM_OTHER, claimant->index) : GetString(STR_COUPLE_DIAGNOSTIC_CLAIM_NONE));
+		} else if (counts[to_underlying(CoupleCandidateResult::Valid)] != 0) {
+			report = GetString(STR_COUPLE_DIAGNOSTIC_PATH_UNKNOWN);
+		} else {
+			report = GetString(STR_COUPLE_DIAGNOSTIC_NO_CANDIDATE);
+		}
+		if (!active) report = GetString(STR_COUPLE_DIAGNOSTIC_NOT_ACTIVE) + "\n" + report;
+
+		for (size_t i = 0; i < counts.size(); i++) {
+			CoupleCandidateResult result = static_cast<CoupleCandidateResult>(i);
+			if (counts[i] == 0 || result == CoupleCandidateResult::Valid || result == CoupleCandidateResult::NotCoupleOrder) continue;
+			report += "\n";
+			report += GetString(STR_COUPLE_DIAGNOSTIC_REJECTION, GetCoupleCandidateResultString(result), counts[i]);
+		}
+
+		ShowErrorMessage(GetEncodedString(STR_COUPLE_DIAGNOSTIC_CAPTION), GetEncodedString(STR_JUST_RAW_STRING, report), WarningLevel::Info);
+	}
+
 	void OrderClick_OrdersFirst(int index)
 	{
 		this->OrderClick_OrdersType(index, true);
@@ -2064,6 +2145,18 @@ private:
 	}
 
 	/**
+	 * Get the modify-order flag storing the pending schedule picker selection.
+	 * @param first true for the first part of the train, false for the second
+	 */
+	ModifyOrderFlags DecoupleScheduleMof(bool first) const
+	{
+		if (this->decouple_schedule_orders_type == ODOF_LOAD_AND_SCHEDULE) {
+			return first ? MOF_DECOUPLE_FIRST_LOAD_SCHEDULE : MOF_DECOUPLE_SECOND_LOAD_SCHEDULE;
+		}
+		return first ? MOF_DECOUPLE_FIRST_SCHEDULE : MOF_DECOUPLE_SECOND_SCHEDULE;
+	}
+
+	/**
 	 * Handle a selection in the decouple orders dropdown.
 	 * @param index the selected dropdown index
 	 * @param first true for the first part of the train, false for the second
@@ -2072,9 +2165,10 @@ private:
 	{
 		if (index < 0 || (uint)index >= lengthof(_order_decouple_orders_drowdown_flags)) return;
 		OrderDecoupleOrdersFlags flag = _order_decouple_orders_drowdown_flags[index];
-		if (flag == ODOF_EXECUTE_SCHEDULE) {
+		if (flag == ODOF_EXECUTE_SCHEDULE || flag == ODOF_LOAD_AND_SCHEDULE) {
 			/* Show the schedule picker for this part. */
 			this->decouple_schedule_part = first ? 0 : 1;
+			this->decouple_schedule_orders_type = flag;
 			this->ShowDecoupleScheduleDropdown(first ? WID_O_ORDERS_FIRST : WID_O_ORDERS_SECOND);
 			return;
 		}
@@ -2095,7 +2189,10 @@ private:
 			std::string name = ol->GetName().empty() ? GetString(STR_ORDER_LIST_DEFAULT_NAME, ol->index.base() + 1) : ol->GetName();
 			list.push_back(MakeDropDownListStringItem(std::move(name), ol->index.base(), false));
 		}
-		if (list.empty()) return;
+		if (list.empty()) {
+			ShowErrorMessage(GetEncodedString(STR_ERROR_NO_SCHEDULE_AVAILABLE), {}, WarningLevel::Warning);
+			return;
+		}
 		ShowDropDownList(this, std::move(list), -1, widget, 0, DropDownOption::Filterable, DDSF_SHARED);
 	}
 
@@ -2400,6 +2497,11 @@ public:
 	{
 		this->CreateNestedTree();
 		this->vscroll = this->GetScrollbar(WID_O_SCROLLBAR);
+		if (auto *preview = this->GetWidget<NWidgetStacked>(WID_O_SEL_DECOUPLE_PREVIEW); preview != nullptr) {
+			preview->SetDisplayedPlane(SZSP_NONE);
+			this->decouple_scroll = this->GetScrollbar(WID_O_DECOUPLE_SCROLLBAR);
+			this->GetWidget<NWidgetStacked>(WID_O_SEL_DECOUPLE_VALUE)->SetDisplayedPlane(SZSP_NONE);
+		}
 		if (NWidgetCore *nwid = this->GetWidget<NWidgetCore>(WID_O_DEPOT_ACTION); nwid != nullptr) {
 			nwid->SetToolTip(STR_ORDER_TRAIN_DEPOT_ACTION_TOOLTIP + to_underlying(v->type));
 		}
@@ -2451,6 +2553,10 @@ public:
 
 		this->CreateNestedTree();
 		this->vscroll = this->GetScrollbar(WID_O_SCROLLBAR);
+		if (auto *preview = this->GetWidget<NWidgetStacked>(WID_O_SEL_DECOUPLE_PREVIEW); preview != nullptr) {
+			preview->SetDisplayedPlane(SZSP_NONE);
+			this->decouple_scroll = this->GetScrollbar(WID_O_DECOUPLE_SCROLLBAR);
+		}
 		/* No occupancy data without executing vehicles. */
 		this->GetWidget<NWidgetStacked>(WID_O_SEL_OCCUPANCY)->SetDisplayedPlane(SZSP_NONE);
 		this->current_aux_planes.fill(SZSP_NONE);
@@ -2486,6 +2592,10 @@ public:
 	void UpdateWidgetSize(WidgetID widget, Dimension &size, [[maybe_unused]] const Dimension &padding, [[maybe_unused]] Dimension &fill, [[maybe_unused]] Dimension &resize) override
 	{
 		switch (widget) {
+			case WID_O_DECOUPLE_PREVIEW:
+				size.height = ScaleGUITrad(GetVehicleHeight(VehicleType::Train) + 12) + GetCharacterHeight(FontSize::Normal) + padding.height + 2 * WidgetDimensions::scaled.vsep_normal;
+				break;
+
 			case WID_O_OCCUPANCY_LIST:
 				size.width = GetStringBoundingBox(GetString(STR_ORDERS_OCCUPANCY_PERCENT, GetParamMaxValue(100))).width + 10 + WidgetDimensions::unscaled.framerect.Horizontal();
 				/* FALL THROUGH */
@@ -2697,6 +2807,9 @@ public:
 		NWidgetStacked *mgmt_sel = this->GetWidget<NWidgetStacked>(WID_O_SEL_MGMT);
 		mgmt_sel->SetDisplayedPlane(this->GetOrderManagementPlane());
 
+		auto *preview_sel = this->GetWidget<NWidgetStacked>(WID_O_SEL_DECOUPLE_PREVIEW);
+		if (preview_sel != nullptr) preview_sel->SetDisplayedPlane(this->GetDecouplePreviewOrder() != nullptr ? 0 : SZSP_NONE);
+
 		auto aux_plane_guard = scope_guard([&]() {
 			bool reinit = false;
 			auto reinit_on_plane_change = [&reinit](NWidgetStacked *sel, int &current) {
@@ -2705,6 +2818,7 @@ public:
 					reinit = true;
 				}
 			};
+			if (preview_sel != nullptr) reinit_on_plane_change(preview_sel, this->current_decouple_plane);
 			reinit_on_plane_change(aux_sel, this->current_aux_planes[0]);
 			reinit_on_plane_change(aux2_sel, this->current_aux_planes[1]);
 			reinit_on_plane_change(aux3_sel, this->current_aux_planes[2]);
@@ -3019,6 +3133,84 @@ public:
 		this->SetDirty();
 	}
 
+	/** The inline preview follows the currently selected order, never a cached order index. */
+	const Order *GetDecouplePreviewOrder() const
+	{
+		if (!this->HasVehicle() || this->vehicle->type != VehicleType::Train || !this->IsLocalTarget()) return nullptr;
+		const Order *order = this->OrderAt(this->OrderGetSel());
+		return order != nullptr && order->IsType(OT_DECOUPLE) ? order : nullptr;
+	}
+
+	static int GetCutPosition(const Train *v, const Train *cut)
+	{
+		int position = 0;
+		for (const Train *u = v->First(); u != cut; u = u->Next()) position += u->GetDisplayImageWidth();
+		return position;
+	}
+
+	void DrawDecouplePreview(const Rect &r) const
+	{
+		const Order *order = this->GetDecouplePreviewOrder();
+		if (order == nullptr) return;
+		const Train *v = Train::From(this->vehicle)->Primary();
+		const Train *cut = GetDecoupleVehicleForCount(const_cast<Train *>(v), order->GetNumDecouple());
+		Rect image = r.Shrink(WidgetDimensions::scaled.framerect);
+		DrawString(image.left, image.right, image.top, GetString(STR_DECOUPLE_PREVIEW_COUNT, order->GetNumDecouple()), TextColour::Black);
+		image.top += GetCharacterHeight(FontSize::Normal) + WidgetDimensions::scaled.vsep_normal;
+		DrawTrainImage(v->First(), image.WithHeight(ScaleGUITrad(GetVehicleHeight(VehicleType::Train)), false),
+				VehicleID::Invalid(), EIT_IN_DETAILS, this->decouple_scroll->GetPosition());
+		auto draw_cut = [&](const Train *boundary, bool selected) {
+			int offset = GetCutPosition(v, boundary) - this->decouple_scroll->GetPosition();
+			int x = _current_text_dir == TD_RTL ? image.right - offset : image.left + offset;
+			if (!IsInsideMM(x, image.left, image.right + 1)) return;
+			int unit = ScaleGUITrad(1);
+			int marker_top = image.bottom - ScaleGUITrad(8);
+			auto fill = [&](int half_width, int top, int bottom, PixelColour colour) {
+				GfxFillRect(std::max(image.left, x - half_width), top, std::min(image.right, x + half_width), bottom, colour);
+			};
+			if (selected) {
+				fill(2 * unit, image.top, marker_top, PC_BLACK);
+				fill(unit, image.top, marker_top, PC_YELLOW);
+			}
+			fill(4 * unit, marker_top, image.bottom, PC_BLACK);
+			fill(3 * unit, marker_top + unit, image.bottom - unit, selected ? PC_YELLOW : PC_WHITE);
+		};
+		for (const DecoupleCut &boundary : GetDecoupleCuts(const_cast<Train *>(v))) draw_cut(boundary.vehicle, false);
+		/* Automatic orders can choose a cut beyond the manual field's 127 limit. */
+		if (cut != nullptr) draw_cut(cut, true);
+	}
+
+	void SelectDecoupleCut(Point pt)
+	{
+		const Order *order = this->GetDecouplePreviewOrder();
+		if (order == nullptr) return;
+		if (_ctrl_pressed) {
+			this->ModifyOrder(this->OrderGetSel(), MOF_DECOUPLE_VALUE, 0);
+			return;
+		}
+		Rect r = this->GetWidget<NWidgetBase>(WID_O_DECOUPLE_PREVIEW)->GetCurrentRect().Shrink(WidgetDimensions::scaled.framerect);
+		int image_top = r.top + GetCharacterHeight(FontSize::Normal) + WidgetDimensions::scaled.vsep_normal;
+		if (pt.y < image_top) {
+			this->query_text_widget = WID_O_DECOUPLE_VALUE;
+			ShowQueryString(GetString(STR_JUST_INT, order->GetNumDecouple()), STR_ORDER_DECOUPLE_VALUE_CAPT, 4, this, CS_NUMERAL, {});
+			return;
+		}
+		if (pt.y > r.bottom) return;
+		Train *v = Train::Get(this->vehicle->index)->Primary();
+		int wanted = (_current_text_dir == TD_RTL ? r.right - pt.x : pt.x - r.left) + this->decouple_scroll->GetPosition();
+		int best_distance = INT_MAX;
+		uint best_count = 0;
+		for (const DecoupleCut &boundary : GetDecoupleCuts(v)) {
+			int distance = std::abs(GetCutPosition(v, boundary.vehicle) - wanted);
+			if (distance < best_distance) {
+				best_distance = distance;
+				best_count = boundary.num_keep;
+			}
+		}
+		if (best_count == 0) return;
+		this->ModifyOrder(this->OrderGetSel(), MOF_DECOUPLE_VALUE, best_count);
+	}
+
 	void OnPaint() override
 	{
 		if (!IsLocalTarget()) {
@@ -3039,12 +3231,21 @@ public:
 			}
 			this->SetWidgetLoweredState(WID_O_MGMT_BTN, this->goto_type == OPOS_CONDITIONAL_RETARGET);
 		}
+		if (this->GetDecouplePreviewOrder() != nullptr) {
+			uint width = 0;
+			for (const Train *u = Train::From(this->vehicle)->First(); u != nullptr; u = u->Next()) width += u->GetDisplayImageWidth();
+			this->decouple_scroll->SetCount(width);
+		}
 		this->DrawWidgets();
 	}
 
 	void DrawWidget(const Rect &r, WidgetID widget) const override
 	{
 		switch (widget) {
+			case WID_O_DECOUPLE_PREVIEW:
+				this->DrawDecouplePreview(r);
+				break;
+
 			case WID_O_ORDER_LIST:
 				DrawOrderListWidget(r);
 				break;
@@ -4148,7 +4349,7 @@ public:
 			case WID_O_COUPLE_VALUE: {
 				const Order *order = OrderAt(this->OrderGetSel());
 				this->query_text_widget = widget;
-				ShowQueryString(GetString(STR_JUST_INT, order->GetNumCouple()), STR_ORDER_DECOUPLE_VALUE_CAPT, 4, this, CS_NUMERAL, {});
+				ShowQueryString(GetString(STR_JUST_INT, order->GetNumCouple()), STR_ORDER_COUPLE_VALUE_CAPT, 4, this, CS_NUMERAL, {});
 				break;
 			}
 
@@ -4167,6 +4368,10 @@ public:
 				break;
 			}
 
+			case WID_O_COUPLE_DIAGNOSTICS:
+				this->ShowCoupleDiagnostics();
+				break;
+
 			case WID_O_DECOUPLE_VALUE: {
 				const Order *order = OrderAt(this->OrderGetSel());
 				this->query_text_widget = widget;
@@ -4174,23 +4379,23 @@ public:
 				break;
 			}
 
-			case WID_O_ORDERS_FIRST:
-				if (this->GetWidget<NWidgetLeaf>(widget)->ButtonHit(pt)) {
-					this->OrderClick_OrdersFirst(0);
-				} else {
-					this->decouple_schedule_part = -1;
-					ShowDropDownMenu(this, _order_decouple_orders_drowdown, 0, WID_O_ORDERS_FIRST, 0, 0);
-				}
+			case WID_O_DECOUPLE_PREVIEW:
+				this->SelectDecoupleCut(pt);
 				break;
 
-			case WID_O_ORDERS_SECOND:
-				if (this->GetWidget<NWidgetLeaf>(widget)->ButtonHit(pt)) {
-					this->OrderClick_OrdersSecond(0);
-				} else {
-					this->decouple_schedule_part = -1;
-					ShowDropDownMenu(this, _order_decouple_orders_drowdown, 0, WID_O_ORDERS_SECOND, 0, 0);
+			case WID_O_ORDERS_FIRST:
+			case WID_O_ORDERS_SECOND: {
+				/* Clicking anywhere opens the dropdown; the selection is only changed there. */
+				this->decouple_schedule_part = -1;
+				const Order *order = OrderAt(this->OrderGetSel());
+				int selected = 0;
+				if (order != nullptr && order->IsType(OT_DECOUPLE)) {
+					OrderDecoupleOrdersFlags flag = (widget == WID_O_ORDERS_FIRST) ? order->GetDecoupleFirstOrdersType() : order->GetDecoupleSecondOrdersType();
+					selected = DecoupleOrdersDropdownIndex(flag);
 				}
+				ShowDropDownMenu(this, _order_decouple_orders_drowdown, selected, widget, 0, 0);
 				break;
+			}
 		}
 	}
 
@@ -4369,7 +4574,7 @@ public:
 			case WID_O_ORDERS_FIRST:
 				if (this->decouple_schedule_part == 0) {
 					this->decouple_schedule_part = -1;
-					this->ModifyOrder(this->OrderGetSel(), MOF_DECOUPLE_FIRST_SCHEDULE, index);
+					this->ModifyOrder(this->OrderGetSel(), this->DecoupleScheduleMof(true), index);
 					break;
 				}
 				this->OrderClick_OrdersFirst(index);
@@ -4378,7 +4583,7 @@ public:
 			case WID_O_ORDERS_SECOND:
 				if (this->decouple_schedule_part == 1) {
 					this->decouple_schedule_part = -1;
-					this->ModifyOrder(this->OrderGetSel(), MOF_DECOUPLE_SECOND_SCHEDULE, index);
+					this->ModifyOrder(this->OrderGetSel(), this->DecoupleScheduleMof(false), index);
 					break;
 				}
 				this->OrderClick_OrdersSecond(index);
@@ -4885,6 +5090,9 @@ public:
 	{
 		/* Update the scroll bar */
 		this->vscroll->SetCapacityFromWidget(this, WID_O_ORDER_LIST, WidgetDimensions::scaled.framerect.Vertical());
+		if (this->decouple_scroll != nullptr && this->current_decouple_plane != SZSP_NONE) {
+			this->decouple_scroll->SetCapacity(this->GetWidget<NWidgetBase>(WID_O_DECOUPLE_PREVIEW)->current_x - WidgetDimensions::scaled.framerect.Horizontal());
+		}
 	}
 
 	bool OnTooltip(Point pt, WidgetID widget, TooltipCloseCondition close_cond) override
@@ -5072,28 +5280,39 @@ static constexpr std::initializer_list<NWidgetPart> _nested_orders_train_widgets
 			NWidget(WWT_PANEL, Colours::Grey), SetFill(1, 0), SetResize(1, 0), EndContainer(),
 			NWidget(NWID_HORIZONTAL, NWidContainerFlag::EqualSize),
 				NWidget(NWID_BUTTON_DROPDOWN, Colours::Grey, WID_O_COUPLE_LOAD), SetMinimalSize(112, 12), SetFill(1, 0),
-														SetStringTip(STR_ORDER_TOGGLE_COUPLE_LOAD, STR_ORDER_CONDITIONAL_VARIABLE_TOOLTIP), SetResize(1, 0),
+														SetStringTip(STR_ORDER_TOGGLE_COUPLE_LOAD, STR_ORDER_COUPLE_LOAD_TOOLTIP), SetResize(1, 0),
 				NWidget(WWT_TEXTBTN, Colours::Grey, WID_O_COUPLE_CARGO), SetMinimalSize(112, 12), SetFill(1, 0),
-												SetStringTip(STR_ORDER_CARGO_TYPE_BUTTON, STR_ORDER_CONDITIONAL_COMPARATOR_TOOLTIP), SetResize(1, 0),
+												SetStringTip(STR_ORDER_CARGO_TYPE_BUTTON, STR_ORDER_COUPLE_CARGO_TOOLTIP), SetResize(1, 0),
 				NWidget(WWT_DROPDOWN, Colours::Grey, WID_O_COUPLE_SLOT), SetMinimalSize(112, 12), SetFill(1, 0),
 												SetStringTip(STR_ORDER_COUPLE_SLOT_BUTTON, STR_ORDER_COUPLE_SLOT_TOOLTIP), SetResize(1, 0),
 				NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_O_COUPLE_VALUE), SetMinimalSize(112, 12), SetFill(1, 0),
-														SetStringTip(STR_ORDERS_COUPLE_VALUE_BUTTON, STR_ORDER_CONDITIONAL_VALUE_TOOLTIP), SetResize(1, 0),
+														SetStringTip(STR_ORDERS_COUPLE_VALUE_BUTTON, STR_ORDER_COUPLE_VALUE_TOOLTIP), SetResize(1, 0),
 				NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_O_COUPLE_STATION), SetMinimalSize(112, 12), SetFill(1, 0),
-														SetStringTip(STR_ORDER_COUPLE_STATION_BUTTON, STR_ORDER_COUPLE_STATION_TOOLTIP), SetResize(1, 0),
+												SetStringTip(STR_ORDER_COUPLE_STATION_BUTTON, STR_ORDER_COUPLE_STATION_TOOLTIP), SetResize(1, 0),
+				NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_O_COUPLE_DIAGNOSTICS), SetMinimalSize(112, 12), SetFill(1, 0),
+												SetStringTip(STR_COUPLE_DIAGNOSTIC_BUTTON, STR_COUPLE_DIAGNOSTIC_TOOLTIP), SetResize(1, 0),
 			EndContainer(),
 			NWidget(NWID_HORIZONTAL, NWidContainerFlag::EqualSize),
 				NWidget(NWID_BUTTON_DROPDOWN, Colours::Grey, WID_O_ORDERS_FIRST), SetMinimalSize(124, 12), SetFill(1, 0),
-														SetStringTip(STR_ORDERS_DECOUPLE_FIRST_KEEP_ORDERS_BUTTON, STR_ORDER_CONDITIONAL_VARIABLE_TOOLTIP), SetResize(1, 0),
+														SetStringTip(STR_ORDERS_DECOUPLE_FIRST_KEEP_ORDERS_BUTTON, STR_ORDER_DECOUPLE_FIRST_ORDERS_TOOLTIP), SetResize(1, 0),
 				NWidget(NWID_BUTTON_DROPDOWN, Colours::Grey, WID_O_ORDERS_SECOND), SetMinimalSize(124, 12), SetFill(1, 0),
-														SetStringTip(STR_ORDERS_DECOUPLE_SECOND_KEEP_ORDERS_BUTTON, STR_ORDER_CONDITIONAL_COMPARATOR_TOOLTIP), SetResize(1, 0),
-				NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_O_DECOUPLE_VALUE), SetMinimalSize(124, 12), SetFill(1, 0),
-														SetStringTip(STR_ORDERS_DECOUPLE_VALUE_BUTTON, STR_ORDER_CONDITIONAL_VALUE_TOOLTIP), SetResize(1, 0),
+														SetStringTip(STR_ORDERS_DECOUPLE_SECOND_KEEP_ORDERS_BUTTON, STR_ORDER_DECOUPLE_SECOND_ORDERS_TOOLTIP), SetResize(1, 0),
+				NWidget(NWID_SELECTION, Colours::Invalid, WID_O_SEL_DECOUPLE_VALUE),
+					NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_O_DECOUPLE_VALUE), SetMinimalSize(124, 12), SetFill(1, 0),
+															SetStringTip(STR_ORDERS_DECOUPLE_VALUE_BUTTON, STR_ORDER_DECOUPLE_VALUE_TOOLTIP), SetResize(1, 0),
+				EndContainer(),
 			EndContainer(),
 		EndContainer(),
 		NWidget(NWID_SELECTION, Colours::Invalid, WID_O_SEL_SHARED),
 			NWidget(WWT_PUSHIMGBTN, Colours::Grey, WID_O_SHARED_ORDER_LIST), SetAspect(1), SetSpriteTip(SPR_SHARED_ORDERS_ICON, STR_ORDERS_VEH_WITH_SHARED_ORDERS_LIST_TOOLTIP),
 			NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_O_ADD_VEH_GROUP), SetAspect(1), SetStringTip(STR_BLACK_PLUS, STR_ORDERS_NEW_GROUP_TOOLTIP),
+		EndContainer(),
+	EndContainer(),
+
+	NWidget(NWID_SELECTION, Colours::Invalid, WID_O_SEL_DECOUPLE_PREVIEW),
+		NWidget(NWID_VERTICAL),
+			NWidget(WWT_PANEL, Colours::Grey, WID_O_DECOUPLE_PREVIEW), SetFill(1, 0), SetResize(1, 0), SetToolTip(STR_ORDERS_DECOUPLE_PREVIEW_TOOLTIP), SetScrollbar(WID_O_DECOUPLE_SCROLLBAR), EndContainer(),
+			NWidget(NWID_HSCROLLBAR, Colours::Grey, WID_O_DECOUPLE_SCROLLBAR),
 		EndContainer(),
 	EndContainer(),
 

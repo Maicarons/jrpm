@@ -49,7 +49,6 @@ public:
 		"badges_objects", // GrfSpecFeature::Objects
 		{}, // GrfSpecFeature::RailTypes
 		{}, // GrfSpecFeature::AirportTiles
-		{}, // GrfSpecFeature::AirTypes
 		{}, // GrfSpecFeature::RoadTypes
 		{}, // GrfSpecFeature::TramTypes
 		"badges_roadstops", // GrfSpecFeature::RoadStops

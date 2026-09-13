@@ -40,6 +40,7 @@
 #include "../air.h"
 #include "../air_map.h"
 #include "../airport_gui.h"
+#include "../sl/vehicle_sl.h"
 #include "../object_map.h"
 #include "../object_base.h"
 #include "../tree_map.h"
@@ -649,6 +650,19 @@ void IterateVehicleAndOrderListOrders(F func)
 	for (Vehicle *v : Vehicle::IterateFrontOnly()) {
 		func(&(v->current_order));
 	}
+}
+
+/**
+ * Whether the savegame predates the multi-tile airports and the new aircraft controller.
+ * Savegames written by this patch pack store the legacy aircraft position unless they use the new
+ * aircraft controller; savegames from upstream do not use the patch pack tables, so use the
+ * savegame version for those.
+ * @return true iff the savegame uses the old airport/aircraft format.
+ */
+static bool IsSavegameBeforeMultitileAirports()
+{
+	if (SlXvGetUpstreamVersion() != SL_MIN_VERSION) return DidLoadLegacyAircraftData();
+	return IsSavegameVersionBefore(SLV_CUSTOM_SUBSIDY_DURATION);
 }
 
 /**
@@ -2983,7 +2997,7 @@ bool AfterLoadGame()
 	}
 
 	/* Data structure on airport has changed. */
-	if (IsSavegameVersionBefore(SLV_CUSTOM_SUBSIDY_DURATION)) {
+	if (IsSavegameBeforeMultitileAirports()) {
 		/* Old saves stored the airport tile gfx in m5; move it to m4 and
 		 * rebuild the tiles from the airport specs. */
 		for (TileIndex t(0); t < Map::Size(); t++) {
@@ -2999,7 +3013,7 @@ bool AfterLoadGame()
 		}
 	}
 
-	if (IsSavegameVersionBefore(SLV_CUSTOM_SUBSIDY_DURATION)) {
+	if (IsSavegameBeforeMultitileAirports()) {
 		/* Delete already crashed zeppelins. */
 		DeleteCrashedZeppelins();
 
@@ -3029,11 +3043,7 @@ bool AfterLoadGame()
 				v->current_order.Free();
 				ProcessOrders(v);
 			} else {
-				if (v->current_order.IsType(OT_LOADING)) {
-					v->vehicle_flags.Reset(VehicleFlag::LoadingFinished);
-					v->LeaveStation();
-				}
-				v->current_order.Free();
+				/* Set the state and position first: leaving the station below resolves sprites. */
 				v->state = AS_FLYING_NO_DEST;
 				v->next_trackdir = INVALID_TRACKDIR;
 				v->trackdir = v->Next()->trackdir = TRACKDIR_X_NE;
@@ -3041,6 +3051,13 @@ bool AfterLoadGame()
 				v->x_pos = (v->x_pos & ~0xF) + 8;
 				v->y_pos = (v->y_pos & ~0xF) + 8;
 				v->tile = TileVirtXY(v->x_pos, v->y_pos);
+
+				if (v->current_order.IsType(OT_LOADING)) {
+					v->vehicle_flags.Reset(VehicleFlag::LoadingFinished);
+					v->LeaveStation();
+				}
+
+				v->current_order.Free();
 				GetAircraftFlightLevelBounds(v, nullptr, &z);
 				ProcessOrders(v);
 				AircraftUpdateNextPos(v);
@@ -3052,15 +3069,15 @@ bool AfterLoadGame()
 		InitializeAirportGui();
 	}
 
-	if (IsSavegameVersionBefore(SLV_CUSTOM_SUBSIDY_DURATION)) {
+	if (IsSavegameBeforeMultitileAirports()) {
 		/* Update go to hangar orders so they store the DepotID instead of StationID. */
 		for (Aircraft *a : Aircraft::Iterate()) {
 			if (!a->IsNormalAircraft()) continue;
 
 			/* Update current order. */
 			if (a->current_order.IsType(OT_GOTO_DEPOT)) {
-				Station *st = Station::Get(a->current_order.GetDestination().ToStationID());
-				Depot *dep = st->airport.hangar;
+				Station *st = Station::GetIfValid(a->current_order.GetDestination().ToStationID());
+				Depot *dep = (st != nullptr) ? st->airport.hangar : nullptr;
 				if (dep == nullptr) {
 					/* Aircraft heading to a removed hangar. */
 					a->current_order.MakeDummy();
@@ -3076,8 +3093,8 @@ bool AfterLoadGame()
 			for (Order *order : a->Orders()) {
 				if (!order->IsType(OT_GOTO_DEPOT)) continue;
 				StationID station_id = order->GetDestination().ToStationID();
-				Station *st = Station::Get(station_id);
-				if (st->airport.hangar != nullptr) {
+				Station *st = Station::GetIfValid(station_id);
+				if (st != nullptr && st->airport.hangar != nullptr) {
 					order->SetDestination(st->airport.hangar->index);
 				}
 			}
@@ -4472,7 +4489,10 @@ bool AfterLoadGame()
 				if (!(ds.GetScheduledDispatchStartTick() >= 0 && ds.IsScheduledDispatchValid()) && ds.GetScheduledDispatch().empty()) {
 					order_list->GetScheduledDispatchScheduleSet().clear();
 				} else {
-					VehicleOrderID idx = order_list->GetFirstSharedVehicle()->GetFirstWaitingLocation(false);
+					const Vehicle *first_shared = order_list->GetFirstSharedVehicle();
+					/* Player-created schedule lists may have no vehicles at all. */
+					if (first_shared == nullptr) continue;
+					VehicleOrderID idx = first_shared->GetFirstWaitingLocation(false);
 					if (idx != INVALID_VEH_ORDER_ID) {
 						order_list->GetOrderAt(idx)->SetDispatchScheduleIndex(0);
 					}

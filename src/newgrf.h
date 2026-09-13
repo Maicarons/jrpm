@@ -107,13 +107,13 @@ enum class GrfSpecFeature : uint8_t {
 	Objects, ///< Objects feature
 	RailTypes, ///< Rail types feature
 	AirportTiles, ///< Airport tiles feature
-	AirTypes, ///< Air types feature
 	RoadTypes, ///< Road types feature
 	TramTypes, ///< Tram types feature
 	RoadStops, ///< Road stops feature
 	Badges, ///< Badges feature
 
 	NewLandscape,
+	AirTypes, ///< Air types feature (fork-only: must not occupy a GRF-visible feature ID)
 	FakeTowns, ///< Fake town GrfSpecFeature for NewGRF debugging (parent scope)
 	End, ///< End marker
 

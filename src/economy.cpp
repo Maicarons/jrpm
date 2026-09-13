@@ -1560,7 +1560,10 @@ void PrepareUnload(Vehicle *front_v)
 	CargoStationIDVectorSet next_station = front_v->GetNextStoppingStation();
 	if (front_v->orders == nullptr || (front_v->current_order.GetUnloadType() != OrderUnloadType::NoUnload)) {
 		Station *st = Station::Get(front_v->last_station_visited);
-		for (Vehicle *v = front_v; v != nullptr; v = v->Next()) {
+		/* The primary may sit mid-chain or at the physical tail (decoupled parts
+		 * driving away reversed), so start at the physical head to cover the
+		 * whole consist. */
+		for (Vehicle *v = front_v->First(); v != nullptr; v = v->Next()) {
 			if (GetUnloadType(v) == OrderUnloadType::NoUnload) continue;
 			const GoodsEntry *ge = &st->goods[v->cargo_type];
 			if (v->cargo_cap > 0 && v->cargo.TotalCount() > 0) {

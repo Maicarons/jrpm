@@ -53,6 +53,22 @@
 #include "safeguards.h"
 
 
+/**
+ * Get the hangar an aircraft's depot order refers to.
+ * An aircraft's depot order names a hangar (a DepotID); orders written before that
+ * encoding name the destination airport's StationID. Both are resolved to the hangar.
+ * @param o the order, which must be an aircraft's depot order.
+ * @return the hangar, or \c nullptr if the order does not resolve to one.
+ */
+const Depot *GetOrderHangar(const Order &o)
+{
+	const Depot *depot = Depot::GetIfValid(o.GetDestination().ToDepotID());
+	if (depot != nullptr && IsAirportTile(depot->xy)) return depot;
+
+	const Station *st = Station::GetIfValid(o.GetDestination().ToStationID());
+	return (st != nullptr) ? st->airport.hangar : nullptr;
+}
+
 DestinationID GetTargetDestination(const Order &o, bool is_aircraft)
 {
 	DestinationID destination_id = o.GetDestination();
@@ -60,12 +76,16 @@ DestinationID GetTargetDestination(const Order &o, bool is_aircraft)
 		case OT_GOTO_STATION:
 			return destination_id;
 		case OT_GOTO_DEPOT:
-			assert(Depot::IsValidID(destination_id.ToDepotID()));
 			if (is_aircraft) {
-				Depot *dep = Depot::Get(destination_id.ToDepotID());
-				destination_id = GetStationIndex(dep->xy);
-				assert(Station::IsValidID(destination_id.ToStationID()));
+				const Depot *hangar = GetOrderHangar(o);
+				if (hangar != nullptr) return DestinationID(GetStationIndex(hangar->xy));
+
+				/* Orders to the nearest depot, or orders to a hangar which no longer exists, do not
+				 * resolve to a hangar. Fall back to the station the order names, if any. */
+				if (Station::IsValidID(destination_id.ToStationID())) return destination_id;
+				return DestinationID{StationID::Invalid()};
 			}
+			assert(Depot::IsValidID(destination_id.ToDepotID()));
 			return destination_id;
 		default:
 			return DestinationID{StationID::Invalid()};
@@ -147,6 +167,25 @@ void Order::Free()
 	this->flags = 0;
 	this->dest  = 0;
 	DeAllocExtraInfo();
+}
+
+/**
+ * Convert the order type field to the current bit layout, from the layout used by savegames which
+ * store it in a single byte, i.e. savegames which do not have the XSLFI_ORDER_DECOUPLE feature.
+ *
+ * Old layout: order type bits 0..3, stop location bits 4..5, condition comparator bits 5..7,
+ * non-stop type bits 6..7; the latter two overlap, as only one of them is used per order type.
+ * Current layout: order type bits 0..4, stop location bits 5..6, non-stop type bits 7..8,
+ * condition comparator bits 9..11.
+ */
+void Order::ConvertLegacyTypeLayout()
+{
+	const uint16_t old = this->type;
+	this->type = 0;
+	SB(this->type, 0, 5, GB(old, 0, 4));
+	SB(this->type, 5, 2, GB(old, 4, 2));
+	SB(this->type, 7, 2, GB(old, 6, 2));
+	SB(this->type, 9, 3, GB(old, 5, 3));
 }
 
 /**
@@ -647,11 +686,19 @@ void OrderList::FreeChain(bool keep_orderlist)
 		return;
 	}
 
-	VehicleType type = this->GetFirstSharedVehicle()->type;
-	Owner owner = this->GetFirstSharedVehicle()->owner;
-	for (Order *o : this->Orders()) {
-		UnregisterOrderDestination(o, type, owner);
-		if (!CleaningPool()) o->InvalidateGuiOnRemove();
+	/* The list is normally guaranteed to have a shared vehicle here, but be
+	 * defensive: an empty list has no destinations to unregister anyway. */
+	if (this->GetFirstSharedVehicle() != nullptr) {
+		VehicleType type = this->GetFirstSharedVehicle()->type;
+		Owner owner = this->GetFirstSharedVehicle()->owner;
+		for (Order *o : this->Orders()) {
+			UnregisterOrderDestination(o, type, owner);
+			if (!CleaningPool()) o->InvalidateGuiOnRemove();
+		}
+	} else {
+		for (Order *o : this->Orders()) {
+			if (!CleaningPool()) o->InvalidateGuiOnRemove();
+		}
 	}
 	this->orders.clear();
 
@@ -730,13 +777,29 @@ const Order *OrderList::GetNextDecisionNode(const Order *next, uint hops, CargoT
  * @pre The vehicle is currently loading and v->last_station_visited is meaningful.
  * @note This function may draw a random number. Don't use it from the GUI.
  */
-CargoMaskedStationIDVector OrderList::GetNextStoppingStation(const Vehicle *v, CargoTypes cargo_mask, const Order *first, uint hops) const
+CargoMaskedStationIDVector OrderList::GetNextStoppingStation(const Vehicle *v, CargoTypes cargo_mask, const Order *first, uint hops, bool in_target) const
 {
-	static std::vector<bool> seen_orders_container;
+	/* Seen orders are keyed by (order list, order index) so that prediction can
+	 * traverse into executed schedule lists without mixing up indexes. */
+	static std::map<std::pair<uint32_t, VehicleOrderID>, bool> seen_orders_container;
 	if (hops == 0) {
 		if (this->GetNumOrders() == 0) return CargoMaskedStationIDVector(cargo_mask); // No orders at all
-		seen_orders_container.assign(this->GetNumOrders(), false);
+		seen_orders_container.clear();
+		/* The top-level call always runs on the vehicle's own order list: when
+		 * it is executing a schedule, this list is the executed target. */
+		in_target = v->IsExecutingSchedule();
 	}
+
+	auto seen_order = [&](const Order *o) -> bool & {
+		return seen_orders_container[{static_cast<uint32_t>(this->index.base()), this->GetIndexOfOrder(o)}];
+	};
+
+	/* Returning from an executed schedule is modelled when the prediction
+	 * advances from the last order of the list back to its first one, which is
+	 * exactly where the runtime calls ReturnFromExecuteSchedule. Track the
+	 * index the current position was advanced from. */
+	const VehicleOrderID last_index = this->GetNumOrders() - 1;
+	VehicleOrderID prev_index = INVALID_VEH_ORDER_ID;
 
 	const Order *next = first;
 	if (first == nullptr) {
@@ -748,16 +811,60 @@ CargoMaskedStationIDVector OrderList::GetNextStoppingStation(const Vehicle *v, C
 			/* GetNext never returns nullptr if there is a valid station in the list.
 			 * As the given "next" is already valid and a station in the list, we
 			 * don't have to check for nullptr here. */
+			prev_index = this->GetIndexOfOrder(next);
 			next = this->GetNext(next);
 			assert(next != nullptr);
 		}
 	}
 
-	const std::span<Order> order_span = v->orders->GetOrderVector();
-	auto seen_order = [&](const Order *o) -> std::vector<bool>::reference { return seen_orders_container[o - order_span.data()]; };
-
 	do {
 		if (seen_order(next)) return CargoMaskedStationIDVector(cargo_mask); // Already handled
+
+		const VehicleOrderID cur_index = this->GetIndexOfOrder(next);
+
+		/* The walk advanced from the last order back to the first one: at
+		 * runtime the vehicle returns to its primary order list here
+		 * (ReturnFromExecuteSchedule) and resumes at the remembered position,
+		 * so predict the primary's next stop instead of looping this list. */
+		if (in_target && prev_index != INVALID_VEH_ORDER_ID && cur_index == 0 && prev_index == last_index) {
+			OrderList *primary = OrderList::GetIfValid(v->primary_order);
+			if (primary != nullptr && primary != this && primary->GetNumOrders() > 0) {
+				const Order *resume = primary->GetOrderAt(v->primary_order_index);
+				if (resume != nullptr && !seen_order(resume)) {
+					CargoMaskedStationIDVector st = primary->GetNextStoppingStation(v, cargo_mask, resume, hops + 1);
+					if (!st.station.empty()) return st;
+				}
+			}
+			/* The return could not be modelled: fall through and keep walking
+			 * this list like a plain cyclic list. */
+		}
+
+		/* An execute-schedule order makes the vehicle jump to the target list
+		 * and stop at its first station, so predict inside the target instead
+		 * of continuing in this list. Cycles between lists are broken by the
+		 * seen-checks. */
+		if (next->IsExecuteScheduleOrder()) {
+			OrderList *target = OrderList::GetIfValid(next->GetDestination().ToOrderListID());
+			if (target != nullptr && target != this && target->GetNumOrders() > 0 && target->IsPlayerCreated() && target->IsVisibleToCompany(v->owner)) {
+				/* Skip a leading stop at the station the vehicle is standing at:
+				 * at runtime such an order resolves instantly without travelling,
+				 * and predicting it here would run into the seen-check right
+				 * after the same-station skip below. */
+				const Order *start = target->GetFirstOrder();
+				for (uint skipped = 0; skipped < target->GetNumOrders(); ++skipped) {
+					if (!(start->IsType(OT_GOTO_STATION) || start->IsType(OT_IMPLICIT))) break;
+					if (start->GetDestination() != v->last_station_visited) break;
+					start = target->GetNext(start);
+				}
+				if (!seen_order(start)) {
+					seen_order(next) = true;
+					CargoMaskedStationIDVector st = target->GetNextStoppingStation(v, cargo_mask, start, hops + 1, true);
+					if (!st.station.empty()) return st;
+					/* The target list has no stops of its own: the vehicle passes
+					 * through it and resumes this list, so skip the order. */
+				}
+			}
+		}
 
 		const Order *decision_node = this->GetNextDecisionNode(next, ++hops, cargo_mask);
 
@@ -771,7 +878,7 @@ CargoMaskedStationIDVector OrderList::GetNextStoppingStation(const Vehicle *v, C
 		/* Resolve possibly nested conditionals by estimation. */
 		while (next->IsType(OT_CONDITIONAL)) {
 			/* We return both options of conditional orders. */
-			const Order *skip_to = &(order_span[next->GetConditionSkipToOrder()]);
+			const Order *skip_to = this->GetOrderAt(next->GetConditionSkipToOrder());
 			if (!seen_order(skip_to)) skip_to = this->GetNextDecisionNode(skip_to, hops, cargo_mask);
 			const Order *advance = this->GetNext(next);
 			if (!seen_order(advance)) advance = this->GetNextDecisionNode(advance, hops, cargo_mask);
@@ -781,9 +888,9 @@ CargoMaskedStationIDVector OrderList::GetNextStoppingStation(const Vehicle *v, C
 			} else if (skip_to == nullptr || skip_to == first || seen_order(skip_to)) {
 				next = (advance == first) ? nullptr : advance;
 			} else {
-				CargoMaskedStationIDVector st1 = this->GetNextStoppingStation(v, cargo_mask, skip_to, hops);
+				CargoMaskedStationIDVector st1 = this->GetNextStoppingStation(v, cargo_mask, skip_to, hops, in_target);
 				cargo_mask &= st1.cargo_mask;
-				CargoMaskedStationIDVector st2 = this->GetNextStoppingStation(v, cargo_mask, advance, hops);
+				CargoMaskedStationIDVector st2 = this->GetNextStoppingStation(v, cargo_mask, advance, hops, in_target);
 				st1.cargo_mask &= st2.cargo_mask;
 				st1.station.insert(st1.station.end(), st2.station.begin(), st2.station.end());
 				return st1;
@@ -805,6 +912,9 @@ CargoMaskedStationIDVector OrderList::GetNextStoppingStation(const Vehicle *v, C
 			});
 			if (invalid) return CargoMaskedStationIDVector(cargo_mask);
 		}
+
+		/* The next iteration advances from the position we are on now. */
+		prev_index = cur_index;
 	} while (next->IsType(OT_GOTO_DEPOT) || next->IsSlotCounterOrder() || next->IsType(OT_DUMMY) || next->IsType(OT_LABEL) || next->IsExecuteScheduleOrder()
 			|| (next->IsBaseStationOrder() && next->GetDestination() == v->last_station_visited));
 
@@ -839,6 +949,23 @@ std::vector<const Order *> OrderList::GetNextStoppingOrder(const Vehicle *v, con
 	}
 
 	do {
+		/* An execute-schedule order makes the vehicle jump to the target list;
+		 * predict inside the target instead. */
+		if (next != nullptr && next->IsExecuteScheduleOrder()) {
+			OrderList *target = OrderList::GetIfValid(next->GetDestination().ToOrderListID());
+			if (target != nullptr && target != this && target->GetNumOrders() > 0 && target->IsPlayerCreated() && target->IsVisibleToCompany(v->owner)) {
+				/* Skip a leading stop at the station the vehicle is standing at,
+				 * mirroring the runtime behaviour (see GetNextStoppingStation). */
+				const Order *start = target->GetFirstOrder();
+				for (uint skipped = 0; skipped < target->GetNumOrders(); ++skipped) {
+					if (!(start->IsType(OT_GOTO_STATION) || start->IsType(OT_IMPLICIT))) break;
+					if (start->GetDestination() != v->last_station_visited) break;
+					start = target->GetNext(start);
+				}
+				return target->GetNextStoppingOrder(v, start, hops + 1);
+			}
+		}
+
 		next = this->GetNextDecisionNode(next, ++hops, cargo_mask);
 
 		/* Resolve possibly nested conditionals by estimation. */
@@ -1080,11 +1207,19 @@ TileIndex Order::GetLocation(const Vehicle *v, bool airport) const
 			if (airport && v != nullptr && v->type == VehicleType::Aircraft) return Station::Get(this->GetDestination().ToStationID())->airport.tile;
 			return BaseStation::Get(this->GetDestination().ToStationID())->xy;
 
-		case OT_GOTO_DEPOT:
+		case OT_GOTO_DEPOT: {
 			if (this->GetDepotActionType() & ODATFB_NEAREST_DEPOT) return INVALID_TILE;
 			if (this->GetDestination() == DepotID::Invalid()) return INVALID_TILE;
-			return (v != nullptr && v->type == VehicleType::Aircraft) ? Station::Get(this->GetDestination().ToStationID())->xy : Depot::Get(this->GetDestination().ToDepotID())->xy;
 
+			if (v != nullptr && v->type == VehicleType::Aircraft) {
+				const Depot *hangar = GetOrderHangar(*this);
+				if (hangar == nullptr) return INVALID_TILE;
+				const Station *st = Station::GetIfValid(GetStationIndex(hangar->xy));
+				return st != nullptr ? st->xy : INVALID_TILE;
+			}
+			const Depot *depot = Depot::GetIfValid(this->GetDestination().ToDepotID());
+			return depot != nullptr ? depot->xy : INVALID_TILE;
+		}
 		default:
 			return INVALID_TILE;
 	}
@@ -2695,7 +2830,7 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 				break;
 
 			case OT_DECOUPLE:
-				if (mof != MOF_FIRST_ORDERS && mof != MOF_SECOND_ORDERS && mof != MOF_DECOUPLE_VALUE && mof != MOF_DECOUPLE_FIRST_SCHEDULE && mof != MOF_DECOUPLE_SECOND_SCHEDULE) return CMD_ERROR;
+				if (mof != MOF_FIRST_ORDERS && mof != MOF_SECOND_ORDERS && mof != MOF_DECOUPLE_VALUE && mof != MOF_DECOUPLE_FIRST_SCHEDULE && mof != MOF_DECOUPLE_SECOND_SCHEDULE && mof != MOF_DECOUPLE_FIRST_LOAD_SCHEDULE && mof != MOF_DECOUPLE_SECOND_LOAD_SCHEDULE) return CMD_ERROR;
 				break;
 
 			case OT_SLOT:
@@ -3007,7 +3142,9 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 			break;
 
 		case MOF_DECOUPLE_FIRST_SCHEDULE:
-		case MOF_DECOUPLE_SECOND_SCHEDULE: {
+		case MOF_DECOUPLE_SECOND_SCHEDULE:
+		case MOF_DECOUPLE_FIRST_LOAD_SCHEDULE:
+		case MOF_DECOUPLE_SECOND_LOAD_SCHEDULE: {
 			if (!is_list && v->type != VehicleType::Train) return CMD_ERROR;
 			if (order->GetType() != OT_DECOUPLE) return CMD_ERROR;
 			const OrderList *target = OrderList::GetIfValid(OrderListID(data));
@@ -3482,6 +3619,16 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 
 			case MOF_DECOUPLE_SECOND_SCHEDULE:
 				order->SetDecoupleSecondOrdersType(ODOF_EXECUTE_SCHEDULE);
+				order->SetDecoupleSecondScheduleID(OrderListID{(uint16_t)data});
+				break;
+
+			case MOF_DECOUPLE_FIRST_LOAD_SCHEDULE:
+				order->SetDecoupleFirstOrdersType(ODOF_LOAD_AND_SCHEDULE);
+				order->SetDecoupleFirstScheduleID(OrderListID{(uint16_t)data});
+				break;
+
+			case MOF_DECOUPLE_SECOND_LOAD_SCHEDULE:
+				order->SetDecoupleSecondOrdersType(ODOF_LOAD_AND_SCHEDULE);
 				order->SetDecoupleSecondScheduleID(OrderListID{(uint16_t)data});
 				break;
 
@@ -5152,8 +5299,9 @@ bool UpdateOrderDest(Vehicle *v, const Order *order, int conditional_depth, bool
 					/* PBS reservations cannot reverse */
 					if (pbs_look_ahead && closest_depot.reverse) return false;
 
-					v->SetDestTile(closest_depot.location);
+					/* Set the order's destination first: SetDestTile derives the target airport from it. */
 					v->current_order.SetDestination(closest_depot.destination);
+					v->SetDestTile(closest_depot.location);
 
 					/* If there is no depot in front, reverse automatically (trains only) */
 					if (v->type == VehicleType::Train && closest_depot.reverse) Command<Commands::ReverseTrainDirection>::Do(DoCommandFlag::Execute, v->index, false);
@@ -5171,8 +5319,7 @@ bool UpdateOrderDest(Vehicle *v, const Order *order, int conditional_depth, bool
 					v->SetDestTile(Depot::Get(order->GetDestination().ToDepotID())->xy);
 				} else {
 					Aircraft *a = Aircraft::From(v);
-					Depot *dep = Depot::Get(a->current_order.GetDestination().ToDepotID());
-					StationID station_id = GetStationIndex(dep->xy);
+					const StationID station_id = GetTargetDestination(a->current_order, true).ToStationID();
 					if (a->targetairport != station_id) {
 						/* The aircraft is now heading for a different hangar than the next in the orders */
 						a->SetDestTile(a->GetOrderStationLocation(station_id));
@@ -5261,18 +5408,25 @@ bool UpdateOrderDest(Vehicle *v, const Order *order, int conditional_depth, bool
 			assert(!pbs_look_ahead);
 			{
 				OrderList *target = OrderList::GetIfValid(order->GetDestination().ToOrderListID());
-				if (target != nullptr && target != v->orders && !v->IsExecutingSchedule() && target->IsPlayerCreated() && target->IsVisibleToCompany(v->owner)) {
+				if (target != nullptr && target != v->orders && target->IsPlayerCreated() && target->IsVisibleToCompany(v->owner)) {
 					/* Execute the target order list: switch this vehicle to it (shared list).
-					 * The vehicle's own list is kept as the primary order list; after one
-					 * full pass of the target list the vehicle returns to it and resumes
-					 * where it left. Nested execute-schedule orders are skipped while
-					 * already executing. */
+					 * The primary order list is kept as-is; after one full pass of the
+					 * target list the vehicle returns to it and resumes where it left.
+					 * Nested execute-schedule orders jump the same way without touching
+					 * the primary list. */
 					OrderList *home = v->orders;
-					/* Step past this execute-schedule order; the resulting position is
-					 * where execution of our own list resumes after the detour. */
-					v->IncrementRealOrderIndex();
-					v->primary_order = home->index;
-					v->primary_order_index = v->cur_real_order_index;
+					if (!v->IsExecutingSchedule()) {
+						/* Step past this execute-schedule order; the resulting position
+						 * is where execution of our own list resumes after the detour.
+						 * This must not be done while already executing a schedule:
+						 * stepping past an order at the end of the list would wrap and
+						 * return the vehicle home before the jump, so nested jumps at
+						 * the end of an executed list would never happen. The wrap is
+						 * inert here because the vehicle is not executing a schedule. */
+						v->IncrementRealOrderIndex();
+						v->primary_order = home->index;
+						v->primary_order_index = v->cur_real_order_index;
+					}
 
 					/* Remember the home list's dispatch/separation state if it is not
 					 * mirrored by the list itself, so we can restore it when returning. */
