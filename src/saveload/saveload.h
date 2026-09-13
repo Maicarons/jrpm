@@ -436,7 +436,11 @@ enum class SaveLoadVersion : uint16_t {
 
 	MaxVersion, ///< Highest possible saveload version.
 };
-static_assert(to_underlying(SaveLoadVersion::MaxVersion) == to_underlying(SL_MAX_VERSION));
+/* jrpm: no static_assert(SaveLoadVersion::MaxVersion == SL_MAX_VERSION) here.
+ * The legacy SLV_* enum in sl/saveload_common.h replaces the top upstream
+ * versions with jrpm's own (SLV_MULTITILE_AIRPORTS/SLV_ORDER_DECOUPLE) and
+ * extends past MaxVersion, so the two intentionally differ; upstream savegame
+ * compatibility goes through the XSLFI_UPSTREAM_VERSION sub-chunk instead. */
 
 typedef void AutolengthProc(int);
 

@@ -146,12 +146,12 @@ struct VIEWChunkHandler : ChunkHandler {
 
 /** Access a std::pair<TileIndex, TownGrowthTileState> field for SaveLoad. */
 static const SaveLoad _growth_tile_desc[] = {
-	SLE_VARNAME(TownsGrowthTilesIndex::value_type, first,  "tile",  SLE_UINT32),
-	SLE_VARNAME(TownsGrowthTilesIndex::value_type, second, "state", SLE_UINT8),
+	SLE_VARNAME(TownsGrowthTilesIndex::value_type, first,  "tile",  VarTypes::U32),
+	SLE_VARNAME(TownsGrowthTilesIndex::value_type, second, "state", VarTypes::U8),
 };
 
 struct GRWTChunkHandler : ChunkHandler {
-	GRWTChunkHandler() : ChunkHandler('GRWT', ChunkType::Table) {}
+	GRWTChunkHandler() : ChunkHandler("GRWT", ChunkType::Table) {}
 
 	void Save() const override
 	{
@@ -169,7 +169,7 @@ struct GRWTChunkHandler : ChunkHandler {
 	void Load() const override
 	{
 		const std::vector<SaveLoad> slt = SlCompatTableHeader(_growth_tile_desc, {});
-		if (!IsSavegameVersionBefore(SLV_RIFF_TO_ARRAY) && SlIterateArray() == -1) return;
+		if (!IsSavegameVersionBefore(SaveLoadVersion::RiffToArray) && SlIterateArray() == -1) return;
 
 		TownsGrowthTilesIndex::value_type tmp{};
 
@@ -186,7 +186,7 @@ struct GRWTChunkHandler : ChunkHandler {
 			_town_growth_tiles_last_month[tmp.first] = tmp.second;
 		}
 
-		if (!IsSavegameVersionBefore(SLV_RIFF_TO_ARRAY) && SlIterateArray() != -1) SlErrorCorrupt("Too many GRWT entries");
+		if (!IsSavegameVersionBefore(SaveLoadVersion::RiffToArray) && SlIterateArray() != -1) SlErrorCorrupt("Too many GRWT entries");
 	}
 
 	void LoadCheck(size_t) const override

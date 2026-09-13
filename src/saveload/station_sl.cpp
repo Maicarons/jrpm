@@ -403,7 +403,7 @@ public:
 		SLE_CONDVAR(Station, airport.h, VarFileType::U8 | VarMemType::U16, SaveLoadVersion::StoreAirportSize, SaveLoadVersion::MaxVersion),
 		    SLE_VAR(Station, airport.type,               VarTypes::U8),
 		SLE_CONDVAR(Station, airport.layout, VarTypes::U8, SaveLoadVersion::NewGRFAirportSmoke, SaveLoadVersion::MaxVersion),
-		SLE_VARNAME(Station, airport.blocks, "airport.flags", VarTypes::U64),
+		SLE_VARNAME(Station, airport.flags, "airport.flags", VarTypes::U64),
 		SLE_CONDVAR(Station, airport.rotation, VarTypes::U8, SaveLoadVersion::NewGRFAirportSmoke, SaveLoadVersion::MaxVersion),
 		SLEG_CONDARR("storage", _old_st_persistent_storage.storage, VarTypes::U32, 16, SaveLoadVersion::NewGRFAirportSmoke, SaveLoadVersion::PersistentStoragePool),
 		SLE_CONDREF(Station, airport.psa, SLRefType::Storage, SaveLoadVersion::PersistentStoragePool, SaveLoadVersion::MaxVersion),

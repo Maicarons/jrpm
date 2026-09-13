@@ -29,7 +29,7 @@ static uint32_t _order_item_ref;
 SaveLoadTable GetOrderDescription()
 {
 	static const SaveLoad _order_desc[] = {
-		     SLE_VAR(Order, type,           VarTypes::U8),
+		     SLE_VAR(Order, type,           VarFileType::U16 | VarMemType::U16),
 		     SLE_VAR(Order, flags,          VarFileType::U8 | VarMemType::U16),
 		     SLE_VAR(Order, dest,           VarTypes::U16),
 		    SLEG_VAR("next", _order_item_ref, VarTypes::U32),
@@ -73,7 +73,7 @@ template <typename T>
 class SlOrders : public VectorSaveLoadHandler<SlOrders<T>, T, Order> {
 public:
 	static inline const SaveLoad description[] = {
-		SLE_VAR(Order, type,        VarTypes::U8),
+		SLE_VAR(Order, type,        VarFileType::U16 | VarMemType::U16),
 		SLE_CONDVAR(Order, decouple_flags, VarTypes::U8, SaveLoadVersion::MinVersion, SaveLoadVersion::MaxVersion),
 		SLE_VAR(Order, flags,       VarFileType::U8 | VarMemType::U16),
 		SLE_VAR(Order, dest,        VarTypes::U16),

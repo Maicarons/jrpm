@@ -3158,7 +3158,7 @@ public:
 		DrawString(image.left, image.right, image.top, GetString(STR_DECOUPLE_PREVIEW_COUNT, order->GetNumDecouple()), TextColour::Black);
 		image.top += GetCharacterHeight(FontSize::Normal) + WidgetDimensions::scaled.vsep_normal;
 		DrawTrainImage(v->First(), image.WithHeight(ScaleGUITrad(GetVehicleHeight(VehicleType::Train)), false),
-				VehicleID::Invalid(), EIT_IN_DETAILS, this->decouple_scroll->GetPosition());
+				VehicleID::Invalid(), EngineImageType::InDetails, this->decouple_scroll->GetPosition());
 		auto draw_cut = [&](const Train *boundary, bool selected) {
 			int offset = GetCutPosition(v, boundary) - this->decouple_scroll->GetPosition();
 			int x = _current_text_dir == TD_RTL ? image.right - offset : image.left + offset;

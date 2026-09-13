@@ -106,11 +106,11 @@ public:
 		/* This next line is for version 4 and prior compatibility.. it temporarily reads
 		type and flags (which were both 4 bits) into type. Later on this is
 		converted correctly */
-		SLE_CONDVAR(Vehicle, current_order.type, VarTypes::U8, SaveLoadVersion::MinVersion, SaveLoadVersion::BigMap),
+		SLE_CONDVAR(Vehicle, current_order.type, VarFileType::U16 | VarMemType::U16, SaveLoadVersion::MinVersion, SaveLoadVersion::BigMap),
 		SLE_CONDVAR(Vehicle, current_order.dest, VarFileType::U8 | VarMemType::U16, SaveLoadVersion::MinVersion, SaveLoadVersion::BigMap),
 
 		/* Orders for version 5 and on */
-		SLE_CONDVAR(Vehicle, current_order.type,    VarTypes::U8,                    SaveLoadVersion::BigMap, SaveLoadVersion::MaxVersion),
+		SLE_CONDVAR(Vehicle, current_order.type,    VarTypes::U16,                   SaveLoadVersion::BigMap, SaveLoadVersion::MaxVersion),
 		SLE_CONDVAR(Vehicle, current_order.flags,   VarFileType::U8 | VarMemType::U16,    SaveLoadVersion::BigMap, SaveLoadVersion::MaxVersion),
 		SLE_CONDVAR(Vehicle, current_order.dest,    VarTypes::U16,                   SaveLoadVersion::BigMap, SaveLoadVersion::MaxVersion),
 
