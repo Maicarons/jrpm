@@ -2189,7 +2189,10 @@ private:
 			std::string name = ol->GetName().empty() ? GetString(STR_ORDER_LIST_DEFAULT_NAME, ol->index.base() + 1) : ol->GetName();
 			list.push_back(MakeDropDownListStringItem(std::move(name), ol->index.base(), false));
 		}
-		if (list.empty()) return;
+		if (list.empty()) {
+			ShowErrorMessage(GetEncodedString(STR_ERROR_NO_SCHEDULE_AVAILABLE), {}, WarningLevel::Warning);
+			return;
+		}
 		ShowDropDownList(this, std::move(list), -1, widget, 0, DropDownOption::Filterable, DDSF_SHARED);
 	}
 
