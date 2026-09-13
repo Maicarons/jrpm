@@ -2615,6 +2615,7 @@ static const EnumIndexArray<const NIFeature *, GrfSpecFeature, GrfSpecFeature::F
 	&_nif_roadstop,        // GrfSpecFeature::RoadStops
 	nullptr,               // GrfSpecFeature::Badges
 	&_nif_newlandscape,    // GrfSpecFeature::NewLandscape
+	nullptr,               // GrfSpecFeature::AirTypes
 	&_nif_town,            // GrfSpecFeature::FakeTowns
 	&_nif_station_struct,  // GrfSpecFeature::FakeStationStruct
 	&_nif_tracerestrict,   // GrfSpecFeature::FakeTracerestrict
