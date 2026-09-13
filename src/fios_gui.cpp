@@ -9,7 +9,7 @@
 
 #include "stdafx.h"
 #include "load_check.h"
-#include "sl/saveload.h"
+#include "sl/saveload_func.h"
 #include "error.h"
 #include "gui.h"
 #include "gfx_func.h"

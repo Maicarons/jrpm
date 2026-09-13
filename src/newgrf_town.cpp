@@ -66,7 +66,7 @@ static uint32_t GetNearbyTileInformation(uint8_t parameter, TileIndex tile, bool
 		/* Get a variable from the persistent storage */
 		case 0x7C: {
 			/* Check the persistent storage for the GrfID stored in register 100h. */
-			uint32_t grfid = GetRegister(0x100);
+			GrfID grfid = GetRegister(0x100);
 			if (grfid == 0xFFFFFFFF) {
 				if (this->ro.grffile == nullptr) return 0;
 				grfid = this->ro.grffile->grfid;
@@ -174,7 +174,7 @@ static uint32_t GetNearbyTileInformation(uint8_t parameter, TileIndex tile, bool
 	if (this->ro.grffile == nullptr) return;
 
 	/* Check the persistent storage for the GrfID stored in register 100h. */
-	uint32_t grfid = GetRegister(0x100);
+	GrfID grfid = GetRegister(0x100);
 
 	/* A NewGRF can only write in the persistent storage associated to its own GRFID. */
 	if (grfid == 0xFFFFFFFF) grfid = this->ro.grffile->grfid;

@@ -1010,7 +1010,6 @@ STR_GRAPH_LAST_24_MONTHS                                        :{TINY_FONT}{BLA
 STR_GRAPH_LAST_24_QUARTERS                                      :{TINY_FONT}{BLACK}6 lat (kwartalny)
 STR_GRAPH_LAST_24_YEARS                                         :{TINY_FONT}{BLACK}24 lata (roczny)
 
-STR_GRAPH_TOGGLE_RANGE                                          :Przełącz ukrywanie/wyświetlanie wykresu dla tego zakresu danych
 STR_GRAPH_SELECT_SCALE                                          :Zmień skalę poziomą wykresu
 
 STR_GRAPH_CARGO_PAYMENT_RATES_CAPTION                           :{WHITE}Stawki płatności za ładunek
@@ -2040,12 +2039,12 @@ STR_CONFIG_SETTING_TREE_PLACER_NONE                             :Brak
 STR_CONFIG_SETTING_TREE_PLACER_ORIGINAL                         :Oryginalny
 STR_CONFIG_SETTING_TREE_PLACER_IMPROVED                         :Ulepszony
 
-STR_CONFIG_SETTING_ROAD_SIDE                                    :Pojazdy drogowe: {STRING}
-STR_CONFIG_SETTING_ROAD_SIDE_HELPTEXT                           :Wybierz stronę, po której będą jeździć samochody
+STR_CONFIG_SETTING_ROAD_SIDE                                    :Strona w ruchu drogowym: {STRING}
+STR_CONFIG_SETTING_ROAD_SIDE_HELPTEXT                           :Wybierz stronę, po której będą jeździć pojazdy drogowe{}Może to również wpłynąć na stronę sygnalizacji oraz grafikę semaforów.{}Aby zmiana w pełni zadziałała, może być konieczne ponowne załadowanie gry
 
 ###length 2
-STR_CONFIG_SETTING_ROAD_SIDE_LEFT                               :Jazda po lewej
-STR_CONFIG_SETTING_ROAD_SIDE_RIGHT                              :Jazda po prawej
+STR_CONFIG_SETTING_ROAD_SIDE_LEFT                               :Lewa
+STR_CONFIG_SETTING_ROAD_SIDE_RIGHT                              :Prawa
 
 STR_CONFIG_SETTING_HEIGHTMAP_ROTATION                           :Obrót mapy wysokości: {STRING}
 STR_CONFIG_SETTING_HEIGHTMAP_ROTATION_TOOLTIP                   :Wybierz kierunek obrotu mapy wysokości, aby dopasować ją do świata gry
@@ -5747,6 +5746,10 @@ STR_ERROR_BRIDGE_TOO_LOW_FOR_BUOY                               :most jest o {HE
 STR_ERROR_BRIDGE_TOO_LOW_FOR_RAIL_WAYPOINT                      :most jest o {HEIGHT} za niski dla posterunku kolejowego
 STR_ERROR_BRIDGE_TOO_LOW_FOR_ROAD_WAYPOINT                      :most jest o {HEIGHT} za niski dla posterunku drogowego
 STR_ERROR_BRIDGE_TOO_LOW_FOR_LOCK                               :most jest o {HEIGHT} za niski dla śluzy
+STR_ERROR_BRIDGE_TOO_LOW_FOR_TRAIN_DEPOT                        :most jest o {HEIGHT} za niski dla hali warsztatów
+STR_ERROR_BRIDGE_TOO_LOW_FOR_ROADVEH_DEPOT                      :most jest o {HEIGHT} za niski dla zajezdni samochodowej
+STR_ERROR_BRIDGE_TOO_LOW_FOR_SHIP_DEPOT                         :most jest o {HEIGHT} za niski dla stoczni
+STR_ERROR_BRIDGE_TOO_LOW_FOR_OBJECT                             :most jest o {HEIGHT} za niski dla obiektu
 
 # Tunnel related errors
 STR_ERROR_CAN_T_BUILD_TUNNEL_HERE                               :Nie można tutaj zbudować tunelu...

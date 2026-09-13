@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file saveload_common.h Common functions/types for saving and loading games. */
+/** @file saveload_types.h Common functions/types for saving and loading games. */
 
 #ifndef SL_SAVELOAD_TYPES_H
 #define SL_SAVELOAD_TYPES_H

@@ -160,10 +160,10 @@ bool Engine::IsEnabled() const
  * This is the GRF providing the Action 3.
  * @return GRF ID of the associated NewGRF.
  */
-uint32_t Engine::GetGRFID() const
+GrfID Engine::GetGRFID() const
 {
 	const GRFFile *file = this->GetGRF();
-	return file == nullptr ? 0 : file->grfid;
+	return file == nullptr ? GrfID{} : file->grfid;
 }
 
 /**
@@ -595,7 +595,7 @@ void EngineOverrideManager::ResetToDefaultMapping()
  *              If dynamic_engines is disabled, all newgrf share the same ID scope identified by INVALID_GRFID.
  * @return The engine ID if present, or EngineID::Invalid() if not.
  */
-EngineID EngineOverrideManager::GetID(VehicleType type, uint16_t grf_local_id, uint32_t grfid)
+EngineID EngineOverrideManager::GetID(VehicleType type, uint16_t grf_local_id, GrfID grfid)
 {
 	auto iter = this->mapping_index.find(HashKey(type, grf_local_id, grfid));
 	EngineID id = (iter != this->mapping_index.end()) ? iter->second : EngineID::Invalid();

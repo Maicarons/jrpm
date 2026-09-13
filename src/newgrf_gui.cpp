@@ -590,7 +590,7 @@ void ShowNewGRFTextfileWindow(Window *parent, TextfileType file_type, const GRFC
 	new NewGRFTextfileWindow(parent, file_type, c);
 }
 
-typedef robin_hood::unordered_flat_map<uint32_t, const GRFConfig *> GrfIdMap; ///< Map of grfid to the grf config.
+typedef robin_hood::unordered_flat_map<GrfID, const GRFConfig *> GrfIdMap; ///< Map of grfid to the grf config.
 
 /**
  * Add all grf configs from \a c into the map.

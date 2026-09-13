@@ -166,6 +166,7 @@ protected:
 
 	uint GetScrollbarCapacity() const;
 	uint GetMinWidth() const;
+	static void CheckRecomputeDateWidth();
 	static void RecomputeDateWidth();
 	void DrawDeparturesListItems(const Rect &r) const;
 
@@ -778,11 +779,7 @@ public:
 		}
 
 		/* Recompute the minimum date display width if the cached one is no longer valid. */
-		if (cached_status_width == 0 ||
-				((cached_date_width == 0) != (!_settings_time.time_in_minutes && CalTime::IsCalendarFrozen())) ||
-				_settings_time.time_in_minutes != cached_date_display_method) {
-			this->RecomputeDateWidth();
-		}
+		DeparturesWindow::CheckRecomputeDateWidth();
 
 		/* We need to redraw the scrolling text in its new position. */
 		this->SetWidgetDirty(WID_DB_LIST);
@@ -900,7 +897,11 @@ public:
 			this->SetWidgetDisabledState(WID_DB_SHOW_TIMES, !_settings_time.time_in_minutes);
 			this->SetupValues();
 			this->ReInit();
-			if (_pause_mode.Any()) this->OnGameTick();
+			if (_pause_mode.Any()) {
+				this->OnGameTick();
+			} else {
+				DeparturesWindow::CheckRecomputeDateWidth();
+			}
 		}
 	}
 
@@ -982,6 +983,15 @@ void UpdateDeparturesWindowVehicleFilter(const OrderList *order_list, bool remov
 	}
 }
 
+void DeparturesWindow::CheckRecomputeDateWidth()
+{
+	if (cached_status_width == 0 ||
+			((cached_date_width == 0) != (!_settings_time.time_in_minutes && CalTime::IsCalendarFrozen())) ||
+			_settings_time.time_in_minutes != cached_date_display_method) {
+		DeparturesWindow::RecomputeDateWidth();
+	}
+}
+
 void DeparturesWindow::RecomputeDateWidth()
 {
 	cached_date_width = 0;
@@ -994,31 +1004,26 @@ void DeparturesWindow::RecomputeDateWidth()
 	cached_status_width = std::max((GetStringBoundingBox(STR_DEPARTURES_CANCELLED)).width, cached_status_width);
 	cached_status_width = std::max((GetStringBoundingBox(STR_DEPARTURES_SCHEDULED)).width, cached_status_width);
 
-	auto eval_tick = [&](StateTicks tick) {
-		auto params = MakeParameters(
-				TextColour::Orange,
-				STR_JUST_TT_TIME_ABS,
-				tick,
-				TextColour::Orange,
-				STR_JUST_TT_TIME_ABS,
-				tick);
-
-		cached_date_width = std::max(GetStringBoundingBox(GetStringWithArgs(STR_DEPARTURES_TIME, params)).width, cached_date_width);
-		PrepareArgsForNextRun(params);
-		cached_date_combined_width = std::max(GetStringBoundingBox(GetStringWithArgs(STR_DEPARTURES_TIME_BOTH, params)).width, cached_date_combined_width);
-
-		cached_status_width = std::max(GetStringBoundingBox(GetString(STR_DEPARTURES_EXPECTED, STR_JUST_TT_TIME_ABS, tick)).width, cached_status_width);
-	};
-
+	format_buffer_sized<64> date_buf;
 	if (_settings_time.time_in_minutes) {
-		StateTicks tick = _settings_time.FromTickMinutes(_settings_time.NowInTickMinutes().ToSameDayClockTime(GetBroadestHourDigitsValue(), (int)GetParamMaxDigits(2)));
-		eval_tick(tick);
+		AppendStringInPlace(date_buf, STR_JUST_TIME_HHMM, (GetBroadestHourDigitsValue() * 100) + GetParamMaxDigits(2));
 	} else if (!CalTime::IsCalendarFrozen()) {
 		/* If the calendar is frozen, all dates are the same, so just don't show anything */
-		for (uint i = 0; i < 365; ++i) {
-			eval_tick(StateTicks{INT_MAX - (i * DAY_TICKS)});
-		}
+		AppendWidestTinyOrIsoCalendarDate(date_buf, false);
 	}
+
+	auto params = MakeParameters(
+			TextColour::Orange,
+			STR_JUST_RAW_STRING,
+			std::string_view{date_buf},
+			TextColour::Orange,
+			STR_JUST_RAW_STRING,
+			std::string_view{date_buf});
+	cached_date_width = std::max(GetStringBoundingBox(GetStringWithArgs(STR_DEPARTURES_TIME, params)).width, cached_date_width);
+	PrepareArgsForNextRun(params);
+	cached_date_combined_width = std::max(GetStringBoundingBox(GetStringWithArgs(STR_DEPARTURES_TIME_BOTH, params)).width, cached_date_combined_width);
+
+	cached_status_width = std::max(GetStringBoundingBox(GetString(STR_DEPARTURES_EXPECTED, STR_JUST_RAW_STRING, std::string_view{date_buf})).width, cached_status_width);
 
 	auto get_tick_zero_width = [&](StringID str) {
 		return GetStringBoundingBox(GetString(str, STR_JUST_TT_TIME_ABS, 0)).width;

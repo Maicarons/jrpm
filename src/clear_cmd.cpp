@@ -57,17 +57,17 @@ static CommandCost ClearTile_Clear(TileIndex tile, DoCommandFlags flags)
 	return price;
 }
 
-SpriteID GetSpriteIDForClearLand(const Slope slope, uint8_t set)
+SpriteID GetSpriteIDForClearLand(const Slope slope, uint8_t density)
 {
-	return SPR_FLAT_BARE_LAND + SlopeToSpriteOffset(slope) + set * 19;
+	return _clear_land_sprites_grass[density] + SlopeToSpriteOffset(slope);
 }
 
-void DrawClearLandTile(const TileInfo *ti, uint8_t set)
+void DrawClearLandTile(const TileInfo *ti, uint8_t density)
 {
-	DrawGroundSprite(GetSpriteIDForClearLand(ti->tileh, set), PAL_NONE);
+	DrawGroundSprite(GetSpriteIDForClearLand(ti->tileh, density), PAL_NONE);
 }
 
-SpriteID GetSpriteIDForHillyLand(const Slope slope, const uint rough_index)
+SpriteID GetSpriteIDForRoughLand(const Slope slope, const uint rough_index)
 {
 	if (slope != SLOPE_FLAT) {
 		return SPR_FLAT_ROUGH_LAND + SlopeToSpriteOffset(slope);
@@ -76,9 +76,13 @@ SpriteID GetSpriteIDForHillyLand(const Slope slope, const uint rough_index)
 	}
 }
 
-void DrawHillyLandTile(const TileInfo *ti)
+/**
+ * Draw a ClearGround::Rough tile.
+ * @param ti The tile to draw.
+ */
+void DrawRoughLandTile(const TileInfo *ti)
 {
-	DrawGroundSprite(GetSpriteIDForHillyLand(ti->tileh, GB(TileHash(ti->x, ti->y), 4, 3)), PAL_NONE);
+	DrawGroundSprite(GetSpriteIDForRoughLand(ti->tileh, GB(TileHash(ti->x, ti->y), 4, 3)), PAL_NONE);
 }
 
 SpriteID GetSpriteIDForRocks(const Slope slope, const uint tile_hash)
@@ -124,6 +128,10 @@ SpriteID GetSpriteIDForSnowDesert(const Slope slope, const uint density)
 	return _clear_land_sprites_snow_desert[density] + SlopeToSpriteOffset(slope);
 }
 
+/**
+ * Draw the fences atop a ClearGround::Fields tile.
+ * @param ti The tile to draw.
+ */
 static void DrawClearLandFence(const TileInfo *ti)
 {
 	/* combine fences into one sprite object */
@@ -185,7 +193,7 @@ static void DrawTile_Clear(TileInfo *ti, DrawTileProcParams params)
 			break;
 
 		case ClearGround::Rough:
-			if (!params.no_ground_tiles) DrawHillyLandTile(ti);
+			if (!params.no_ground_tiles) DrawRoughLandTile(ti);
 			break;
 
 		case ClearGround::Rocks:

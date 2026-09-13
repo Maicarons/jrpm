@@ -25,6 +25,7 @@
 #include "base_media_music.h"
 #include "base_media_sounds.h"
 #include "sl/saveload.h"
+#include "sl/saveload_func.h"
 #include "company_cmd.h"
 #include "company_func.h"
 #include "company_gui.h"
@@ -1519,8 +1520,8 @@ void WriteVehicleInfo(format_target &buffer, const Vehicle *u, const Vehicle *v,
 	buffer.format(": type {}, vehicle {} ({}), company {}, unit number {}, wagon {}, engine: ",
 			u->type, u->index, v->index, u->owner, v->unitnumber, length);
 	AppendStringInPlace(buffer, STR_ENGINE_NAME, u->engine_type);
-	uint32_t grfid = u->GetGRFID();
-	if (grfid) {
+	GrfID grfid = u->GetGRFID();
+	if (grfid != 0) {
 		buffer.format(", GRF:{:08X}", std::byteswap(grfid));
 		GRFConfig *grfconfig = GetGRFConfig(grfid);
 		if (grfconfig) {

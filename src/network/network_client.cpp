@@ -9,8 +9,8 @@
 
 #include "../stdafx.h"
 #include "network_gui.h"
-#include "../sl/saveload.h"
 #include "../sl/saveload_filter.h"
+#include "../sl/saveload_func.h"
 #include "../command_func.h"
 #include "../console_func.h"
 #include "../strings_func.h"

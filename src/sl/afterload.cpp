@@ -83,13 +83,13 @@
 #include "../pathfinder/water_regions.h"
 #include "../tile_cmd.h"
 
+#include "saveload_internal.h"
+#include "saveload_func.h"
 
-#include "../sl/saveload_internal.h"
+#include "../table/strings.h"
 
 #include <signal.h>
 #include <algorithm>
-
-#include "table/strings.h"
 
 #include "../safeguards.h"
 
@@ -403,17 +403,7 @@ static const GRFIdentifier &GetOverriddenIdentifier(const GRFConfig &c)
 }
 
 /** Was the saveload crash because of missing NewGRFs? */
-static bool _saveload_crash_with_missing_newgrfs = false;
-
-/**
- * Did loading the savegame cause a crash? If so,
- * were NewGRFs missing?
- * @return when the saveload crashed due to missing NewGRFs.
- */
-bool SaveloadCrashWithMissingNewGRFs()
-{
-	return _saveload_crash_with_missing_newgrfs;
-}
+bool _saveload_crash_with_missing_newgrfs = false;
 
 /**
  * Signal handler used to give a user a more useful report for crashes during

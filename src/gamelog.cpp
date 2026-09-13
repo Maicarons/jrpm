@@ -494,7 +494,7 @@ void GamelogTestMode()
  * @param bug type of bug, @see enum GRFBugs
  * @param data additional data
  */
-static void GamelogGRFBug(uint32_t grfid, GRFBug bug, uint64_t data)
+static void GamelogGRFBug(GrfID grfid, GRFBug bug, uint64_t data)
 {
 	assert(_gamelog_action_type == GamelogActionType::GRFBug);
 
@@ -515,7 +515,7 @@ static void GamelogGRFBug(uint32_t grfid, GRFBug bug, uint64_t data)
  * @param internal_id the internal ID of whatever's broken in the NewGRF
  * @return true iff a unique record was done
  */
-bool GamelogGRFBugReverse(uint32_t grfid, uint16_t internal_id)
+bool GamelogGRFBugReverse(GrfID grfid, uint16_t internal_id)
 {
 	for (LoggedAction &la : _gamelog_actions) {
 		for (LoggedChange &lc : la.changes) {
@@ -548,7 +548,7 @@ static inline bool IsLoggableGrfConfig(const GRFConfig &g)
  * Logs removal of a GRF
  * @param grfid ID of removed GRF
  */
-void GamelogGRFRemove(uint32_t grfid)
+void GamelogGRFRemove(GrfID grfid)
 {
 	assert(_gamelog_action_type == GamelogActionType::Load || _gamelog_action_type == GamelogActionType::GRF);
 
@@ -594,7 +594,7 @@ void GamelogGRFCompatible(const GRFIdentifier &newg)
  * @param grfid GRF that is moved
  * @param offset how far it is moved, positive = moved down
  */
-static void GamelogGRFMove(uint32_t grfid, int32_t offset)
+static void GamelogGRFMove(GrfID grfid, int32_t offset)
 {
 	assert(_gamelog_action_type == GamelogActionType::GRF);
 
@@ -610,7 +610,7 @@ static void GamelogGRFMove(uint32_t grfid, int32_t offset)
  * Details about parameters changed are not stored
  * @param grfid ID of GRF to store
  */
-static void GamelogGRFParameters(uint32_t grfid)
+static void GamelogGRFParameters(GrfID grfid)
 {
 	assert(_gamelog_action_type == GamelogActionType::GRF);
 

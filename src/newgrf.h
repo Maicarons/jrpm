@@ -33,8 +33,6 @@
 #include <bitset>
 #include <vector>
 
-struct GRFConfig;
-
 /**
  * List of different canal 'features'.
  * Each feature gets an entry in the canal spritegroup table
@@ -134,8 +132,6 @@ enum class GrfSpecFeature : uint8_t {
 
 /** Bitset of \c GrfSpecFeature elements. */
 using GrfSpecFeatures = EnumBitSet<GrfSpecFeature, uint32_t, GrfSpecFeature::End>;
-
-static const uint32_t INVALID_GRFID = 0xFFFFFFFF;
 
 struct GRFLabel {
 	uint8_t label;
@@ -343,7 +339,7 @@ struct NewSignalStyle;
 /** Dynamic data of a loaded NewGRF */
 struct GRFFile {
 	std::string filename{};
-	uint32_t grfid = 0;
+	GrfID grfid{};
 	uint8_t grf_version = 0;
 
 	uint sound_offset = 0;
@@ -496,7 +492,7 @@ void GrfMsgIntl(int severity, fmt::format_string<T...> msg, T&&... args)
 
 bool GetGlobalVariable(uint8_t param, uint32_t *value, const GRFFile *grffile);
 
-StringID MapGRFStringID(uint32_t grfid, GRFStringID str);
+StringID MapGRFStringID(GrfID grfid, GRFStringID str);
 StringID MapGRFStringID(const struct GRFFile *grf, GRFStringID str);
 void ShowNewGRFError();
 

@@ -3033,3 +3033,12 @@ void CheckForMissingGlyphs(MissingGlyphSearcher *searcher)
 	}
 #endif /* !(WITH_ICU_I18N && WITH_HARFBUZZ) && !WITH_UNISCRIBE && !WITH_COCOA */
 }
+
+void AppendWidestTinyOrIsoCalendarDate(format_target &result, bool iso, FontSize size)
+{
+	static_assert(CalTime::MAX_YEAR.base() == 5000000); // 7 digits
+	uint8_t widest = GetBroadestDigit(size).second; // 0-padded, so only the second return value is needed
+	/* Day and month are zero-padded with ZEROFILL_NUM, hence the two 2s. */
+	auto tmp_params = MakeParameters(widest * 11, 2, widest * 11, 2, GetParamMaxDigits(7, size));
+	FormatStringDirect(StringBuilder(result), GetStringPtr(iso ? STR_FORMAT_DATE_ISO : STR_FORMAT_DATE_TINY), tmp_params, 0);
+}

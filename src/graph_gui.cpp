@@ -201,6 +201,12 @@ protected:
 		const HistoryRange *history_range = nullptr;
 	};
 
+	/** Label and tooltip for a graph range. */
+	struct GraphRange {
+		StringID label; ///< Label for this range.
+		StringID tooltip; ///< Tooltip for this range.
+	};
+
 	static inline constexpr GraphScale MONTHLY_SCALE_WALLCLOCK[] = {
 		{STR_GRAPH_LAST_24_MINUTES_TIME_LABEL, 0, HISTORY_MONTH.total_division, ECONOMY_MONTH_MINUTES, &HISTORY_MONTH},
 		{STR_GRAPH_LAST_72_MINUTES_TIME_LABEL, 0, HISTORY_QUARTER.total_division, ECONOMY_QUARTER_MINUTES, &HISTORY_QUARTER},
@@ -258,7 +264,7 @@ protected:
 	};
 	std::vector<DataSet> data{};
 
-	std::span<const StringID> ranges{};
+	std::span<const GraphRange> ranges{};
 	std::span<const GraphScale> scales{};
 	uint8_t selected_scale = 0;
 
@@ -700,8 +706,8 @@ public:
 		switch (widget) {
 			case WID_GRAPH_RANGE_MATRIX: {
 				Dimension label_max_size = {};
-				for (StringID str : this->ranges) {
-					label_max_size = maxdim(label_max_size, GetStringBoundingBox(str, FontSize::Small));
+				for (const GraphRange &gr : this->ranges) {
+					label_max_size = maxdim(label_max_size, GetStringBoundingBox(gr.label, FontSize::Small));
 				}
 				this->UpdateMatrixSize(widget, size, resize, label_max_size, this->ranges.size());
 				break;
@@ -742,6 +748,17 @@ public:
 		}
 	}
 
+	bool OnTooltip([[maybe_unused]] Point pt, WidgetID widget, TooltipCloseCondition close_cond) override
+	{
+		if (widget != WID_GRAPH_RANGE_MATRIX) return false;
+
+		int row = GetRowFromWidget(pt.y, widget, 0, GetCharacterHeight(FontSize::Small) + WidgetDimensions::scaled.framerect.Vertical());
+		if (row == INT_MAX) return false;
+
+		GuiShowTooltips(this, GetEncodedString(this->ranges[row].tooltip), close_cond);
+		return true;
+	}
+
 	void DrawWidget(const Rect &r, WidgetID widget) const override
 	{
 		switch (widget) {
@@ -753,14 +770,14 @@ public:
 				uint line_height = GetCharacterHeight(FontSize::Small) + WidgetDimensions::scaled.framerect.Vertical();
 				uint index = 0;
 				Rect line = r.WithHeight(line_height);
-				for (const auto &str : this->ranges) {
+				for (const auto &[label, tooltip] : this->ranges) {
 					bool lowered = !HasBit(this->excluded_range, index) && !HasBit(this->masked_range, index);
 
 					/* Redraw frame if lowered */
 					if (lowered) DrawFrameRect(line, Colours::Brown, FrameFlag::Lowered);
 
 					const Rect text = line.Shrink(WidgetDimensions::scaled.framerect);
-					DrawString(text, str, (this->highlight_state && this->highlight_range == index) ? TextColour::White : TextColour::Black, {AlignmentH::Centre, AlignmentV::Middle}, false, FontSize::Small);
+					DrawString(text, label, (this->highlight_state && this->highlight_range == index) ? TextColour::White : TextColour::Black, {AlignmentH::Centre, AlignmentV::Middle}, false, FontSize::Small);
 
 					if (HasBit(this->masked_range, index)) {
 						GfxFillRect(line.Shrink(WidgetDimensions::scaled.bevel), GetColourGradient(Colours::Brown, Shade::Darker), FillRectMode::Checker);
@@ -2196,11 +2213,11 @@ CompanyID PerformanceRatingDetailWindow::company = CompanyID::Invalid();
 /*******************************/
 
 struct IndustryProductionGraphWindow : BaseCargoGraphWindow {
-	static inline constexpr StringID RANGE_LABELS[] = {
-		STR_GRAPH_INDUSTRY_RANGE_PRODUCED,
-		STR_GRAPH_INDUSTRY_RANGE_TRANSPORTED,
-		STR_GRAPH_INDUSTRY_RANGE_DELIVERED,
-		STR_GRAPH_INDUSTRY_RANGE_WAITING,
+	static inline constexpr GraphRange RANGE_LABELS[] = {
+		{STR_GRAPH_INDUSTRY_RANGE_PRODUCED, STR_GRAPH_INDUSTRY_RANGE_PRODUCED_TOOLTIP},
+		{STR_GRAPH_INDUSTRY_RANGE_TRANSPORTED, STR_GRAPH_INDUSTRY_RANGE_TRANSPORTED_TOOLTIP},
+		{STR_GRAPH_INDUSTRY_RANGE_DELIVERED, STR_GRAPH_INDUSTRY_RANGE_DELIVERED_TOOLTIP},
+		{STR_GRAPH_INDUSTRY_RANGE_WAITING, STR_GRAPH_INDUSTRY_RANGE_WAITING_TOOLTIP},
 	};
 
 	static inline CargoTypes excluded_cargo_types{};
@@ -2343,7 +2360,7 @@ static constexpr std::initializer_list<NWidgetPart> _nested_industry_production_
 			NWidget(WWT_EMPTY, Colours::Invalid, WID_GRAPH_GRAPH), SetMinimalSize(495, 0), SetFill(1, 1), SetResize(1, 1),
 			NWidget(NWID_VERTICAL),
 				NWidget(NWID_SPACER), SetMinimalSize(0, 24), SetFill(0, 1),
-				NWidget(WWT_MATRIX, Colours::Brown, WID_GRAPH_RANGE_MATRIX), SetFill(1, 0), SetResize(0, 0), SetMatrixDataTip(1, 0, STR_GRAPH_TOGGLE_RANGE),
+				NWidget(WWT_MATRIX, Colours::Brown, WID_GRAPH_RANGE_MATRIX), SetFill(1, 0), SetResize(0, 0), SetMatrixDataTip(1, 0),
 				NWidget(NWID_SPACER), SetMinimalSize(0, 4),
 				NWidget(WWT_PUSHTXTBTN, Colours::Brown, WID_GRAPH_ENABLE_CARGOES), SetStringTip(STR_GRAPH_CARGO_ENABLE_ALL, STR_GRAPH_CARGO_TOOLTIP_ENABLE_ALL), SetFill(1, 0),
 				NWidget(WWT_PUSHTXTBTN, Colours::Brown, WID_GRAPH_DISABLE_CARGOES), SetStringTip(STR_GRAPH_CARGO_DISABLE_ALL, STR_GRAPH_CARGO_TOOLTIP_DISABLE_ALL), SetFill(1, 0),
@@ -2378,10 +2395,10 @@ void ShowIndustryProductionGraph(WindowNumber window_number)
 }
 
 struct TownCargoGraphWindow : BaseCargoGraphWindow {
-	static inline constexpr StringID RANGE_LABELS[] = {
-		STR_GRAPH_TOWN_RANGE_PRODUCED,
-		STR_GRAPH_TOWN_RANGE_TRANSPORTED,
-		STR_GRAPH_TOWN_RANGE_DELIVERED,
+	static inline constexpr GraphRange RANGE_LABELS[] = {
+		{STR_GRAPH_TOWN_RANGE_PRODUCED, STR_GRAPH_TOWN_RANGE_PRODUCED_TOOLTIP},
+		{STR_GRAPH_TOWN_RANGE_TRANSPORTED, STR_GRAPH_TOWN_RANGE_TRANSPORTED_TOOLTIP},
+		{STR_GRAPH_TOWN_RANGE_DELIVERED, STR_GRAPH_TOWN_RANGE_DELIVERED_TOOLTIP},
 	};
 
 	static inline CargoTypes excluded_cargo_types{};
@@ -2512,7 +2529,7 @@ static constexpr std::initializer_list<NWidgetPart> _nested_town_cargo_graph_wid
 			NWidget(WWT_EMPTY, Colours::Invalid, WID_GRAPH_GRAPH), SetMinimalSize(495, 0), SetFill(1, 1), SetResize(1, 1),
 			NWidget(NWID_VERTICAL),
 				NWidget(NWID_SPACER), SetMinimalSize(0, 24), SetFill(0, 1),
-				NWidget(WWT_MATRIX, Colours::Brown, WID_GRAPH_RANGE_MATRIX), SetFill(1, 0), SetResize(0, 0), SetMatrixDataTip(1, 0, STR_GRAPH_CARGO_PAYMENT_TOGGLE_CARGO),
+				NWidget(WWT_MATRIX, Colours::Brown, WID_GRAPH_RANGE_MATRIX), SetFill(1, 0), SetResize(0, 0), SetMatrixDataTip(1, 0),
 				NWidget(NWID_SPACER), SetMinimalSize(0, 4),
 				NWidget(WWT_PUSHTXTBTN, Colours::Brown, WID_GRAPH_ENABLE_CARGOES), SetStringTip(STR_GRAPH_CARGO_ENABLE_ALL, STR_GRAPH_CARGO_TOOLTIP_ENABLE_ALL), SetFill(1, 0),
 				NWidget(WWT_PUSHTXTBTN, Colours::Brown, WID_GRAPH_DISABLE_CARGOES), SetStringTip(STR_GRAPH_CARGO_DISABLE_ALL, STR_GRAPH_CARGO_TOOLTIP_DISABLE_ALL), SetFill(1, 0),

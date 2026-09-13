@@ -35,7 +35,7 @@ struct OldWaypoint {
 	uint8_t delete_ctr;
 	CalTime::Date build_date;
 	uint8_t localidx;
-	uint32_t grfid;
+	GrfID grfid;
 	const StationSpec *spec;
 	Owner owner;
 

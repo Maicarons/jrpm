@@ -23,7 +23,7 @@
 #include "engine_func.h"
 #include "water.h"
 #include "tilehighlight_func.h"
-#include "sl/saveload.h"
+#include "sl/saveload_func.h"
 #include "void_map.h"
 #include "town.h"
 #include "newgrf.h"
@@ -45,6 +45,7 @@
 #include "town_cmd.h"
 #include "signs_cmd.h"
 #include "road_cmd.h"
+#include "scope.h"
 
 #include "table/strings.h"
 

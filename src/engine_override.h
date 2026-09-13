@@ -34,7 +34,7 @@ struct EngineOverrideManager {
 	static const uint NUM_DEFAULT_ENGINES; ///< Number of default entries
 
 private:
-	static uint64_t HashKey(VehicleType type, uint16_t grf_local_id, uint32_t grfid)
+	static uint64_t HashKey(VehicleType type, uint16_t grf_local_id, GrfID grfid)
 	{
 		return grfid | (static_cast<uint64_t>(grf_local_id) << 32) | (static_cast<uint64_t>(type) << 48);
 	}
@@ -48,7 +48,7 @@ private:
 
 public:
 	void ResetToDefaultMapping();
-	EngineID GetID(VehicleType type, uint16_t grf_local_id, uint32_t grfid);
+	EngineID GetID(VehicleType type, uint16_t grf_local_id, GrfID grfid);
 
 	void AddToIndex(EngineID id);
 	void RemoveFromIndex(EngineID id);

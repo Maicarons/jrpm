@@ -316,4 +316,6 @@ public:
 
 void CheckForMissingGlyphs(MissingGlyphSearcher *searcher = nullptr);
 
+void AppendWidestTinyOrIsoCalendarDate(struct format_target &result, bool iso, FontSize size = FontSize::Normal);
+
 #endif /* STRINGS_FUNC_H */

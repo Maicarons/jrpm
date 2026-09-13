@@ -56,7 +56,7 @@ OverrideManagerBase::OverrideManagerBase(uint16_t offset, uint16_t maximum, uint
  * @param grfid  ID of the grf file
  * @param entity_type original entity type
  */
-void OverrideManagerBase::Add(uint16_t local_id, uint32_t grfid, uint entity_type)
+void OverrideManagerBase::Add(uint16_t local_id, GrfID grfid, uint entity_type)
 {
 	assert(entity_type < this->max_offset);
 	/* An override can be set only once */
@@ -84,7 +84,7 @@ void OverrideManagerBase::ResetOverride()
  * @param grfid ID of the grf file
  * @return the ID of the candidate, of the Invalid flag item ID
  */
-uint16_t OverrideManagerBase::GetID(uint16_t grf_local_id, uint32_t grfid) const
+uint16_t OverrideManagerBase::GetID(uint16_t grf_local_id, GrfID grfid) const
 {
 	for (uint16_t id = 0; id < this->max_entities; id++) {
 		const EntityIDMapping *map = &this->mappings[id];
@@ -103,7 +103,7 @@ uint16_t OverrideManagerBase::GetID(uint16_t grf_local_id, uint32_t grfid) const
  * @param substitute_id is the original entity from which data is copied for the new one
  * @return the proper usable slot id, or invalid marker if none is found
  */
-uint16_t OverrideManagerBase::AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id)
+uint16_t OverrideManagerBase::AddEntityID(uint16_t grf_local_id, GrfID grfid, uint16_t substitute_id)
 {
 	uint16_t id = this->GetID(grf_local_id, grfid);
 
@@ -133,7 +133,7 @@ uint16_t OverrideManagerBase::AddEntityID(uint16_t grf_local_id, uint32_t grfid,
  * @param entity_id ID of the entity being queried.
  * @return GRFID.
  */
-uint32_t OverrideManagerBase::GetGRFID(uint16_t entity_id) const
+GrfID OverrideManagerBase::GetGRFID(uint16_t entity_id) const
 {
 	return this->mappings[entity_id].grfid;
 }
@@ -176,7 +176,7 @@ void HouseOverrideManager::SetEntitySpec(HouseSpec &&hs)
 
 		overridden_hs->grf_prop.override_id = house_id;
 		this->entity_overrides[i] = this->invalid_id;
-		this->grfid_overrides[i] = 0;
+		this->grfid_overrides[i] = {};
 	}
 }
 
@@ -186,7 +186,7 @@ void HouseOverrideManager::SetEntitySpec(HouseSpec &&hs)
  * @param grfid ID of the grf file
  * @return the ID of the candidate, of the Invalid flag item ID
  */
-uint16_t IndustryOverrideManager::GetID(uint16_t grf_local_id, uint32_t grfid) const
+uint16_t IndustryOverrideManager::GetID(uint16_t grf_local_id, GrfID grfid) const
 {
 	uint16_t id = OverrideManagerBase::GetID(grf_local_id, grfid);
 	if (id != this->invalid_id) return id;
@@ -206,7 +206,7 @@ uint16_t IndustryOverrideManager::GetID(uint16_t grf_local_id, uint32_t grfid) c
  * @param substitute_id industry from which data has been copied
  * @return a free entity id (slotid) if ever one has been found, or Invalid_ID marker otherwise
  */
-uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, uint32_t grfid, uint16_t substitute_id)
+uint16_t IndustryOverrideManager::AddEntityID(uint16_t grf_local_id, GrfID grfid, uint16_t substitute_id)
 {
 	/* This entity hasn't been defined before, so give it an ID now. */
 	for (uint16_t id = 0; id < this->max_entities; id++) {
@@ -286,7 +286,7 @@ void IndustryTileOverrideManager::SetEntitySpec(IndustryTileSpec &&its)
 		overridden_its->grf_prop.override_id = indt_id;
 		overridden_its->enabled = false;
 		this->entity_overrides[i] = this->invalid_id;
-		this->grfid_overrides[i] = 0;
+		this->grfid_overrides[i] = {};
 	}
 }
 
@@ -521,7 +521,7 @@ CommandCost GetErrorMessageFromLocationCallbackResult(uint16_t cb_res, std::span
  * @param cbid Callback causing the problem.
  * @param cb_res Invalid result returned by the callback.
  */
-void ErrorUnknownCallbackResult(uint32_t grfid, uint16_t cbid, uint16_t cb_res)
+void ErrorUnknownCallbackResult(GrfID grfid, uint16_t cbid, uint16_t cb_res)
 {
 	GRFConfig *grfconfig = GetGRFConfig(grfid);
 
@@ -742,7 +742,7 @@ void SpriteLayoutProcessor::ProcessRegisters(uint8_t resolved_var10, uint32_t re
 void GRFFilePropsBase::SetGRFFile(const struct GRFFile *grffile)
 {
 	this->grffile = grffile;
-	this->grfid = grffile == nullptr ? 0 : grffile->grfid;
+	this->grfid = grffile == nullptr ? GrfID{} : grffile->grfid;
 }
 
 /**

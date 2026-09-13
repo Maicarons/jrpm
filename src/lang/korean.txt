@@ -632,7 +632,6 @@ STR_GRAPH_LAST_24_MONTHS                                        :{TINY_FONT}{BLA
 STR_GRAPH_LAST_24_QUARTERS                                      :{TINY_FONT}{BLACK}6년 (분기별)
 STR_GRAPH_LAST_24_YEARS                                         :{TINY_FONT}{BLACK}24년 (연도별)
 
-STR_GRAPH_TOGGLE_RANGE                                          :이 데이터 범위에 대한 그래프 전환
 STR_GRAPH_SELECT_SCALE                                          :그래프 가로 축척 변경
 
 STR_GRAPH_CARGO_PAYMENT_RATES_CAPTION                           :{WHITE}화물 운송단가 비율
@@ -648,14 +647,21 @@ STR_GRAPH_CARGO_PAYMENT_CARGO                                   :{TINY_FONT}{BLA
 
 STR_GRAPH_INDUSTRY_CAPTION                                      :{WHITE}{INDUSTRY} - 화물 그래프
 STR_GRAPH_INDUSTRY_RANGE_PRODUCED                               :생산량
+STR_GRAPH_INDUSTRY_RANGE_PRODUCED_TOOLTIP                       :이 산업시설에서 생산된 화물양 그래프를 표시하거나 숨깁니다
 STR_GRAPH_INDUSTRY_RANGE_TRANSPORTED                            :수송량
+STR_GRAPH_INDUSTRY_RANGE_TRANSPORTED_TOOLTIP                    :이 산업시설에서 수송된 화물양 그래프를 표시하거나 숨깁니다
 STR_GRAPH_INDUSTRY_RANGE_DELIVERED                              :수송됨
+STR_GRAPH_INDUSTRY_RANGE_DELIVERED_TOOLTIP                      :이 산업시설로 수송된 화물양 그래프를 표시하거나 숨깁니다
 STR_GRAPH_INDUSTRY_RANGE_WAITING                                :대기 중
+STR_GRAPH_INDUSTRY_RANGE_WAITING_TOOLTIP                        :이 산업시설의 대기 화물양 그래프를 표시하거나 숨깁니다
 
 STR_GRAPH_TOWN_CARGO_CAPTION                                    :{WHITE}{TOWN} - 화물 이력
 STR_GRAPH_TOWN_RANGE_PRODUCED                                   :생산
+STR_GRAPH_TOWN_RANGE_PRODUCED_TOOLTIP                           :이 도시에서 생산된 화물양 그래프를 표시하거나 숨깁니다
 STR_GRAPH_TOWN_RANGE_TRANSPORTED                                :수송됨
+STR_GRAPH_TOWN_RANGE_TRANSPORTED_TOOLTIP                        :이 도시에서 수송된 화물양 그래프를 표시하거나 숨깁니다
 STR_GRAPH_TOWN_RANGE_DELIVERED                                  :수송됨
+STR_GRAPH_TOWN_RANGE_DELIVERED_TOOLTIP                          :이 도시로 수송된 화물양 그래프를 표시하거나 숨깁니다
 
 STR_GRAPH_PERFORMANCE_DETAIL_TOOLTIP                            :{BLACK}상세 성취도를 봅니다.
 
@@ -1662,11 +1668,11 @@ STR_CONFIG_SETTING_TREE_PLACER_ORIGINAL                         :오리지널
 STR_CONFIG_SETTING_TREE_PLACER_IMPROVED                         :향상됨
 
 STR_CONFIG_SETTING_ROAD_SIDE                                    :자동차 통행 방향: {STRING}
-STR_CONFIG_SETTING_ROAD_SIDE_HELPTEXT                           :통행 방향을 선택합니다
+STR_CONFIG_SETTING_ROAD_SIDE_HELPTEXT                           :도로 차량의 통행 방향을 선택합니다.{}이 설정은 열차 신호기의 설치 위치에도 영향을 미칩니다.{}제대로 적용하기 위해서는 게임을 다시 불러올 필요가 있습니다.
 
 ###length 2
-STR_CONFIG_SETTING_ROAD_SIDE_LEFT                               :좌측통행
-STR_CONFIG_SETTING_ROAD_SIDE_RIGHT                              :우측통행
+STR_CONFIG_SETTING_ROAD_SIDE_LEFT                               :좌측
+STR_CONFIG_SETTING_ROAD_SIDE_RIGHT                              :우측
 
 STR_CONFIG_SETTING_HEIGHTMAP_ROTATION                           :높이맵 회전: {STRING}
 STR_CONFIG_SETTING_HEIGHTMAP_ROTATION_TOOLTIP                   :높이맵을 게임 세계에 맞추기 위해 어느 방향으로 회전시킬지 선택합니다
@@ -2889,22 +2895,22 @@ STR_PICKER_COLLECTION_DELETE_QUERY                              :모음집 삭�
 STR_PICKER_COLLECTION_DELETE_QUERY_TEXT                         :{YELLOW}정말 이 모음집을 삭제하시겠습니까?
 STR_PICKER_COLLECTION_DELETE_QUERY_DISABLED_TEXT                :{YELLOW}정말 이 모음집을 삭제하시겠습니까? (비활성화된 NewGRF에서 온 항목을 포함하고 있습니다)
 
-STR_PICKER_STATION_CLASS_TOOLTIP                                :표시할 역 종류를 선택하세요
+STR_PICKER_STATION_CLASS_TOOLTIP                                :표시할 역 종류를 선택하세요. CTRL + 클릭하면 즐겨찾기된 항목에 추가/제거가 가능합니다
 STR_PICKER_STATION_TYPE_TOOLTIP                                 :설치하려는 역 종류를 선택하세요. CTRL+클릭하면 즐겨찾기 추가/제거가 가능합니다
 STR_PICKER_STATION_COLLECTION_TOOLTIP                           :표시할 역 모음집을 선택하세요
-STR_PICKER_WAYPOINT_CLASS_TOOLTIP                               :표시할 경유지 종류를 선택하세요
+STR_PICKER_WAYPOINT_CLASS_TOOLTIP                               :표시할 경유지 종류를 선택하세요. CTRL + 클릭하면 즐겨찾기된 항목에 추가/제거가 가능합니다
 STR_PICKER_WAYPOINT_TYPE_TOOLTIP                                :설치하려는 경유지를 선택하세요. CTRL+클릭하면 즐겨찾기 추가/제거가 가능합니다
 STR_PICKER_WAYPOINT_COLLECTION_TOOLTIP                          :표시할 경유지 모음집을 선택하세요
-STR_PICKER_ROADSTOP_BUS_CLASS_TOOLTIP                           :표시할 버스 정류장 종류를 선택하세요
+STR_PICKER_ROADSTOP_BUS_CLASS_TOOLTIP                           :표시할 버스 정류장 종류를 선택하세요. CTRL + 클릭하면 즐겨찾기된 항목에 추가/제거가 가능합니다
 STR_PICKER_ROADSTOP_BUS_TYPE_TOOLTIP                            :설치하려는 버스 정류장 종류를 선택하세요. CTRL+클릭하면 즐겨찾기 추가/제거가 가능합니다
 STR_PICKER_ROADSTOP_BUS_COLLECTION_TOOLTIP                      :표시할 버스 정류장 모음집을 선택하세요
-STR_PICKER_ROADSTOP_TRUCK_CLASS_TOOLTIP                         :표시할 트럭 적하장 종류를 선택하세요
+STR_PICKER_ROADSTOP_TRUCK_CLASS_TOOLTIP                         :표시할 트럭 적하장 종류를 선택하세요. CTRL + 클릭하면 즐겨찾기된 항목에 추가/제거가 가능합니다
 STR_PICKER_ROADSTOP_TRUCK_TYPE_TOOLTIP                          :설치하려는 트럭 적하장 종류를 선택하세요. CTRL+클릭하면 즐겨찾기 추가/제거가 가능합니다
 STR_PICKER_ROADSTOP_TRUCK_COLLECTION_TOOLTIP                    :표시할 트럭 적하장 모음집을 선택하세요
-STR_PICKER_OBJECT_CLASS_TOOLTIP                                 :표시할 오브젝트 종류를 선택하세요
+STR_PICKER_OBJECT_CLASS_TOOLTIP                                 :표시할 오브젝트 종류를 선택하세요. CTRL + 클릭하면 즐겨찾기된 항목에 추가/제거가 가능합니다
 STR_PICKER_OBJECT_TYPE_TOOLTIP                                  :설치하려는 오브젝트 종류를 선택합니다. CTRL+클릭+드래그하면 대각선 방향의 영역을 선택할 수 있습니다. SHIFT 키를 누른 채로 사용하면 예상 비용을 볼 수 있습니다
 STR_PICKER_OBJECT_COLLECTION_TOOLTIP                            :표시할 오브젝트 모음집을 선택하세요
-STR_PICKER_HOUSE_CLASS_TOOLTIP                                  :표시할 도시 구역을 선택하세요
+STR_PICKER_HOUSE_CLASS_TOOLTIP                                  :표시할 도시 구역을 선택하세요. CTRL + 클릭하면 즐겨찾기된 항목에 추가/제거가 가능합니다
 STR_PICKER_HOUSE_TYPE_TOOLTIP                                   :지으려는 건물 종류를 선택하세요. CTRL+클릭하면 즐겨찾기 추가/제거가 가능합니다
 STR_PICKER_HOUSE_COLLECTION_TOOLTIP                             :표시할 건물 모음집을 선택하세요
 
@@ -5362,6 +5368,10 @@ STR_ERROR_BRIDGE_TOO_LOW_FOR_BUOY                               :다리 밑에 �
 STR_ERROR_BRIDGE_TOO_LOW_FOR_RAIL_WAYPOINT                      :다리 밑에 철도 경유지를 두기에는 다리 높이가 {HEIGHT}만큼 낮습니다
 STR_ERROR_BRIDGE_TOO_LOW_FOR_ROAD_WAYPOINT                      :다리 밑에 도로 경유지를 두기에는 다리 높이가 {HEIGHT}만큼 낮습니다
 STR_ERROR_BRIDGE_TOO_LOW_FOR_LOCK                               :다리 밑에 항구를 두기에는 다리 높이가 {HEIGHT}만큼 낮습니다
+STR_ERROR_BRIDGE_TOO_LOW_FOR_TRAIN_DEPOT                        :다리 밑에 차량기지를 두기에는 다리 높이가 {HEIGHT}만큼 낮습니다
+STR_ERROR_BRIDGE_TOO_LOW_FOR_ROADVEH_DEPOT                      :다리 밑에 차고지를 두기에는 다리 높이가 {HEIGHT}만큼 낮습니다
+STR_ERROR_BRIDGE_TOO_LOW_FOR_SHIP_DEPOT                         :다리 밑에 정박소를 두기에는 다리 높이가 {HEIGHT}만큼 낮습니다
+STR_ERROR_BRIDGE_TOO_LOW_FOR_OBJECT                             :다리 밑에 오브젝트를 두기에는 다리 높이가 {HEIGHT}만큼 낮습니다
 
 # Tunnel related errors
 STR_ERROR_CAN_T_BUILD_TUNNEL_HERE                               :여기에 터널을 지을 수 없습니다...

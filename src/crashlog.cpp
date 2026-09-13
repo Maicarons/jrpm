@@ -24,6 +24,7 @@
 #include "sound/sound_driver.hpp"
 #include "video/video_driver.hpp"
 #include "sl/saveload.h"
+#include "sl/saveload_func.h"
 #include "screenshot.h"
 #include "screenshot_type.h"
 #include "gfx_func.h"
@@ -97,6 +98,17 @@
 #endif
 
 #include "safeguards.h"
+
+/**
+ * Did loading the savegame cause a crash? If so,
+ * were NewGRFs missing?
+ * @return when the saveload crashed due to missing NewGRFs.
+ */
+inline bool SaveloadCrashWithMissingNewGRFs()
+{
+	extern bool _saveload_crash_with_missing_newgrfs;
+	return _saveload_crash_with_missing_newgrfs;
+}
 
 /* static */ const char *CrashLog::message = nullptr;
 /* static */ bool CrashLog::have_crashed = false;

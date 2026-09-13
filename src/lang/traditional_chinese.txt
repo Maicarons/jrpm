@@ -631,7 +631,6 @@ STR_GRAPH_LAST_24_MONTHS                                        :{TINY_FONT}{BLA
 STR_GRAPH_LAST_24_QUARTERS                                      :{TINY_FONT}{BLACK}6 年（每季）
 STR_GRAPH_LAST_24_YEARS                                         :{TINY_FONT}{BLACK}24 年（每年）
 
-STR_GRAPH_TOGGLE_RANGE                                          :切換圖表數據範圍
 STR_GRAPH_SELECT_SCALE                                          :變更圖表水平比例
 
 STR_GRAPH_CARGO_PAYMENT_RATES_CAPTION                           :{WHITE}貨物運費表
@@ -647,14 +646,21 @@ STR_GRAPH_CARGO_PAYMENT_CARGO                                   :{TINY_FONT}{BLA
 
 STR_GRAPH_INDUSTRY_CAPTION                                      :{WHITE}{INDUSTRY} - 貨物記錄
 STR_GRAPH_INDUSTRY_RANGE_PRODUCED                               :已產出
+STR_GRAPH_INDUSTRY_RANGE_PRODUCED_TOOLTIP                       :切換顯示該工業產生的貨物圖表
 STR_GRAPH_INDUSTRY_RANGE_TRANSPORTED                            :已運送
-STR_GRAPH_INDUSTRY_RANGE_DELIVERED                              :已接受
+STR_GRAPH_INDUSTRY_RANGE_TRANSPORTED_TOOLTIP                    :切換顯示該工業的貨物運輸圖表
+STR_GRAPH_INDUSTRY_RANGE_DELIVERED                              :已交付
+STR_GRAPH_INDUSTRY_RANGE_DELIVERED_TOOLTIP                      :切換顯示該工業的貨物交付圖表
 STR_GRAPH_INDUSTRY_RANGE_WAITING                                :庫存
+STR_GRAPH_INDUSTRY_RANGE_WAITING_TOOLTIP                        :切換顯示該工業的待運貨物圖表
 
 STR_GRAPH_TOWN_CARGO_CAPTION                                    :{WHITE}{TOWN} - 貨物記錄
 STR_GRAPH_TOWN_RANGE_PRODUCED                                   :已產出
+STR_GRAPH_TOWN_RANGE_PRODUCED_TOOLTIP                           :切換顯示該市鎮貨物產量圖表
 STR_GRAPH_TOWN_RANGE_TRANSPORTED                                :已運送
-STR_GRAPH_TOWN_RANGE_DELIVERED                                  :已接受
+STR_GRAPH_TOWN_RANGE_TRANSPORTED_TOOLTIP                        :切換顯示從該市鎮運輸的貨物圖表
+STR_GRAPH_TOWN_RANGE_DELIVERED                                  :已交付
+STR_GRAPH_TOWN_RANGE_DELIVERED_TOOLTIP                          :切換顯示運往該市鎮的貨物圖表
 
 STR_GRAPH_PERFORMANCE_DETAIL_TOOLTIP                            :{BLACK}顯示詳細營運評比
 
@@ -690,7 +696,7 @@ STR_PERFORMANCE_DETAIL_STATIONS                                 :{BLACK}車站�
 STR_PERFORMANCE_DETAIL_MIN_PROFIT                               :{BLACK}最低損益：
 STR_PERFORMANCE_DETAIL_MIN_INCOME                               :{BLACK}最低收入：
 STR_PERFORMANCE_DETAIL_MAX_INCOME                               :{BLACK}最高收入：
-STR_PERFORMANCE_DETAIL_DELIVERED                                :{BLACK}已運送：
+STR_PERFORMANCE_DETAIL_DELIVERED                                :{BLACK}已交付：
 STR_PERFORMANCE_DETAIL_CARGO                                    :{BLACK}貨物：
 STR_PERFORMANCE_DETAIL_MONEY                                    :{BLACK}資金：
 STR_PERFORMANCE_DETAIL_LOAN                                     :{BLACK}貸款：
@@ -1660,12 +1666,12 @@ STR_CONFIG_SETTING_TREE_PLACER_NONE                             :無
 STR_CONFIG_SETTING_TREE_PLACER_ORIGINAL                         :原版
 STR_CONFIG_SETTING_TREE_PLACER_IMPROVED                         :改進版
 
-STR_CONFIG_SETTING_ROAD_SIDE                                    :公路車輛：{STRING}
-STR_CONFIG_SETTING_ROAD_SIDE_HELPTEXT                           :選擇行車方向。
+STR_CONFIG_SETTING_ROAD_SIDE                                    :公路車輛行車方向：{STRING}
+STR_CONFIG_SETTING_ROAD_SIDE_HELPTEXT                           :選擇公路車輛行車方向。{}這亦會影響號誌的方向與號誌燈的圖形。{}變更後可能需要重新載入遊戲才能完全生效
 
 ###length 2
-STR_CONFIG_SETTING_ROAD_SIDE_LEFT                               :靠左行駛
-STR_CONFIG_SETTING_ROAD_SIDE_RIGHT                              :靠右行駛
+STR_CONFIG_SETTING_ROAD_SIDE_LEFT                               :靠左
+STR_CONFIG_SETTING_ROAD_SIDE_RIGHT                              :靠右
 
 STR_CONFIG_SETTING_HEIGHTMAP_ROTATION                           :旋轉高度圖：{STRING}
 STR_CONFIG_SETTING_HEIGHTMAP_ROTATION_TOOLTIP                   :選擇高度圖的旋轉方向以設立遊戲版圖
@@ -1871,7 +1877,7 @@ STR_CONFIG_SETTING_MAX_SHIPS_HELPTEXT                           :每所公司擁
 STR_CONFIG_SETTING_AI_BUILDS_TRAINS                             :禁止電腦使用鐵道：{STRING}
 STR_CONFIG_SETTING_AI_BUILDS_TRAINS_HELPTEXT                    :如啟用此選項，電腦玩家將無法建造列車。
 
-STR_CONFIG_SETTING_AI_BUILDS_ROAD_VEHICLES                      :禁止電腦使用道路車輛：{STRING}
+STR_CONFIG_SETTING_AI_BUILDS_ROAD_VEHICLES                      :禁止電腦使用公路車輛：{STRING}
 STR_CONFIG_SETTING_AI_BUILDS_ROAD_VEHICLES_HELPTEXT             :如啟用此選項，電腦玩家將無法建造公路車輛 (包括電車)。
 
 STR_CONFIG_SETTING_AI_BUILDS_AIRCRAFT                           :禁止電腦使用飛機：{STRING}
@@ -2888,22 +2894,22 @@ STR_PICKER_COLLECTION_DELETE_QUERY                              :刪除收藏夾
 STR_PICKER_COLLECTION_DELETE_QUERY_TEXT                         :{YELLOW}你確定要刪除此收藏夾嗎？
 STR_PICKER_COLLECTION_DELETE_QUERY_DISABLED_TEXT                :{YELLOW}你確定要刪除此收藏夾嗎？收藏夾內尚有些已停用 NewGRF 的項目！
 
-STR_PICKER_STATION_CLASS_TOOLTIP                                :選擇顯示的車站種類
+STR_PICKER_STATION_CLASS_TOOLTIP                                :選擇顯示的車站種類。按住 <Ctrl> 點選可增加或移除收藏的物品
 STR_PICKER_STATION_TYPE_TOOLTIP                                 :選擇建設的車站類型。按住 <Ctrl> 點選可在儲存項目中新增或刪除
 STR_PICKER_STATION_COLLECTION_TOOLTIP                           :選擇要顯示的車站收藏夾
-STR_PICKER_WAYPOINT_CLASS_TOOLTIP                               :選擇顯示的中途站種類
+STR_PICKER_WAYPOINT_CLASS_TOOLTIP                               :選擇顯示的中途站種類。按住 <Ctrl> 點選可增加或移除收藏的物品
 STR_PICKER_WAYPOINT_TYPE_TOOLTIP                                :選擇建設的中途站類型。按住 <Ctrl> 點選可在儲存項目中新增或刪除
 STR_PICKER_WAYPOINT_COLLECTION_TOOLTIP                          :選擇要顯示的中途站收藏夾
-STR_PICKER_ROADSTOP_BUS_CLASS_TOOLTIP                           :選擇顯示的公車站種類
+STR_PICKER_ROADSTOP_BUS_CLASS_TOOLTIP                           :選擇顯示的公車站種類。按住 <Ctrl> 點選可增加或移除收藏的物品
 STR_PICKER_ROADSTOP_BUS_TYPE_TOOLTIP                            :選擇建設的公車站類型。按住 <Ctrl> 點選可在儲存項目中新增或刪除
 STR_PICKER_ROADSTOP_BUS_COLLECTION_TOOLTIP                      :選擇要顯示的公車站收藏夾
-STR_PICKER_ROADSTOP_TRUCK_CLASS_TOOLTIP                         :選擇顯示的貨車場種類
+STR_PICKER_ROADSTOP_TRUCK_CLASS_TOOLTIP                         :選擇顯示的貨車場種類。按住 <Ctrl> 點選可增加或移除收藏的物品
 STR_PICKER_ROADSTOP_TRUCK_TYPE_TOOLTIP                          :選擇建設的貨車場類型。按住 <Ctrl> 點選可在儲存項目中新增或刪除
 STR_PICKER_ROADSTOP_TRUCK_COLLECTION_TOOLTIP                    :選擇要顯示的貨運站收藏夾
-STR_PICKER_OBJECT_CLASS_TOOLTIP                                 :選擇顯示的物品種類
+STR_PICKER_OBJECT_CLASS_TOOLTIP                                 :選擇顯示的物品種類。按住 <Ctrl> 點選可增加或移除收藏的物品
 STR_PICKER_OBJECT_TYPE_TOOLTIP                                  :選擇建設的物件類型。按住 <Ctrl> 點選可在儲存項目中新增或刪除。按住 <Ctrl> 以對角線選擇區域。按住 <Shift> 可顯示預估成本
 STR_PICKER_OBJECT_COLLECTION_TOOLTIP                            :選擇要顯示的物件收藏夾
-STR_PICKER_HOUSE_CLASS_TOOLTIP                                  :選擇顯示的市鎮區域
+STR_PICKER_HOUSE_CLASS_TOOLTIP                                  :選擇顯示的市鎮區域。按住 <Ctrl> 點選可增加或移除收藏的物品
 STR_PICKER_HOUSE_TYPE_TOOLTIP                                   :選擇建設的房屋類型。按住 <Ctrl> 點選可在儲存項目中新增或刪除
 STR_PICKER_HOUSE_COLLECTION_TOOLTIP                             :選擇要顯示的房屋收藏夾
 
@@ -3763,9 +3769,9 @@ STR_TOWN_VIEW_CARGO_LAST_MINUTE_MAX                             :{BLACK}上分�
 STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH                              :{BLACK}市鎮成長所需貨物：
 STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH_REQUIRED_GENERAL             :{RED}需要 {ORANGE}{STRING}
 STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH_REQUIRED_WINTER              :{ORANGE}{STRING}{BLACK} 必須是冬天
-STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH_DELIVERED_GENERAL            :{ORANGE}{STRING}{GREEN} 已運送
+STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH_DELIVERED_GENERAL            :{ORANGE}{STRING}{GREEN} 已交付
 STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH_REQUIRED                     :{ORANGE}{CARGO_TINY} / {CARGO_LONG}{RED} (仍然需要)
-STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH_DELIVERED                    :{ORANGE}{CARGO_TINY} / {CARGO_LONG}{GREEN}（已運送）
+STR_TOWN_VIEW_CARGO_FOR_TOWNGROWTH_DELIVERED                    :{ORANGE}{CARGO_TINY} / {CARGO_LONG}{GREEN}（已交付）
 STR_TOWN_VIEW_TOWN_GROWS_EVERY                                  :{BLACK}該市鎮每隔 {ORANGE}{UNITS_DAYS_OR_SECONDS}{BLACK}擴張一次
 STR_TOWN_VIEW_TOWN_GROWS_EVERY_FUNDED                           :{BLACK}該市鎮每隔 {ORANGE}{UNITS_DAYS_OR_SECONDS}{BLACK}擴張一次（正接受資助）
 STR_TOWN_VIEW_TOWN_GROW_STOPPED                                 :{BLACK}市鎮{RED}不在{BLACK}成長
@@ -5361,6 +5367,10 @@ STR_ERROR_BRIDGE_TOO_LOW_FOR_BUOY                               :橋樑過低，
 STR_ERROR_BRIDGE_TOO_LOW_FOR_RAIL_WAYPOINT                      :橋樑過低，橋高僅有 {HEIGHT}，不足以興建中途站
 STR_ERROR_BRIDGE_TOO_LOW_FOR_ROAD_WAYPOINT                      :橋樑過低，橋高僅有 {HEIGHT}，不足以興建中途站
 STR_ERROR_BRIDGE_TOO_LOW_FOR_LOCK                               :橋樑過低，橋高僅有 {HEIGHT}，不足以興建水閘
+STR_ERROR_BRIDGE_TOO_LOW_FOR_TRAIN_DEPOT                        :橋樑過低，橋高僅有 {HEIGHT}，不足以興建鐵道機廠
+STR_ERROR_BRIDGE_TOO_LOW_FOR_ROADVEH_DEPOT                      :橋樑過低，橋高僅有 {HEIGHT}，不足以興建車廠
+STR_ERROR_BRIDGE_TOO_LOW_FOR_SHIP_DEPOT                         :橋樑過低，橋高僅有 {HEIGHT}，不足以興建船塢
+STR_ERROR_BRIDGE_TOO_LOW_FOR_OBJECT                             :橋樑過低，橋高僅有 {HEIGHT}，不足以設置物件
 
 # Tunnel related errors
 STR_ERROR_CAN_T_BUILD_TUNNEL_HERE                               :無法在此挖掘隧道……

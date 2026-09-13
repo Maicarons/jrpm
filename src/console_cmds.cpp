@@ -14,7 +14,7 @@
 #include "debug.h"
 #include "engine_func.h"
 #include "landscape.h"
-#include "sl/saveload.h"
+#include "sl/saveload_func.h"
 #include "network/core/network_game_info.h"
 #include "network/network.h"
 #include "network/network_func.h"
@@ -3354,12 +3354,12 @@ static bool ConDumpRoadTypes(std::span<std::string_view> argv)
 	for (RoadType rt : EnumRange(ROADTYPE_END)) {
 		const RoadTypeInfo *rti = GetRoadTypeInfo(rt);
 		if (rti->label == 0) continue;
-		uint32_t grfid = 0;
+		GrfID grfid = 0;
 		const GRFFile *grf = rti->grffile[RoadSpriteType::Ground];
 		if (grf == nullptr) {
 			uint32_t str_grfid = GetStringGRFID(rti->strings.name);
 			if (str_grfid != 0) {
-				extern GRFFile *GetFileByGRFID(uint32_t grfid);
+				extern GRFFile *GetFileByGRFID(GrfID grfid);
 				grf = GetFileByGRFID(grfid);
 			}
 		}
@@ -3412,12 +3412,12 @@ static bool ConDumpRailTypes(std::span<std::string_view> argv)
 	for (RailType rt : EnumRange(RAILTYPE_END)) {
 		const RailTypeInfo *rti = GetRailTypeInfo(rt);
 		if (rti->label == 0) continue;
-		uint32_t grfid = 0;
+		GrfID grfid = 0;
 		const GRFFile *grf = rti->grffile[RailSpriteType::Ground];
 		if (grf == nullptr) {
 			uint32_t str_grfid = GetStringGRFID(rti->strings.name);
 			if (str_grfid != 0) {
-				extern GRFFile *GetFileByGRFID(uint32_t grfid);
+				extern GRFFile *GetFileByGRFID(GrfID grfid);
 				grf = GetFileByGRFID(grfid);
 			}
 		}
@@ -3465,7 +3465,7 @@ static bool ConDumpBridgeTypes(std::span<std::string_view> argv)
 	btree::btree_set<uint32_t> grfids;
 	for (BridgeType bt = 0; bt < MAX_BRIDGES; bt++) {
 		const BridgeSpec *spec = GetBridgeSpec(bt);
-		uint32_t grfid = GetStringGRFID(spec->material);
+		GrfID grfid = GetStringGRFID(spec->material);
 		if (grfid != 0) grfids.insert(grfid);
 		IConsolePrint(CC_DEFAULT, "  {:2} Year: {:7}, Min: {:3}, Max: {:5}, Flags: {:02X}, Ctrl Flags: {}{}{}{}, Pillars: {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X}, GRF: {:08X}, {}",
 				(uint) bt,
@@ -3493,8 +3493,8 @@ static bool ConDumpBridgeTypes(std::span<std::string_view> argv)
 				GetStringFmtParam(spec->material)
 		);
 	}
-	for (uint32_t grfid : grfids) {
-		extern GRFFile *GetFileByGRFID(uint32_t grfid);
+	for (GrfID grfid : grfids) {
+		extern GRFFile *GetFileByGRFID(GrfID grfid);
 		const GRFFile *grffile = GetFileByGRFID(grfid);
 		IConsolePrint(CC_DEFAULT, "  GRF: {:08X} = {}", std::byteswap(grfid), grffile ? (std::string_view)grffile->filename : "????");
 	}
@@ -3537,12 +3537,12 @@ static bool ConDumpCargoTypes(std::span<std::string_view> argv)
 	btree::btree_map<uint32_t, const GRFFile *> grfs;
 	for (CargoType i{}; i < NUM_CARGO; i++) {
 		const CargoSpec *spec = CargoSpec::Get(i);
-		uint32_t grfid = 0;
+		GrfID grfid = 0;
 		const GRFFile *grf = spec->grffile;
 		if (grf == nullptr) {
-			uint32_t str_grfid = GetStringGRFID(spec->name);
+			GrfID str_grfid = GetStringGRFID(spec->name);
 			if (str_grfid != 0) {
-				extern GRFFile *GetFileByGRFID(uint32_t grfid);
+				extern GRFFile *GetFileByGRFID(GrfID grfid);
 				grf = GetFileByGRFID(grfid);
 			}
 		}
@@ -3709,7 +3709,7 @@ static bool ConDumpSignalStyles(std::span<std::string_view> argv)
 	for (uint8_t i = 0; i < _num_new_signal_styles; i++) {
 		const NewSignalStyle &style = _new_signal_styles[i];
 
-		uint32_t grfid = 0;
+		GrfID grfid = 0;
 		if (style.grffile != nullptr) {
 			grfid = style.grffile->grfid;
 			grfs.insert(std::pair<uint32_t, const GRFFile *>(grfid, style.grffile));

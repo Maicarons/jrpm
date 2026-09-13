@@ -31,6 +31,7 @@
 #include "../core/bitmath_func.hpp"
 #include "../core/endian_func.hpp"
 #include "../core/string_consumer.hpp"
+#include "../core/tinystring_type.hpp"
 #include "../vehicle_base.h"
 #include "../company_func.h"
 #include "../date_func.h"
@@ -69,6 +70,7 @@
 
 #include "saveload_internal.h"
 #include "saveload_filter.h"
+#include "saveload_func.h"
 #include "saveload_buffer.h"
 #include "extended_ver_sl.h"
 
@@ -112,14 +114,14 @@ extern bool _sl_upstream_mode;
 
 namespace upstream_sl {
 	void SlNullPointers();
-	void SlNullPointerChunkByID(uint32_t);
+	void SlNullPointerChunkByID(ChunkId);
 	void SlLoadChunks();
-	void SlLoadChunkByID(uint32_t id);
+	void SlLoadChunkByID(ChunkId);
 	void SlLoadCheckChunks();
-	void SlLoadCheckChunkByID(uint32_t id);
+	void SlLoadCheckChunkByID(ChunkId);
 	void SlFixPointers();
-	void SlFixPointerChunkByID(uint32_t id);
-	void SlSaveChunkChunkByID(uint32_t id);
+	void SlFixPointerChunkByID(ChunkId);
+	void SlSaveChunkChunkByID(ChunkId);
 	void SlResetLoadState();
 	void FixSCCEncoded(std::string &str, bool fix_code);
 	void FixSCCEncodedNegative(std::string &str);
@@ -456,7 +458,7 @@ static void SlNullPointers()
 		if (!upstream_null_chunks.empty() && upstream_null_chunks.front() == ch.id) {
 			upstream_null_chunks.pop_front();
 			SlExecWithSlVersion(MAX_LOAD_SAVEGAME_VERSION, [&]() {
-				upstream_sl::SlNullPointerChunkByID(ch.id);
+				upstream_sl::SlNullPointerChunkByID(ChunkIdAsLabel(ch.id));
 			});
 			continue;
 		}
@@ -2980,7 +2982,7 @@ static void SlSaveChunk(const ChunkHandler &ch)
 			auto guard = scope_guard([&]() {
 				_sl_version = old_ver;
 			});
-			upstream_sl::SlSaveChunkChunkByID(ch.id);
+			upstream_sl::SlSaveChunkChunkByID(ChunkIdAsLabel(ch.id));
 			return;
 		}
 	}
@@ -3201,7 +3203,7 @@ struct FileWriter : SaveFilter {
 		if (!this->temp_name.empty()) FioRemove(this->temp_name);
 	}
 
-	void Write(uint8_t *buf, size_t size) override
+	void Write(const uint8_t *buf, size_t size) override
 	{
 		/* We're in the process of shutting down, i.e. in "failure" mode. */
 		if (!this->file.has_value()) return;
@@ -3318,7 +3320,7 @@ struct LZOSaveFilter : SaveFilter {
 		if (lzo_init() != LZO_E_OK) SlError(STR_GAME_SAVELOAD_ERROR_BROKEN_INTERNAL_ERROR, "cannot initialize compressor");
 	}
 
-	void Write(uint8_t *buf, size_t size) override
+	void Write(const uint8_t *buf, size_t size) override
 	{
 		const lzo_bytep in = buf;
 		/* Buffer size is from the LZO docs plus the chunk header size. */
@@ -3374,7 +3376,7 @@ struct NoCompSaveFilter : SaveFilter {
 	{
 	}
 
-	void Write(uint8_t *buf, size_t size) override
+	void Write(const uint8_t *buf, size_t size) override
 	{
 		this->chain->Write(buf, size);
 	}
@@ -3458,10 +3460,10 @@ struct ZlibSaveFilter : SaveFilter {
 	 * @param len  Amount of bytes to write.
 	 * @param mode Mode for deflate.
 	 */
-	void WriteLoop(uint8_t *p, size_t len, int mode)
+	void WriteLoop(const uint8_t *p, size_t len, int mode)
 	{
 		uint n;
-		this->z.next_in = p;
+		this->z.next_in = const_cast<uint8_t *>(p); // zlib does not modify the data, but is non-const for legacy reasons
 		this->z.avail_in = (uInt)len;
 		do {
 			this->z.next_out = this->buf;
@@ -3486,7 +3488,7 @@ struct ZlibSaveFilter : SaveFilter {
 		} while (this->z.avail_in || !this->z.avail_out);
 	}
 
-	void Write(uint8_t *buf, size_t size) override
+	void Write(const uint8_t *buf, size_t size) override
 	{
 		this->WriteLoop(buf, size, 0);
 	}
@@ -3584,7 +3586,7 @@ struct LZMASaveFilter : SaveFilter {
 	 * @param len    Amount of bytes to write.
 	 * @param action Action for lzma_code.
 	 */
-	void WriteLoop(uint8_t *p, size_t len, lzma_action action)
+	void WriteLoop(const uint8_t *p, size_t len, lzma_action action)
 	{
 		size_t n;
 		this->lzma.next_in = p;
@@ -3604,7 +3606,7 @@ struct LZMASaveFilter : SaveFilter {
 		} while (this->lzma.avail_in || !this->lzma.avail_out);
 	}
 
-	void Write(uint8_t *buf, size_t size) override
+	void Write(const uint8_t *buf, size_t size) override
 	{
 		this->WriteLoop(buf, size, LZMA_RUN);
 	}
@@ -3702,7 +3704,7 @@ struct ZSTDSaveFilter : SaveFilter {
 	 * @param len    Amount of bytes to write.
 	 * @param mode   Mode for ZSTD_compressStream2.
 	 */
-	void WriteLoop(uint8_t *p, size_t len, ZSTD_EndDirective mode)
+	void WriteLoop(const uint8_t *p, size_t len, ZSTD_EndDirective mode)
 	{
 		ZSTD_inBuffer input{p, len, 0};
 
@@ -3718,7 +3720,7 @@ struct ZSTDSaveFilter : SaveFilter {
 		} while (!finished);
 	}
 
-	void Write(uint8_t *buf, size_t size) override
+	void Write(const uint8_t *buf, size_t size) override
 	{
 		this->WriteLoop(buf, size, ZSTD_e_continue);
 	}
@@ -3736,6 +3738,9 @@ struct ZSTDSaveFilter : SaveFilter {
  ************* END OF CODE *****************
  *******************************************/
 
+/** Unique 4-letter tag for the different saveload formats. */
+using SaveLoadFormatTag = Label<struct SaveLoadFormatLabelTag>;
+
 enum SaveLoadFormatFlags : uint8_t {
 	SLF_NONE             = 0,
 	SLF_NO_THREADED_LOAD = 1 << 0, ///< Unsuitable for threaded loading
@@ -3746,7 +3751,7 @@ DECLARE_ENUM_AS_BIT_SET(SaveLoadFormatFlags);
 /** The format for a reader/writer type of a savegame */
 struct SaveLoadFormat {
 	const char *name;                     ///< name of the compressor/decompressor (debug-only)
-	uint32_t tag;                         ///< the 4-letter tag by which it is identified in the savegame
+	SaveLoadFormatTag tag;                ///< the 4-letter tag by which it is identified in the savegame
 
 	std::shared_ptr<LoadFilter> (*init_load)(std::shared_ptr<LoadFilter> chain);                       ///< Constructor for the load filter.
 	std::shared_ptr<SaveFilter> (*init_write)(std::shared_ptr<SaveFilter> chain, uint8_t compression); ///< Constructor for the save filter.
@@ -3761,19 +3766,19 @@ struct SaveLoadFormat {
 static const SaveLoadFormat _saveload_formats[] = {
 #if defined(WITH_LZO)
 	/* Roughly 75% larger than zlib level 6 at only ~7% of the CPU usage. */
-	{"lzo",    TO_BE32('OTTD'), CreateLoadFilter<LZOLoadFilter>,    CreateSaveFilter<LZOSaveFilter>,    0, 0, 0, SLF_NO_THREADED_LOAD},
+	{"lzo",    "OTTD", CreateLoadFilter<LZOLoadFilter>,    CreateSaveFilter<LZOSaveFilter>,    0, 0, 0, SLF_NO_THREADED_LOAD},
 #else
-	{"lzo",    TO_BE32('OTTD'), nullptr,                            nullptr,                            0, 0, 0, SLF_NO_THREADED_LOAD},
+	{"lzo",    "OTTD", nullptr,                            nullptr,                            0, 0, 0, SLF_NO_THREADED_LOAD},
 #endif
 	/* Roughly 5 times larger at only 1% of the CPU usage over zlib level 6. */
-	{"none",   TO_BE32('OTTN'), CreateLoadFilter<NoCompLoadFilter>, CreateSaveFilter<NoCompSaveFilter>, 0, 0, 0, SLF_NONE},
+	{"none",   "OTTN", CreateLoadFilter<NoCompLoadFilter>, CreateSaveFilter<NoCompSaveFilter>, 0, 0, 0, SLF_NONE},
 #if defined(WITH_ZLIB)
 	/* After level 6 the speed reduction is significant (1.5x to 2.5x slower per level), but the reduction in filesize is
 	 * fairly insignificant (~1% for each step). Lower levels become ~5-10% bigger by each level than level 6 while level
 	 * 1 is "only" 3 times as fast. Level 0 results in uncompressed savegames at about 8 times the cost of "none". */
-	{"zlib",   TO_BE32('OTTZ'), CreateLoadFilter<ZlibLoadFilter>,   CreateSaveFilter<ZlibSaveFilter>,   0, 6, 9, SLF_NONE},
+	{"zlib",   "OTTZ", CreateLoadFilter<ZlibLoadFilter>,   CreateSaveFilter<ZlibSaveFilter>,   0, 6, 9, SLF_NONE},
 #else
-	{"zlib",   TO_BE32('OTTZ'), nullptr,                            nullptr,                            0, 0, 0, SLF_NONE},
+	{"zlib",   "OTTZ", nullptr,                            nullptr,                            0, 0, 0, SLF_NONE},
 #endif
 #if defined(WITH_LIBLZMA)
 	/* Level 2 compression is speed wise as fast as zlib level 6 compression (old default), but results in ~10% smaller saves.
@@ -3781,9 +3786,9 @@ static const SaveLoadFormat _saveload_formats[] = {
 	 * The next significant reduction in file size is at level 4, but that is already 4 times slower. Level 3 is primarily 50%
 	 * slower while not improving the filesize, while level 0 and 1 are faster, but don't reduce savegame size much.
 	 * It's OTTX and not e.g. OTTL because liblzma is part of xz-utils and .tar.xz is preferred over .tar.lzma. */
-	{"lzma",   TO_BE32('OTTX'), CreateLoadFilter<LZMALoadFilter>,   CreateSaveFilter<LZMASaveFilter>,   0, 2, 9, SLF_NONE},
+	{"lzma",   "OTTX", CreateLoadFilter<LZMALoadFilter>,   CreateSaveFilter<LZMASaveFilter>,   0, 2, 9, SLF_NONE},
 #else
-	{"lzma",   TO_BE32('OTTX'), nullptr,                            nullptr,                            0, 0, 0, SLF_NONE},
+	{"lzma",   "OTTX", nullptr,                            nullptr,                            0, 0, 0, SLF_NONE},
 #endif
 #if defined(WITH_ZSTD)
 	/* Zstd provides a decent compression rate at a very high compression/decompression speed. Compared to lzma level 2
@@ -3792,9 +3797,9 @@ static const SaveLoadFormat _saveload_formats[] = {
 	 * (compress + 10 MB/s download + decompress time), about 3x faster than lzma:2 and 1.5x than zlib:2 and lzo.
 	 * As zstd has negative compression levels the values were increased by 100 moving zstd level range -100..22 into
 	 * openttd 0..122. Also note that value 100 matches zstd level 0 which is a special value for default level 3 (openttd 103) */
-	{"zstd",   TO_BE32('OTTS'), CreateLoadFilter<ZSTDLoadFilter>,   CreateSaveFilter<ZSTDSaveFilter>,   0, 101, 122, SLF_REQUIRES_ZSTD},
+	{"zstd",   "OTTS", CreateLoadFilter<ZSTDLoadFilter>,   CreateSaveFilter<ZSTDSaveFilter>,   0, 101, 122, SLF_REQUIRES_ZSTD},
 #else
-	{"zstd",   TO_BE32('OTTS'), nullptr,                            nullptr,                            0, 0, 0, SLF_REQUIRES_ZSTD},
+	{"zstd",   "OTTS", nullptr,                            nullptr,                            0, 0, 0, SLF_REQUIRES_ZSTD},
 #endif
 };
 
@@ -3946,8 +3951,10 @@ static SaveLoadResult SaveFileToDisk(bool threaded)
 		Debug(sl, 3, "Using compression format: {}, level: {}", fmt->name, compression);
 
 		/* We have written our stuff to memory, now write it to file! */
-		uint32_t hdr[2] = { fmt->tag, TO_BE32((uint32_t) (SAVEGAME_VERSION | SAVEGAME_VERSION_EXT) << 16) };
-		_sl.sf->Write((uint8_t*)hdr, sizeof(hdr));
+		_sl.sf->Write(fmt->tag.data(), fmt->tag.size());
+
+		uint32_t version = TO_BE32((uint32_t) (SAVEGAME_VERSION | SAVEGAME_VERSION_EXT) << 16);
+		_sl.sf->Write(reinterpret_cast<uint8_t *>(&version), sizeof(version));
 
 		_sl.sf = fmt->init_write(_sl.sf, compression);
 		_sl.dumper->Flush(*(_sl.sf));
@@ -4180,8 +4187,10 @@ static SaveLoadResult DoLoad(std::shared_ptr<LoadFilter> reader, bool load_check
 		SlResetTNNC();
 	});
 
-	uint32_t hdr[2];
-	if (_sl.lf->Read((uint8_t*)hdr, sizeof(hdr)) != sizeof(hdr)) SlError(STR_GAME_SAVELOAD_ERROR_FILE_NOT_READABLE);
+	std::array<uint8_t, 8> header;
+	if (_sl.lf->Read(header.data(), header.size()) != header.size()) SlError(STR_GAME_SAVELOAD_ERROR_FILE_NOT_READABLE);
+
+	SaveLoadFormatTag tag{std::span{header}.subspan<0, 4>()};
 
 	SaveLoadVersion original_sl_version = SL_MIN_VERSION;
 
@@ -4203,19 +4212,19 @@ static SaveLoadResult DoLoad(std::shared_ptr<LoadFilter> reader, bool load_check
 					/* Who removed LZO support? */
 					NOT_REACHED();
 				}
-				if (fmt->tag == TO_BE32('OTTD')) break;
+				if (fmt->tag == SaveLoadFormatTag{"OTTD"}) break;
 				fmt++;
 			}
 			break;
 		}
 
-		if (fmt->tag == hdr[0]) {
+		if (fmt->tag == tag) {
 			/* check version number */
-			_sl_version = (SaveLoadVersion)(TO_BE32(hdr[1]) >> 16);
+			_sl_version = (SaveLoadVersion)(header[4] << 8 | header[5]);
 			/* Minor is not used anymore from version 18.0, but it is still needed
 			 * in versions before that (4 cases) which can't be removed easy.
 			 * Therefore it is loaded, but never saved (or, it saves a 0 in any scenario). */
-			_sl_minor_version = (TO_BE32(hdr[1]) >> 8) & 0xFF;
+			_sl_minor_version = header[6];
 
 			bool special_version = false;
 			if (_sl_version & SAVEGAME_VERSION_EXT) {

@@ -151,7 +151,7 @@ StringID MapGRFStringIDCommon(T grfid, GRFStringID str)
 	}
 }
 
-StringID MapGRFStringID(uint32_t grfid, GRFStringID str)
+StringID MapGRFStringID(GrfID grfid, GRFStringID str)
 {
 	return MapGRFStringIDCommon(grfid, str);
 }

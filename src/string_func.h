@@ -36,6 +36,7 @@ char *stredup(const char *src, const char *last = nullptr) NOACCESS(2);
 
 void strecpy(std::span<char> dst, std::string_view src);
 
+void FormatArrayAsHex(struct format_target &output, std::span<const uint8_t> data, bool upper_case = true);
 std::string FormatArrayAsHex(std::span<const uint8_t> data, bool upper_case = true);
 
 template <typename T>

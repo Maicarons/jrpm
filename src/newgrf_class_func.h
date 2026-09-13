@@ -153,7 +153,7 @@ void NewGRFClass<Tspec, Tindex>::PrepareIndices()
  * @return The spec.
  */
 template <typename Tspec, typename Tindex>
-const Tspec *NewGRFClass<Tspec, Tindex>::GetByGrf(uint32_t grfid, uint16_t local_id)
+const Tspec *NewGRFClass<Tspec, Tindex>::GetByGrf(GrfID grfid, uint16_t local_id)
 {
 	auto iter = NewGRFClass::grf_index.find(NewGRFClass::GrfHashKey(grfid, local_id));
 	if (iter != NewGRFClass::grf_index.end()) return iter->second;

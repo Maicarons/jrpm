@@ -34,7 +34,7 @@
 #include "company_func.h"
 #include "tunnelbridge_map.h"
 #include "pathfinder/aystar.h"
-#include "sl/saveload.h"
+#include "sl/saveload_func.h"
 #include "framerate_type.h"
 #include "tile_cmd.h"
 #include "town.h"

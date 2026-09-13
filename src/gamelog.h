@@ -11,6 +11,7 @@
 #define GAMELOG_H
 
 #include "newgrf_config.h"
+#include "newgrf_type.h"
 #include <vector>
 
 struct LoggedAction;
@@ -50,7 +51,7 @@ void GamelogSetting(const char *name, int32_t oldval, int32_t newval);
 
 void GamelogGRFUpdate(const GRFConfigList &oldg, const GRFConfigList &newg);
 void GamelogGRFAddList(const GRFConfigList &newg);
-void GamelogGRFRemove(uint32_t grfid);
+void GamelogGRFRemove(GrfID grfid);
 void GamelogGRFAdd(const GRFConfig &newg);
 void GamelogGRFCompatible(const GRFIdentifier &newg);
 
