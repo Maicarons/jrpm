@@ -8,6 +8,10 @@
 /** @file pbs.cpp PBS support routines. */
 
 #include "stdafx.h"
+#include <deque>
+#include <map>
+#include <string>
+#include "3rdparty/fmt/format.h"
 #include "debug.h"
 #include "viewport_func.h"
 #include "vehicle_func.h"
@@ -1605,11 +1609,10 @@ bool IsCouplePartnerTile(const Train *v, TileIndex tile)
 	return CouplePlatformStripHasPartner(tgt->Primary(), tile);
 }
 
-/** Worklist entry for the couple approach walk. */
+/** Worklist entry for the couple approach search. */
 struct CoupleApproachEntry {
 	TileIndex tile;  ///< Tile the step is taken from.
 	Trackdir td;     ///< Trackdir to follow from \a tile.
-	uint dist;       ///< Manhattan distance from \a tile to the partner, keeping the walk on the direct route.
 };
 
 /** Tile budget for the couple approach walk. */
@@ -1623,18 +1626,30 @@ static constexpr uint COUPLE_APPROACH_BUDGET = 256;
  * stands in. A single train parked behind the partner, which the approacher never passes, was
  * enough to keep the couple from ever getting a reservation, so a partner with anything else on
  * its platform could not be coupled to at all. Only the track travelled before the contact
- * matters, so this walks it from our own leading vehicle towards the partner and stops as soon
- * as it gets there. Branches leading away from the partner are dropped and a tile budget bounds
- * the rest; failing to reach the partner within it counts as blocked, as an exhausted fill
- * budget did.
+ * matters, so this searches from our own leading vehicle towards the partner and stops as soon
+ * as it gets there. Another consist is an obstacle rather than an answer: as long as some route
+ * to the partner stays free, a consist sitting on a branch we do not travel does not block the
+ * couple, and one that does cut every route to the partner blocks it. A tile budget bounds the
+ * search.
  *
  * @param v the approaching consist with a goto-couple order.
- * @return true iff nothing is in the way between us and the partner.
+ * @return true iff a way to the partner is free of other consists.
  */
+/* [coupdbg] Temporary: deduplicated couple diagnostics (see train_cmd.cpp). */
+static void CoupleDbgP(uint32_t key, int level, const std::string &msg)
+{
+	static std::map<uint64_t, std::string> seen;
+	const uint64_t k = (static_cast<uint64_t>(level) << 32) | key;
+	auto it = seen.find(k);
+	if (it != seen.end() && it->second == msg) return;
+	seen[k] = msg;
+	fprintf(stderr, "[coupdbg] P%d #%u %s\n", level, key, msg.c_str());
+}
+
 bool IsCoupleApproachPathClear(const Train *v)
 {
 	const Train *tgt = Train::GetIfValid(v->Primary()->couple_target);
-	if (tgt == nullptr) return false;
+	if (tgt == nullptr) { CoupleDbgP(v->index.base(), 1, "approach NOT CLEAR: no couple target set"); return false; }
 	const Train *partner = tgt->Primary();
 	const Train *mover = v->Primary();
 	const Train *moving_front = mover->GetMovingFront();
@@ -1655,10 +1670,16 @@ bool IsCoupleApproachPathClear(const Train *v)
 	};
 
 	/* Already touching the partner: that contact is the whole point of the order. */
-	if (partner_on(moving_front->tile) || partner_on(moving_back->tile)) return true;
+	if (partner_on(moving_front->tile) || partner_on(moving_back->tile)) {
+		CoupleDbgP(mover->index.base(), 2, fmt::format("approach CLEAR: already touching partner (front tile={} back tile={})", (uint)moving_front->tile.base(), (uint)moving_back->tile.base()));
+		return true;
+	}
 
 	/* Anything else sharing one of our tiles is already in the way. */
-	if (foreign_on(moving_front->tile) || foreign_on(moving_back->tile)) return false;
+	if (foreign_on(moving_front->tile) || foreign_on(moving_back->tile)) {
+		CoupleDbgP(mover->index.base(), 1, fmt::format("approach NOT CLEAR: foreign vehicle on our own tile (front tile={} back tile={})", (uint)moving_front->tile.base(), (uint)moving_back->tile.base()));
+		return false;
+	}
 
 	/* The way between us and the partner, walked from both ends of the consist: a couple is
 	 * very often made by reversing into the partner, and a walk from the leading vehicle alone
@@ -1666,29 +1687,42 @@ bool IsCoupleApproachPathClear(const Train *v)
 	Trackdir front_td = moving_front->GetVehicleTrackdir();
 	Trackdir back_td = moving_back->GetVehicleTrackdir();
 	if (back_td != INVALID_TRACKDIR) back_td = ReverseTrackdir(back_td);
-	if (front_td == INVALID_TRACKDIR && back_td == INVALID_TRACKDIR) return false;
+	if (front_td == INVALID_TRACKDIR && back_td == INVALID_TRACKDIR) {
+		CoupleDbgP(mover->index.base(), 1, "approach NOT CLEAR: no usable trackdir on either end");
+		return false;
+	}
+	CoupleDbgP(mover->index.base(), 4, fmt::format("walk us={} front=({},{}) td={} back=({},{}) td={} partner={}@({},{}) d_front={} d_back={}",
+		mover->index.base(), TileX(moving_front->tile), TileY(moving_front->tile), (int)front_td,
+		TileX(moving_back->tile), TileY(moving_back->tile), (int)back_td,
+		partner->index.base(), TileX(tgt->tile), TileY(tgt->tile),
+		DistanceManhattan(moving_front->tile, tgt->tile), DistanceManhattan(moving_back->tile, tgt->tile)));
 
 	btree::btree_set<TileIndex> visited;
-	std::vector<CoupleApproachEntry> todo;
+	std::deque<CoupleApproachEntry> todo;
 	visited.insert(moving_front->tile);
 	visited.insert(moving_back->tile);
 	if (front_td != INVALID_TRACKDIR) {
-		todo.push_back({moving_front->tile, front_td, DistanceManhattan(moving_front->tile, tgt->tile)});
+		todo.push_back({moving_front->tile, front_td});
 	}
 	if (back_td != INVALID_TRACKDIR) {
-		todo.push_back({moving_back->tile, back_td, DistanceManhattan(moving_back->tile, tgt->tile)});
+		todo.push_back({moving_back->tile, back_td});
 	}
 
+	std::string trace;
 	CFollowTrackRail ft(v, v->GetIndirectCompatibleRailTypes());
 	while (!todo.empty()) {
-		CoupleApproachEntry e = todo.back();
-		todo.pop_back();
+		CoupleApproachEntry e = todo.front();
+		todo.pop_front();
 
-		if (!ft.Follow(e.tile, e.td)) continue;
-		if (!IsValidTile(ft.new_tile) || IsRailDepotTile(ft.new_tile)) continue;
-		if (visited.find(ft.new_tile) != visited.end()) continue;
-		if (visited.size() >= COUPLE_APPROACH_BUDGET) break;
+		if (!ft.Follow(e.tile, e.td)) { trace += fmt::format("followFail [{}({},{}) td{}] err{} ", (uint)e.tile.base(), TileX(e.tile), TileY(e.tile), (int)e.td, (int)ft.err); continue; }
+		if (!IsValidTile(ft.new_tile) || IsRailDepotTile(ft.new_tile)) { trace += fmt::format("badTile [{}({},{})] ", (uint)ft.new_tile.base(), TileX(ft.new_tile), TileY(ft.new_tile)); continue; }
+		if (visited.find(ft.new_tile) != visited.end()) { trace += fmt::format("seen [{}({},{})] ", (uint)ft.new_tile.base(), TileX(ft.new_tile), TileY(ft.new_tile)); continue; }
+		if (visited.size() >= COUPLE_APPROACH_BUDGET) { trace += "BUDGET "; break; }
 		visited.insert(ft.new_tile);
+		trace += fmt::format("step [{}({},{}) td{}] -> [{}({},{}) exitdir{} newtdb{:x} skip{}] ",
+			(uint)e.tile.base(), TileX(e.tile), TileY(e.tile), (int)e.td,
+			(uint)ft.new_tile.base(), TileX(ft.new_tile), TileY(ft.new_tile), (int)ft.exitdir,
+			(uint)ft.new_td_bits, ft.tiles_skipped);
 
 		/* The follower jumps whole station platforms in one step and lands past them, so a
 		 * partner standing on one is stepped over and never seen. Look at every tile the step
@@ -1697,24 +1731,31 @@ bool IsCoupleApproachPathClear(const Train *v)
 		 * which IsValidTile filters out. */
 		TileIndexDiff step = TileOffsByDiagDir(ft.exitdir);
 		bool reached = false;
+		bool blocked = false;
 		for (uint i = 1; i <= ft.tiles_skipped + 1; i++) {
 			TileIndex t = ft.new_tile - step * (ft.tiles_skipped + 1 - i);
 			if (!IsValidTile(t) || t == e.tile) continue;
-			if (foreign_on(t)) return false;
+			if (foreign_on(t)) { blocked = true; break; }
 			if (partner_on(t)) { reached = true; break; }
 		}
 		if (reached) return true;
 
-		uint dist = DistanceManhattan(ft.new_tile, tgt->tile);
-		if (dist > e.dist) continue; // this branch leads away from the partner
+		/* Another consist cuts this way off, but a different route may still lead to the
+		 * partner; only a consist that cuts every route blocks the couple. */
+		if (blocked) {
+			trace += fmt::format("blocked@({},{}) ", TileX(ft.new_tile), TileY(ft.new_tile));
+			continue;
+		}
 
 		TrackdirBits tdb = ft.new_td_bits & DiagdirReachesTrackdirs(ft.exitdir);
 		for (Trackdir ntd : SetTrackdirBitIterator(tdb)) {
-			todo.push_back({ft.new_tile, ntd, dist});
+			todo.push_back({ft.new_tile, ntd});
 		}
 	}
 
-	/* The partner was never reached, so the way is not known to be free. */
+	/* The partner was never reached, so every way to it is cut off. */
+	CoupleDbgP(mover->index.base(), 1, fmt::format("approach NOT CLEAR: partner never reached (visited={} from ({},{}) to partner ({},{})) trace={}",
+		(uint)visited.size(), TileX(moving_front->tile), TileY(moving_front->tile), TileX(tgt->tile), TileY(tgt->tile), trace));
 	return false;
 }
 
