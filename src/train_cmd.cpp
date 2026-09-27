@@ -6320,6 +6320,10 @@ static void InsertDecoupleWaitOrder(Train *v, std::unique_ptr<OrderList> &copy, 
 	InsertOrder(v, std::move(wait), wait_index);
 }
 
+/* [dordbg] Temporary. */
+static void OrderDbgF(uint32_t key, int level, const std::string &msg);
+static std::string OrderListDesc(const OrderList *ol);
+
 /**
  * Make a decoupled train part adopt a player-created order list as its own
  * schedule: both its orders and its primary order list become the schedule.
@@ -6335,7 +6339,15 @@ static void InsertDecoupleWaitOrder(Train *v, std::unique_ptr<OrderList> &copy, 
 static bool AdoptDecoupleSchedule(Train *part, OrderListID schedule_id, StationID load_at_station = StationID::Invalid(), const Order *load_order = nullptr)
 {
 	OrderList *ol = OrderList::GetIfValid(schedule_id);
-	if (ol == nullptr || !ol->IsPlayerCreated()) return false;
+	if (ol == nullptr || !ol->IsPlayerCreated()) {
+		OrderDbgF(part->index.base(), 3, fmt::format("ADOPT part={} sched={} FAILED (ol={})",
+			part->index.base(), (uint)schedule_id.base(), OrderListDesc(ol)));
+		return false;
+	}
+
+	OrderDbgF(part->index.base(), 3, fmt::format("ADOPT part={} sched={} target={} orders={} primary={} executing={}",
+		part->index.base(), (uint)schedule_id.base(), OrderListDesc(ol), OrderListDesc(part->orders),
+		(uint)part->primary_order.base(), (int)part->IsExecutingSchedule()));
 
 	/* Build a wrapper schedule holding an execute-schedule order for the target
 	 * schedule; the part will run the target through the regular
@@ -6397,7 +6409,32 @@ static bool AdoptDecoupleSchedule(Train *part, OrderListID schedule_id, StationI
 	/* The wrapper mirrors the part's dispatch/separation state while it is the home list. */
 	part->orders->SetDispatchEnabled(part->vehicle_flags.Test(VehicleFlag::ScheduledDispatch));
 	part->orders->SetSeparationEnabled(part->vehicle_flags.Test(VehicleFlag::TimetableSeparation));
+	OrderDbgF(part->index.base(), 4, fmt::format("ADOPT done part={} neworders={} primary={}",
+		part->index.base(), OrderListDesc(part->orders), (uint)part->primary_order.base()));
 	return true;
+}
+
+/* [dordbg] Temporary: deduplicated decouple diagnostics. A line is printed only when the
+ * message differs from the last one logged under the same key/level. */
+static void OrderDbgF(uint32_t key, int level, const std::string &msg)
+{
+	static std::map<uint64_t, std::string> seen;
+	const uint64_t k = (static_cast<uint64_t>(level) << 32) | key;
+	auto it = seen.find(k);
+	if (it != seen.end() && it->second == msg) return;
+	seen[k] = msg;
+	fprintf(stderr, "[dordbg] L%d #%u %s\n", level, key, msg.c_str());
+}
+
+/* [dordbg] Temporary. */
+static std::string OrderListDesc(const OrderList *ol)
+{
+	if (ol == nullptr) return "null";
+	const Order *o0 = ol->GetOrderAt(0);
+	return fmt::format("{}[id={} veh={} shared={} plc={} n={} o0={}]",
+		ol->IsPlayerCreated() ? "sched" : "veh", (uint)ol->index.base(),
+		ol->GetNumVehicles(), (int)ol->IsShared(), (int)ol->IsPlayerCreated(),
+		ol->GetNumOrders(), o0 != nullptr ? GetOrderTypeName(o0->GetType()) : "-");
 }
 
 static void SplitOrders(Train *v, Train *u, uint8_t &load_trains, std::unique_ptr<OrderList> (&wait_orders)[2])
@@ -6406,6 +6443,11 @@ static void SplitOrders(Train *v, Train *u, uint8_t &load_trains, std::unique_pt
 	assert(after_decouple_flags.GetType() == OT_DECOUPLE);
 	const VehicleOrderID wait_index = v->cur_implicit_order_index + 2;
 	const BaseConsist order_state = *v;
+
+	OrderDbgF(v->index.base(), 0, fmt::format("SPLIT enter first={} second={} v={} vprim={} vpi={} vexec={} u={} uprim={} upi={}",
+		(int)after_decouple_flags.GetDecoupleFirstOrdersType(), (int)after_decouple_flags.GetDecoupleSecondOrdersType(),
+		OrderListDesc(v->orders), (uint)v->primary_order.base(), (int)v->primary_order_index, (int)v->IsExecutingSchedule(),
+		OrderListDesc(u->orders), (uint)u->primary_order.base(), (int)u->primary_order_index));
 
 	if (v != u) {
 		switch (after_decouple_flags.GetDecoupleSecondOrdersType()) {
@@ -6418,6 +6460,13 @@ static void SplitOrders(Train *v, Train *u, uint8_t &load_trains, std::unique_pt
 				u->orders = v->orders;
 				u->primary_order = v->primary_order;
 				u->primary_order_index = v->primary_order_index;
+				/* A home list that no longer exists would leave the new part looking like it is
+				 * on an execute-schedule detour; the next list allocated could then reuse that
+				 * index and hand it a foreign list. Fall back to the list the part actually runs. */
+				if (u->primary_order != OrderListID::Invalid() && OrderList::GetIfValid(u->primary_order) == nullptr) {
+					u->primary_order = (u->orders != nullptr) ? u->orders->index : OrderListID::Invalid();
+					u->primary_order_index = INVALID_VEH_ORDER_ID;
+				}
 				u->AddToShared(v);
 				u->cur_real_order_index = v->cur_real_order_index;
 				u->cur_implicit_order_index = v->cur_implicit_order_index;
@@ -6458,6 +6507,9 @@ static void SplitOrders(Train *v, Train *u, uint8_t &load_trains, std::unique_pt
 		ProcessOrders(u);
 	}
 
+	OrderDbgF(v->index.base(), 1, fmt::format("SPLIT after-second v={} u={} same={}",
+		OrderListDesc(v->orders), OrderListDesc(u->orders), (int)(v->orders == u->orders)));
+
 	for (const Train *w = u->First(); w != nullptr; w = w->Next()) {
 	}
 
@@ -6484,6 +6536,11 @@ static void SplitOrders(Train *v, Train *u, uint8_t &load_trains, std::unique_pt
 		default: NOT_REACHED();
 	}
 	ProcessOrders(v);
+
+	OrderDbgF(v->index.base(), 2, fmt::format("SPLIT end v={} vprim={} vpi={} u={} uprim={} upi={} same={}",
+		OrderListDesc(v->orders), (uint)v->primary_order.base(), (int)v->primary_order_index,
+		OrderListDesc(u->orders), (uint)u->primary_order.base(), (int)u->primary_order_index,
+		(int)(v->orders == u->orders)));
 }
 
 /**
@@ -7094,6 +7151,11 @@ static void AdoptCoupleWaitingSchedule(Train *v, Train *u)
 		if (v->IsOrderListShared()) {
 			v->RemoveFromShared();
 		} else if (v->orders->IsPlayerCreated()) {
+			v->orders->RemoveVehicle(v);
+		} else if (OrderListIsSomeonesHome(v->orders)) {
+			/* Another vehicle away on an execute-schedule detour calls this list home, so it has
+			 * to survive. Only detach from it; leaving the vehicle in the chain with no orders
+			 * would make a later join allocate a fresh empty list for it. */
 			v->orders->RemoveVehicle(v);
 		} else {
 			v->orders->FreeChain(false);

@@ -4671,6 +4671,12 @@ void Vehicle::AddToShared(Vehicle *shared_chain)
 	if (shared_chain->orders == nullptr) {
 		dbg_assert(shared_chain->previous_shared == nullptr);
 		dbg_assert(shared_chain->next_shared == nullptr);
+		/* [dordbg] Temporary: this hands a brand new EMPTY order list to two vehicles at once
+		 * and leaves #primary_order alone. If the caller already pinned #primary_order
+		 * elsewhere, the vehicle ends up "executing" an empty list with no resume position
+		 * (#primary_order_index stays INVALID) and then returns to order 0 of its home list. */
+		fprintf(stderr, "[dordbg] ADDSHARED-EMPTY: shared_chain=#%u adding=#%u (shared_chain->primary_order=%u adding->primary_order=%u)\n",
+			shared_chain->index.base(), this->index.base(), (uint)shared_chain->primary_order.base(), (uint)this->primary_order.base());
 		this->orders = shared_chain->orders = OrderList::Create(nullptr, shared_chain);
 	}
 
