@@ -1264,6 +1264,25 @@ Vehicle *RVTransportFindWaitingAtStation(const Station *st, const Vehicle *carri
 }
 
 /**
+ * Can this road vehicle be put back on the road network at \a t?
+ *
+ * A carried road vehicle keeps the tile it had when it was loaded, and while a road vehicle is in
+ * a tunnel or on a bridge that tile is frozen (the controller does not advance it there), so the
+ * remembered tile can well be a tunnel tile. Asking "is this a road stop or a normal road tile" is
+ * therefore not enough: tunnels and bridges carry road as well.
+ * @param rv Road vehicle which would be placed there.
+ * @param t Tile to check.
+ * @return true if the vehicle can stand on that tile.
+ */
+static bool RVTransportCanPutDownHere(const RoadVehicle *rv, TileIndex t)
+{
+	if (!IsValidTile(t)) return false;
+	if (IsAnyRoadStopTile(t)) return true;
+	if (IsNormalRoadTile(t)) return true;
+	return IsTileType(t, TileType::TunnelBridge) && HasRoadTypeRoad(t) && rv->compatible_roadtypes.Test(GetRoadTypeRoad(t));
+}
+
+/**
  * Check the carried state of all road vehicles after a savegame was loaded. A road vehicle which
  * claims to be carried by a vehicle that does not exist any more (or by something which cannot be
  * a carrier) must not stay hidden and frozen on the map: it is put back on the road, or, if there
@@ -1280,11 +1299,20 @@ void RVTransportValidateAfterLoad()
 		if (!v->IsFrontEngine()) {
 			/* A part of an articulated road vehicle follows its front: only clear stale state here. */
 			if ((v->First()->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) {
+				/* A part which was carried itself is hidden because it is being carried: nothing
+				 * else can hide it, because it is off the road network and frozen. A part which
+				 * was not carried is hidden for one of the engine's own reasons instead (a road
+				 * vehicle in a tunnel or in a depot is hidden), and VehState::Hidden must not be
+				 * touched for those - clearing it there leaves a vehicle which claims to be in a
+				 * tunnel while being drawn, which trips the assertion in
+				 * RoadVehicle::GetCurrentMaxSpeed(). */
+				const bool was_carried = (v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) != 0;
+
 				v->rv_transport_flags &= ~Vehicle::RV_TRANSPORT_CARRIED;
 				v->transported_by = VehicleID::Invalid();
 				v->transported_host_part = VehicleID::Invalid();
 				v->transported_weight = 0;
-				v->vehstatus.Reset(VehState::Hidden);
+				if (was_carried) v->vehstatus.Reset(VehState::Hidden);
 			}
 			continue;
 		}
@@ -1313,7 +1341,7 @@ void RVTransportValidateAfterLoad()
 		Debug(misc, 0, "RoRo: road vehicle #{} was carried by missing vehicle #{}", v->index.base(), v->transported_by.base());
 		v->transported_by = VehicleID::Invalid();
 		v->transported_host_part = VehicleID::Invalid();
-		if (IsValidTile(v->tile) && (IsAnyRoadStopTile(v->tile) || IsNormalRoadTile(v->tile))) {
+		if (RVTransportCanPutDownHere(RoadVehicle::From(v), v->tile)) {
 			release.push_back(v->index);
 		} else {
 			remove.push_back(v->index);

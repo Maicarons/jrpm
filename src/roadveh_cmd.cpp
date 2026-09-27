@@ -539,8 +539,13 @@ inline int RoadVehicle::GetCurrentMaxSpeed() const
 			}
 		}
 
-		/* Vehicle is on the middle part of a bridge. */
+		/* Vehicle is on the middle part of a bridge. RVSB_WORMHOLE covers "in a tunnel and/or on
+		 * a bridge", but a vehicle in a tunnel is always hidden, so only a bridge gets here. Spell
+		 * the assumption out: a vehicle which is in a tunnel and not hidden means its state and
+		 * its visibility disagree, and that has to be reported here instead of silently reading a
+		 * bridge type out of a tunnel. */
 		if (u->state == RVSB_WORMHOLE && !u->vehstatus.Test(VehState::Hidden)) {
+			assert_tile(IsBridgeTile(u->tile), u->tile);
 			max_speed = std::min(max_speed, GetBridgeSpec(GetBridgeType(u->tile))->speed * 2);
 		}
 	}
