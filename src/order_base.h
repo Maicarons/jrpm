@@ -1508,6 +1508,14 @@ public:
 	 */
 	void InitializePlayerCreated();
 
+	/**
+	 * Recompute the counters derived from the orders that are never saved: the number of manual
+	 * orders and the timetable/total durations. Needed for order lists that have no vehicles, as
+	 * those are never passed to #Initialize. Without it #num_manual_orders stays zero and
+	 * #SkipToNextRealOrderIndex degenerates to always using order 0.
+	 */
+	void RecalculateDerivedCounters();
+
 	void RecalculateTimetableDuration();
 
 	/**

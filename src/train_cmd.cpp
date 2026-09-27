@@ -8,9 +8,6 @@
 /** @file train_cmd.cpp Handling of trains. */
 
 #include "stdafx.h"
-#include <map>
-#include <string>
-#include "3rdparty/fmt/format.h"
 #include "error.h"
 #include "articulated_vehicles.h"
 #include "command_func.h"
@@ -5284,10 +5281,6 @@ static void TryLongReserveChooseTrainTrackFromReservationEnd(Train *v, bool no_r
 	}
 }
 
-/* [coupdbg] Temporary. */
-static void CoupleDbgF(uint32_t key, int level, const std::string &msg);
-static std::string CoupleDbgDesc(const Train *t);
-static const char *CoupleDbgResult(CoupleCandidateResult r);
 
 /**
  * Choose a track and reserve if necessary
@@ -5410,7 +5403,6 @@ static ChooseTrainTrackResult ChooseTrainTrack(Train *consist, const TileIndex t
 						uint32_t couple_cost = 0;
 						DoTrainCouplePathfind(consist, false, &couple_target, &couple_cost);
 						if (couple_target == nullptr) {
-							CoupleDbgF(consist->index.base(), 2, fmt::format("pathfind(safe-exit) found NO partner for {}", CoupleDbgDesc(consist)));
 							if (mark_stuck) MarkTrainAsStuck(consist);
 							FreeTrainTrackReservation(consist);
 							if (changed_signal != INVALID_TRACKDIR) SetSignalStateByTrackdir(tile, changed_signal, SignalState::Red);
@@ -5418,10 +5410,8 @@ static ChooseTrainTrackResult ChooseTrainTrack(Train *consist, const TileIndex t
 						}
 						consist->couple_target = couple_target->index;
 						ClaimCoupleTarget(consist, couple_target->Primary(), couple_cost);
-						CoupleDbgF(consist->index.base(), 2, fmt::format("pathfind(safe-exit) chose + claimed {}", CoupleDbgDesc(couple_target)));
 					}
 					consist->SetDestTile(couple_target->tile);
-					CoupleDbgF(consist->index.base(), 2, fmt::format("steer(safe-exit) to {}", CoupleDbgDesc(couple_target)));
 				}
 				/* Got a valid reservation that ends at a safe target, quick exit. */
 				result_flags |= CTTRF_RESERVATION_MADE;
@@ -5465,8 +5455,6 @@ static ChooseTrainTrackResult ChooseTrainTrack(Train *consist, const TileIndex t
 			/* Track the concrete contact-end vehicle for approach braking; the
 			 * speed code re-validates it every tick. */
 			consist->couple_target = (couple_target != nullptr) ? couple_target->index : VehicleID::Invalid();
-			CoupleDbgF(consist->index.base(), 2, fmt::format("pathfind(main) {} for {}",
-				couple_target != nullptr ? "found" : "found NOTHING", CoupleDbgDesc(consist)));
 			/* Register (or update) the claim on the waiting train so competing
 			 * approaching consists look for another partner. Must happen after
 			 * couple_target is set: the claim is only valid while it points here. */
@@ -5477,7 +5465,6 @@ static ChooseTrainTrackResult ChooseTrainTrack(Train *consist, const TileIndex t
 		if (couple_target != nullptr) {
 			/* Steer the regular pathfinder towards the partner's contact end. */
 			consist->SetDestTile(couple_target->tile);
-			CoupleDbgF(consist->index.base(), 2, fmt::format("steer(main) to {}", CoupleDbgDesc(couple_target)));
 		} else {
 			/* No available partner: wait like a train with an unreachable
 			 * destination instead of pathing anywhere. */
@@ -5640,52 +5627,6 @@ static ChooseTrainTrackResult ChooseTrainTrack(Train *consist, const TileIndex t
  * @param other The %Train found on our path.
  * @return \c true when the other consist is our couple partner.
  */
-/* [coupdbg] Temporary: deduplicated couple diagnostics. A line is printed only when
- * the message differs from the last one logged under the same key/level. */
-static void CoupleDbgF(uint32_t key, int level, const std::string &msg)
-{
-	static std::map<uint64_t, std::string> seen;
-	const uint64_t k = (static_cast<uint64_t>(level) << 32) | key;
-	auto it = seen.find(k);
-	if (it != seen.end() && it->second == msg) return;
-	seen[k] = msg;
-	fprintf(stderr, "[coupdbg] L%d #%u %s\n", level, key, msg.c_str());
-}
-
-/* [coupdbg] Temporary. */
-static std::string CoupleDbgDesc(const Train *t)
-{
-	if (t == nullptr) return "null";
-	const Train *ct = Train::GetIfValid(t->couple_target);
-	const Train *cl = Train::GetIfValid(t->couple_claimant);
-	return fmt::format("#{}[{} i{} r{} tile={} tgt={} clm={}]",
-		t->index.base(), GetOrderTypeName(t->current_order.GetType()),
-		t->cur_implicit_order_index, t->cur_real_order_index, (uint)t->tile.base(),
-		ct != nullptr ? (int)ct->index.base() : -1,
-		cl != nullptr ? (int)cl->index.base() : -1);
-}
-
-/* [coupdbg] Temporary. */
-static const char *CoupleDbgResult(CoupleCandidateResult r)
-{
-	switch (r) {
-		case CoupleCandidateResult::Valid: return "Valid";
-		case CoupleCandidateResult::NotCoupleOrder: return "NotCoupleOrder";
-		case CoupleCandidateResult::NotWaiting: return "NotWaiting";
-		case CoupleCandidateResult::Claimed: return "Claimed";
-		case CoupleCandidateResult::Crashed: return "Crashed";
-		case CoupleCandidateResult::Stopped: return "Stopped";
-		case CoupleCandidateResult::Owner: return "Owner";
-		case CoupleCandidateResult::Load: return "Load";
-		case CoupleCandidateResult::Cargo: return "Cargo";
-		case CoupleCandidateResult::UnitCount: return "UnitCount";
-		case CoupleCandidateResult::Slot: return "Slot";
-		case CoupleCandidateResult::Station: return "Station";
-		case CoupleCandidateResult::Platform: return "Platform";
-		case CoupleCandidateResult::Arrangement: return "Arrangement";
-	}
-	return "?";
-}
 
 static bool IsCouplePartnerOf(const Train *consist, const Train *other)
 {
@@ -5727,8 +5668,6 @@ static bool IsPlatformAheadOccupied(const Train *consist)
 		for (const Train *u : VehiclesOnTile<VehicleType::Train>(tile)) {
 			if (u->Primary() == consist->Primary()) continue;
 			if (IsCouplePartnerOf(consist, u)) continue;
-			CoupleDbgF(consist->index.base(), 3, fmt::format("platform-ahead HELD: blocker {} while we are {} (tile={})",
-				CoupleDbgDesc(u), CoupleDbgDesc(consist), (uint)tile.base()));
 			return true;
 		}
 	}
@@ -5805,7 +5744,6 @@ TryPathReserveResultFlags TryPathReserveWithResultFlags(Train *consist, bool mar
 	 * through the other train and drive into it. */
 	if (IsPlatformAheadOccupied(consist)) {
 		if (mark_as_stuck) MarkTrainAsStuck(consist);
-		CoupleDbgF(consist->index.base(), 3, fmt::format("reserve ABORT: platform ahead occupied, consist {}", CoupleDbgDesc(consist)));
 		return TPRRF_NONE;
 	}
 
@@ -5822,7 +5760,6 @@ TryPathReserveResultFlags TryPathReserveWithResultFlags(Train *consist, bool mar
 		 * a train reversing on a platform another train stands on was driven straight into it. */
 		if (!IsCouplePartnerOf(consist, Train::From(other_train))) {
 			if (mark_as_stuck) MarkTrainAsStuck(consist);
-			CoupleDbgF(consist->index.base(), 3, fmt::format("reserve ABORT: path blocked by {}, us {}", CoupleDbgDesc(Train::From(other_train)), CoupleDbgDesc(consist)));
 			return TPRRF_NONE;
 		}
 	}
@@ -6320,9 +6257,6 @@ static void InsertDecoupleWaitOrder(Train *v, std::unique_ptr<OrderList> &copy, 
 	InsertOrder(v, std::move(wait), wait_index);
 }
 
-/* [dordbg] Temporary. */
-static void OrderDbgF(uint32_t key, int level, const std::string &msg);
-static std::string OrderListDesc(const OrderList *ol);
 
 /**
  * Make a decoupled train part adopt a player-created order list as its own
@@ -6340,14 +6274,9 @@ static bool AdoptDecoupleSchedule(Train *part, OrderListID schedule_id, StationI
 {
 	OrderList *ol = OrderList::GetIfValid(schedule_id);
 	if (ol == nullptr || !ol->IsPlayerCreated()) {
-		OrderDbgF(part->index.base(), 3, fmt::format("ADOPT part={} sched={} FAILED (ol={})",
-			part->index.base(), (uint)schedule_id.base(), OrderListDesc(ol)));
 		return false;
 	}
 
-	OrderDbgF(part->index.base(), 3, fmt::format("ADOPT part={} sched={} target={} orders={} primary={} executing={}",
-		part->index.base(), (uint)schedule_id.base(), OrderListDesc(ol), OrderListDesc(part->orders),
-		(uint)part->primary_order.base(), (int)part->IsExecutingSchedule()));
 
 	/* Build a wrapper schedule holding an execute-schedule order for the target
 	 * schedule; the part will run the target through the regular
@@ -6409,33 +6338,10 @@ static bool AdoptDecoupleSchedule(Train *part, OrderListID schedule_id, StationI
 	/* The wrapper mirrors the part's dispatch/separation state while it is the home list. */
 	part->orders->SetDispatchEnabled(part->vehicle_flags.Test(VehicleFlag::ScheduledDispatch));
 	part->orders->SetSeparationEnabled(part->vehicle_flags.Test(VehicleFlag::TimetableSeparation));
-	OrderDbgF(part->index.base(), 4, fmt::format("ADOPT done part={} neworders={} primary={}",
-		part->index.base(), OrderListDesc(part->orders), (uint)part->primary_order.base()));
 	return true;
 }
 
-/* [dordbg] Temporary: deduplicated decouple diagnostics. A line is printed only when the
- * message differs from the last one logged under the same key/level. */
-static void OrderDbgF(uint32_t key, int level, const std::string &msg)
-{
-	static std::map<uint64_t, std::string> seen;
-	const uint64_t k = (static_cast<uint64_t>(level) << 32) | key;
-	auto it = seen.find(k);
-	if (it != seen.end() && it->second == msg) return;
-	seen[k] = msg;
-	fprintf(stderr, "[dordbg] L%d #%u %s\n", level, key, msg.c_str());
-}
 
-/* [dordbg] Temporary. */
-static std::string OrderListDesc(const OrderList *ol)
-{
-	if (ol == nullptr) return "null";
-	const Order *o0 = ol->GetOrderAt(0);
-	return fmt::format("{}[id={} veh={} shared={} plc={} n={} o0={}]",
-		ol->IsPlayerCreated() ? "sched" : "veh", (uint)ol->index.base(),
-		ol->GetNumVehicles(), (int)ol->IsShared(), (int)ol->IsPlayerCreated(),
-		ol->GetNumOrders(), o0 != nullptr ? GetOrderTypeName(o0->GetType()) : "-");
-}
 
 static void SplitOrders(Train *v, Train *u, uint8_t &load_trains, std::unique_ptr<OrderList> (&wait_orders)[2])
 {
@@ -6444,10 +6350,6 @@ static void SplitOrders(Train *v, Train *u, uint8_t &load_trains, std::unique_pt
 	const VehicleOrderID wait_index = v->cur_implicit_order_index + 2;
 	const BaseConsist order_state = *v;
 
-	OrderDbgF(v->index.base(), 0, fmt::format("SPLIT enter first={} second={} v={} vprim={} vpi={} vexec={} u={} uprim={} upi={}",
-		(int)after_decouple_flags.GetDecoupleFirstOrdersType(), (int)after_decouple_flags.GetDecoupleSecondOrdersType(),
-		OrderListDesc(v->orders), (uint)v->primary_order.base(), (int)v->primary_order_index, (int)v->IsExecutingSchedule(),
-		OrderListDesc(u->orders), (uint)u->primary_order.base(), (int)u->primary_order_index));
 
 	if (v != u) {
 		switch (after_decouple_flags.GetDecoupleSecondOrdersType()) {
@@ -6507,8 +6409,6 @@ static void SplitOrders(Train *v, Train *u, uint8_t &load_trains, std::unique_pt
 		ProcessOrders(u);
 	}
 
-	OrderDbgF(v->index.base(), 1, fmt::format("SPLIT after-second v={} u={} same={}",
-		OrderListDesc(v->orders), OrderListDesc(u->orders), (int)(v->orders == u->orders)));
 
 	for (const Train *w = u->First(); w != nullptr; w = w->Next()) {
 	}
@@ -6537,10 +6437,6 @@ static void SplitOrders(Train *v, Train *u, uint8_t &load_trains, std::unique_pt
 	}
 	ProcessOrders(v);
 
-	OrderDbgF(v->index.base(), 2, fmt::format("SPLIT end v={} vprim={} vpi={} u={} uprim={} upi={} same={}",
-		OrderListDesc(v->orders), (uint)v->primary_order.base(), (int)v->primary_order_index,
-		OrderListDesc(u->orders), (uint)u->primary_order.base(), (int)u->primary_order_index,
-		(int)(v->orders == u->orders)));
 }
 
 /**
@@ -6756,11 +6652,10 @@ static Train *GetValidCoupleClaimant(const Train *carrier)
 
 	/* The claim only counts while the claimant is still approaching this
 	 * consist; anything else (order left, different target, crash) releases it. */
-	if (!claimant->current_order.IsType(OT_GOTO_COUPLE)) { CoupleDbgF(carrier->index.base(), 1, fmt::format("claim DEAD: claimant {} left the couple order", CoupleDbgDesc(claimant))); return nullptr; }
-	if (claimant->vehstatus.Test(VehState::Crashed)) { CoupleDbgF(carrier->index.base(), 1, fmt::format("claim DEAD: claimant {} crashed", CoupleDbgDesc(claimant))); return nullptr; }
+	if (!claimant->current_order.IsType(OT_GOTO_COUPLE)) return nullptr;
+	if (claimant->vehstatus.Test(VehState::Crashed)) return nullptr;
 	Train *tgt = Train::GetIfValid(claimant->couple_target);
-	if (tgt == nullptr || tgt->Primary() != carrier) { CoupleDbgF(carrier->index.base(), 1, fmt::format("claim DEAD: claimant {} no longer targets us (tgt={})",
-			CoupleDbgDesc(claimant), CoupleDbgDesc(tgt))); return nullptr; }
+	if (tgt == nullptr || tgt->Primary() != carrier) return nullptr;
 
 	/* The partner can stop qualifying at any time while we approach it (most
 	 * notably it can lose its 路签 to another consist, or fill up). Note this
@@ -6768,8 +6663,6 @@ static Train *GetValidCoupleClaimant(const Train *carrier)
 	 * #CoupleClaimBlocks, which lands back here. */
 	CoupleCandidateResult vol = GetCoupleVolatileConditionResult(claimant, claimant->current_order, tgt->First(), tgt->tile);
 	if (vol != CoupleCandidateResult::Valid) {
-		CoupleDbgF(carrier->index.base(), 1, fmt::format("claim DEAD: volatile {} against claimant {} (tgt={} carrier={})",
-			CoupleDbgResult(vol), CoupleDbgDesc(claimant), CoupleDbgDesc(tgt), CoupleDbgDesc(carrier)));
 		/* Drop the target so the claimant re-selects a partner instead of
 		 * braking for a couple that can no longer happen. */
 		claimant->couple_target = VehicleID::Invalid();
@@ -6795,9 +6688,9 @@ static Train *GetClaimedCoupleTarget(const Train *moving)
 	Train *carrier = tgt->Primary();
 	/* The claim is only usable while the target is still a live, waiting consist
 	 * and the claim is still held by this moving consist. */
-	if (carrier->vehstatus.Test(VehState::Crashed)) { CoupleDbgF(moving->index.base(), 2, fmt::format("claimed-target unusable: carrier {} crashed", CoupleDbgDesc(carrier))); return nullptr; }
-	if (!carrier->current_order.IsType(OT_WAIT_COUPLE)) { CoupleDbgF(moving->index.base(), 2, fmt::format("claimed-target unusable: carrier {} not OT_WAIT_COUPLE", CoupleDbgDesc(carrier))); return nullptr; }
-	if (GetValidCoupleClaimant(carrier) != moving->Primary()) { CoupleDbgF(moving->index.base(), 2, fmt::format("claimed-target unusable: claimant on carrier {} is not us", CoupleDbgDesc(carrier))); return nullptr; }
+	if (carrier->vehstatus.Test(VehState::Crashed)) return nullptr;
+	if (!carrier->current_order.IsType(OT_WAIT_COUPLE)) return nullptr;
+	if (GetValidCoupleClaimant(carrier) != moving->Primary()) return nullptr;
 	return tgt;
 }
 

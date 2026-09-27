@@ -316,12 +316,14 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 			}
 		}
 
-		/* Player-created order lists usually have no vehicles and are therefore
-		 * never passed to Initialize(); recompute their derived counters, which
-		 * are not saved and would stay zero (or get corrupted by later edits). */
+		/* Order lists that have no vehicles are never passed to Initialize(); recompute their
+		 * derived counters, which are not saved and would otherwise stay zero (or get corrupted
+		 * by later edits). This covers player-created order lists as well as the home list of a
+		 * vehicle that is away on an execute-schedule detour: a zero #num_manual_orders there
+		 * makes #SkipToNextRealOrderIndex fall back to order 0 and lose the resume position. */
 		for (OrderList *ol : OrderList::Iterate()) {
-			if (!ol->IsPlayerCreated() || ol->GetNumVehicles() != 0) continue;
-			ol->InitializePlayerCreated();
+			if (ol->GetNumVehicles() != 0) continue;
+			ol->RecalculateDerivedCounters();
 		}
 	}
 

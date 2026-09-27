@@ -13,8 +13,6 @@
 #include "3rdparty/fmt/format.h"
 #include "debug.h"
 
-/* [dordbg] Temporary. */
-static void OrderDbgF(uint32_t key, int level, const std::string &msg);
 #include "command_func.h"
 #include "company_func.h"
 #include "news_func.h"
@@ -661,6 +659,19 @@ void OrderList::InitializePlayerCreated()
 	assert(this->IsPlayerCreated());
 	assert(this->GetNumVehicles() == 0 && this->first_shared == nullptr);
 
+	this->RecalculateDerivedCounters();
+}
+
+/**
+ * Recompute the counters derived from the orders that are never saved: the number of manual
+ * orders and the timetable/total durations.
+ *
+ * Order lists that have no vehicles are never passed to #Initialize, so on loading a savegame
+ * these counters would stay zero. A zero #num_manual_orders makes #SkipToNextRealOrderIndex fall
+ * back to order 0, which loses the resume position of an execute-schedule detour.
+ */
+void OrderList::RecalculateDerivedCounters()
+{
 	this->num_manual_orders = 0;
 	this->timetable_duration = 0;
 	this->total_duration = 0;
@@ -678,18 +689,6 @@ void OrderList::InitializePlayerCreated()
  * @param keep_orderlist If this is true only delete the orders, otherwise also delete the OrderList.
  * @note do not use on "current_order" vehicle orders!
  */
-/* [dordbg] Temporary: report a live execute-schedule detour home being replaced by the
- * vehicle's own order list. That silently drops the detour: the vehicle then treats the list
- * it was executing as its own orders, and its real home list is orphaned and freed. */
-void HomeDbgCheck(const char *where, const Vehicle *v, OrderListID before)
-{
-	if (before == v->primary_order || before == OrderListID::Invalid()) return;
-	if (OrderList::GetIfValid(before) == nullptr) return;
-	if (v->orders == nullptr || v->orders->index != v->primary_order) return;
-	OrderDbgF(v->index.base(), 8, fmt::format("HOME-LOST at {}: #{} home {} -> {} == orders (orders: id={} plc={} n={})",
-		where, v->index.base(), (uint)before.base(), (uint)v->primary_order.base(),
-		(uint)v->orders->index.base(), (int)v->orders->IsPlayerCreated(), (int)v->orders->GetNumOrders()));
-}
 
 /**
  * Detach every vehicle that still names \a going_away as its home order list.
@@ -736,18 +735,6 @@ bool OrderListIsSomeonesHome(const OrderList *ol)
 
 void OrderList::FreeChain(bool keep_orderlist)
 {
-	OrderDbgF(this->index.base(), 6, fmt::format("FREECHAIN id={} keep={} plc={} shared={} veh={} n={}",
-		(uint)this->index.base(), (int)keep_orderlist, (int)this->IsPlayerCreated(),
-		(int)this->IsShared(), this->GetNumVehicles(), this->GetNumOrders()));
-	/* [dordbg] Temporary: report vehicles that still name this list as their home as it is
-	 * being freed -- that is exactly the moment a dangling #primary_order is created. */
-	for (const Vehicle *u : Vehicle::Iterate()) {
-		if (u->primary_order == this->index) {
-			OrderDbgF(u->index.base(), 7, fmt::format("HOME-FREED id={} still home of #{} (orders={} exec={})",
-				(uint)this->index.base(), u->index.base(),
-				u->orders != nullptr ? (int)u->orders->index.base() : -1, (int)u->IsExecutingSchedule()));
-		}
-	}
 	if (this->IsPlayerCreated()) {
 		/* Player-created order lists are managed via dedicated commands. They must not be freed by the
 		 * normal lifecycle, and they also do not unregister destinations as none were ever registered. */
@@ -4154,14 +4141,12 @@ CommandCost CmdCloneOrder(DoCommandFlags flags, CloneOptions action, VehicleID v
 				DeleteVehicleOrders(dst, false, ShouldResetOrderIndicesOnOrderCopy(src, dst));
 				dst->dispatch_records.clear();
 
-				const OrderListID dordbg_before = dst->primary_order;
 				dst->orders = src->orders;
 
 				/* Link this vehicle in the shared-list */
 				dst->AddToShared(src);
 				/* AddToShared may have created a new list when src had none. */
 				dst->primary_order = dst->orders->index;
-				HomeDbgCheck("clone-share", dst, dordbg_before);
 
 
 				/* Set automation bit if target has it. */
@@ -4255,10 +4240,8 @@ CommandCost CmdCloneOrder(DoCommandFlags flags, CloneOptions action, VehicleID v
 					dst->orders = nullptr;
 				}
 				assert(OrderList::CanAllocateItem());
-				const OrderListID dordbg_before = dst->primary_order;
 				dst->orders = OrderList::Create(std::move(dst_orders), dst);
 				dst->primary_order = dst->orders->index;
-				HomeDbgCheck("clone-copy", dst, dordbg_before);
 
 				/* Copy over scheduled dispatch data */
 				assert(dst->orders != nullptr);
@@ -4666,9 +4649,6 @@ bool Vehicle::HasDepotOrder() const
 	return false;
 }
 
-/* [dordbg] Temporary. */
-static void OrderDbgF(uint32_t key, int level, const std::string &msg);
-static std::string OrderListDescC(const OrderList *ol);
 
 /**
  * Free a vehicle-owned order list that served as the home of execute-schedule
@@ -4677,31 +4657,13 @@ static std::string OrderListDescC(const OrderList *ol);
  */
 static void FreeOrphanedExecuteScheduleHome(OrderList *home)
 {
-	if (home == nullptr) {
-		OrderDbgF(0, 2, "FREEHOME home=null (nothing to do)");
-		return;
-	}
-	if (home->IsPlayerCreated()) {
-		OrderDbgF(home->index.base(), 2, fmt::format("FREEHOME home={} KEPT player-created {}",
-			(uint)home->index.base(), OrderListDescC(home)));
-		return;
-	}
-	if (home->GetNumVehicles() != 0) {
-		OrderDbgF(home->index.base(), 2, fmt::format("FREEHOME home={} KEPT still has vehicles {}",
-			(uint)home->index.base(), OrderListDescC(home)));
-		return;
-	}
+	if (home == nullptr || home->IsPlayerCreated()) return;
+	if (home->GetNumVehicles() != 0) return;
 	for (const Vehicle *u : Vehicle::Iterate()) {
 		/* A vehicle keeps the list alive whenever it names it as its home, whether or not it
 		 * currently has any orders of its own. */
-		if (u->primary_order == home->index) {
-			OrderDbgF(u->index.base(), 2, fmt::format("FREEHOME home={} KEPT referenced by #{} (orders={} primary={})",
-				(uint)home->index.base(), u->index.base(), OrderListDescC(u->orders), (uint)u->primary_order.base()));
-			return;
-		}
+		if (u->primary_order == home->index) return;
 	}
-	OrderDbgF(home->index.base(), 2, fmt::format("FREEHOME home={} FREED {}",
-		(uint)home->index.base(), OrderListDescC(home)));
 	home->FreeChain(false);
 }
 
@@ -4710,9 +4672,6 @@ void SetDecoupleWaitOrderList(Vehicle *v, OrderList *orders)
 {
 	OrderList *old = v->orders;
 	const bool executing = v->IsExecutingSchedule();
-	OrderDbgF(v->index.base(), 11, fmt::format("SETWAIT #{}: old={} new={} executing={} primary={} idx={}",
-		v->index.base(), old != nullptr ? (int)old->index.base() : -1, (int)orders->index.base(),
-		(int)executing, (int)v->primary_order.base(), (int)v->primary_order_index));
 	const VehicleFlags flags = v->vehicle_flags;
 	const int32_t lateness = v->lateness_counter;
 	DeleteOrderWarnings(v);
@@ -4744,25 +4703,7 @@ void SetDecoupleWaitOrderList(Vehicle *v, OrderList *orders)
  *                            If false, _you_ have to make sure the order indices are valid after
  *                            your messing with them!
  */
-/* [dordbg] Temporary: deduplicated decouple diagnostics (see train_cmd.cpp). */
-static void OrderDbgF(uint32_t key, int level, const std::string &msg)
-{
-	static std::map<uint64_t, std::string> seen;
-	const uint64_t k = (static_cast<uint64_t>(level) << 32) | key;
-	auto it = seen.find(k);
-	if (it != seen.end() && it->second == msg) return;
-	seen[k] = msg;
-	fprintf(stderr, "[dordbg] C%d #%u %s\n", level, key, msg.c_str());
-}
 
-/* [dordbg] Temporary. */
-static std::string OrderListDescC(const OrderList *ol)
-{
-	if (ol == nullptr) return "null";
-	return fmt::format("[id={} veh={} shared={} plc={} n={}]",
-		(uint)ol->index.base(), ol->GetNumVehicles(), (int)ol->IsShared(),
-		(int)ol->IsPlayerCreated(), ol->GetNumOrders());
-}
 
 void DeleteVehicleOrders(Vehicle *v, bool keep_orderlist, bool reset_order_indices)
 {
@@ -4771,30 +4712,16 @@ void DeleteVehicleOrders(Vehicle *v, bool keep_orderlist, bool reset_order_indic
 
 	extern void UpdateDeparturesWindowVehicleFilter(const OrderList *order_list, bool remove);
 
-	const char *dordbg_branch =
-		v->IsOrderListShared() ? "detach-shared" :
-		(v->orders != nullptr && v->orders->IsPlayerCreated()) ? "detach-player" :
-		"FREECHAIN";
-	OrderDbgF(v->index.base(), 0, fmt::format("DELORD branch={} orders={} primary={} executing={} keep={}",
-		dordbg_branch, OrderListDescC(v->orders), (uint)v->primary_order.base(),
-		(int)v->IsExecutingSchedule(), (int)keep_orderlist));
-
 	/* The vehicle may be away on an execute-schedule detour; in that case
 	 * v->orders is the list being executed and the real home list is kept
 	 * by primary_order. Drop the detour state first, then clean up the
 	 * home list if nothing references it anymore. */
 	OrderList *execute_home = nullptr;
-	const OrderListID dordbg_home_id = v->primary_order;
-	const bool dordbg_was_executing = v->IsExecutingSchedule();
 	if (v->IsExecutingSchedule()) {
 		execute_home = OrderList::GetIfValid(v->primary_order);
 		v->primary_order = OrderListID::Invalid();
 		v->primary_order_index = INVALID_VEH_ORDER_ID;
 	}
-	OrderDbgF(v->index.base(), 5, fmt::format("DELORD pre: executing={} home={} homeExists={} execute_home={}",
-		(int)dordbg_was_executing, (uint)dordbg_home_id.base(),
-		(int)(dordbg_home_id != OrderListID::Invalid() && OrderList::GetIfValid(dordbg_home_id) != nullptr),
-		OrderListDescC(execute_home)));
 
 	if (v->IsOrderListShared()) {
 		/* Remove ourself from the shared order list. */
@@ -4830,9 +4757,6 @@ void DeleteVehicleOrders(Vehicle *v, bool keep_orderlist, bool reset_order_indic
 
 	/* Unbunching data is no longer valid. */
 	v->ResetDepotUnbunching();
-
-	OrderDbgF(v->index.base(), 1, fmt::format("DELORD done branch={} orders-after={} primary={}",
-		dordbg_branch, OrderListDescC(v->orders), (uint)v->primary_order.base()));
 
 	if (v->orders == nullptr) {
 		/* No orders left: the vehicle has no primary order list either. */
@@ -5481,14 +5405,9 @@ void Vehicle::ReturnFromExecuteSchedule()
 {
 	OrderList *home = OrderList::GetIfValid(this->primary_order);
 	OrderList *target = this->orders;
-	OrderDbgF(this->index.base(), 9, fmt::format("RETURN #{}: home={} (n={}) target={} resume_idx={}",
-		this->index.base(), (uint)this->primary_order.base(), home != nullptr ? (int)home->GetNumOrders() : -1,
-		target != nullptr ? (int)target->index.base() : -1, (int)this->primary_order_index));
 	if (home == nullptr || home == target) {
 		/* The home list is gone (its deletion should have handled this):
 		 * adopt the list we are on as the new home. */
-		OrderDbgF(this->index.base(), 9, fmt::format("RETURN #{} ADOPTS the executed list as home ({})",
-			this->index.base(), home == nullptr ? "home GONE" : "home == target"));
 		this->primary_order = target->index;
 		this->primary_order_index = INVALID_VEH_ORDER_ID;
 		return;
@@ -5497,8 +5416,6 @@ void Vehicle::ReturnFromExecuteSchedule()
 	if (home->GetNumOrders() == 0) {
 		/* Nothing to resume into: keep executing the target list until the
 		 * home list has orders again. */
-		OrderDbgF(this->index.base(), 9, fmt::format("RETURN #{} STUCK: home {} has 0 orders, keeps running {}",
-			this->index.base(), (uint)home->index.base(), (uint)target->index.base()));
 		return;
 	}
 
@@ -5520,8 +5437,6 @@ void Vehicle::ReturnFromExecuteSchedule()
 	/* Resume where we left the home list when we jumped away. */
 	VehicleOrderID resume = this->primary_order_index;
 	if (resume == INVALID_VEH_ORDER_ID || resume >= home->GetNumOrders()) resume = 0;
-	OrderDbgF(this->index.base(), 9, fmt::format("RETURN #{} -> home {} at resume={} (raw_idx={} home_n={})",
-		this->index.base(), (uint)home->index.base(), (int)resume, (int)this->primary_order_index, (int)home->GetNumOrders()));
 	this->primary_order_index = INVALID_VEH_ORDER_ID;
 	this->primary_order = home->index;
 	this->cur_implicit_order_index = resume;
@@ -5688,10 +5603,6 @@ bool UpdateOrderDest(Vehicle *v, const Order *order, int conditional_depth, bool
 			assert(!pbs_look_ahead);
 			{
 				OrderList *target = OrderList::GetIfValid(order->GetDestination().ToOrderListID());
-				OrderDbgF(v->index.base(), 12, fmt::format("XSEQ #{}: orders={} primary={} idx={} executing={} target={}",
-					v->index.base(), v->orders != nullptr ? (int)v->orders->index.base() : -1,
-					(int)v->primary_order.base(), (int)v->primary_order_index, (int)v->IsExecutingSchedule(),
-					target != nullptr ? (int)target->index.base() : -1));
 				if (target != nullptr && target != v->orders && target->IsPlayerCreated() && target->IsVisibleToCompany(v->owner)) {
 					/* Execute the target order list: switch this vehicle to it (shared list).
 					 * The primary order list is kept as-is; after one full pass of the
@@ -5710,11 +5621,7 @@ bool UpdateOrderDest(Vehicle *v, const Order *order, int conditional_depth, bool
 						v->IncrementRealOrderIndex();
 						v->primary_order = home->index;
 						v->primary_order_index = v->cur_real_order_index;
-						OrderDbgF(v->index.base(), 12, fmt::format("XSEQ #{}: recorded home={} resume={}",
-							v->index.base(), (int)home->index.base(), (int)v->primary_order_index));
 					} else {
-						OrderDbgF(v->index.base(), 12, fmt::format("XSEQ #{}: ALREADY executing, kept primary={} idx={}",
-							v->index.base(), (int)v->primary_order.base(), (int)v->primary_order_index));
 					}
 
 					/* Remember the home list's dispatch/separation state if it is not
