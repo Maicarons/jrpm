@@ -178,6 +178,7 @@ enum SlXvFeatureIndex {
 	XSLFI_DRIVE_BACKWARDS,                        ///< See: SLV_DRIVE_BACKWARDS (PR#15379)
 	XSLFI_TRAIN_SERVICE_AT_STATION,              ///< Trains can be serviced at stations
 	XSLFI_TRAIN_NO_DEPOT_TEMPORARY_STOP,        ///< Trains do not temporarily stop in / route through depots
+	XSLFI_DOUBLE_ENDED_SHIPS,                     ///< See: SLV_DOUBLE_ENDED_SHIPS (PR#16002)
 
 	XSLFI_PR_13745_APPLIED,                       ///< Tag to indicate that the fix in PR #13745 has been already applied
 	XSLFI_SIGNAL_STATE_FIX,                       ///< Tag for signal state fixes

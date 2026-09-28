@@ -443,7 +443,7 @@ void Train::ConsistChanged(ConsistChangeFlags allowed_changes)
 		uint16_t new_cap = e_u->DetermineCapacity(u);
 		if (allowed_changes.Test(ConsistChangeFlag::Capacity)) {
 			/* Update vehicle capacity. */
-			if (u->cargo_cap > new_cap) u->cargo.Truncate(new_cap);
+			if (u->cargo.TotalCount() > new_cap) u->cargo.Truncate(u->cargo.TotalCount() - new_cap);
 			u->refit_cap = std::min(new_cap, u->refit_cap);
 			u->cargo_cap = new_cap;
 		} else {
@@ -1734,6 +1734,7 @@ static CommandCost CmdBuildRailWagon(TileIndex tile, DoCommandFlags flags, const
 		v->refit_cap = 0;
 
 		v->railtypes = rvi->railtypes;
+		v->flags.Set(VehicleRailFlag::AllowedOnNormalRail, _settings_game.vehicle.disable_elrails && rvi->intended_railtypes.Test(RAILTYPE_ELECTRIC));
 
 		v->date_of_last_service = EconTime::CurDate();
 		v->date_of_last_service_newgrf = CalTime::CurDate();
@@ -1831,6 +1832,7 @@ static void AddRearEngineToMultiheadedTrain(Train *v)
 	u->cargo_cap = v->cargo_cap;
 	u->refit_cap = v->refit_cap;
 	u->railtypes = v->railtypes;
+	u->flags.Set(VehicleRailFlag::AllowedOnNormalRail, _settings_game.vehicle.disable_elrails && RailVehInfo(v->engine_type)->intended_railtypes.Test(RAILTYPE_ELECTRIC));
 	u->engine_type = v->engine_type;
 	u->reliability = v->reliability;
 	u->reliability_spd_dec = v->reliability_spd_dec;
@@ -1905,6 +1907,7 @@ CommandCost CmdBuildRailVehicle(TileIndex tile, DoCommandFlags flags, const Engi
 		v->max_age = e->GetLifeLengthInDays();
 
 		v->railtypes = rvi->railtypes;
+		v->flags.Set(VehicleRailFlag::AllowedOnNormalRail, _settings_game.vehicle.disable_elrails && rvi->intended_railtypes.Test(RAILTYPE_ELECTRIC));
 
 		v->SetServiceInterval(Company::Get(_current_company)->settings.vehicle.servint_trains);
 		v->date_of_last_service = EconTime::CurDate();
@@ -7292,9 +7295,26 @@ static uint TrainCrashed(Train *v)
 		Game::NewEvent(new ScriptEventVehicleCrashed(v->index, tile, ScriptEventVehicleCrashed::CRASH_TRAIN, victims, v->owner));
 	}
 
+	return victims;
+}
+
+/**
+ * Marks trains as crashed and creates an script events.
+ * @param v First vehicle of first consist.
+ * @param u First vehicle of second consist.
+ * @return The number of victims (including 4 drivers; 2 for each train that has not previously crashed).
+ */
+static uint TrainsCrashed(Train *v, Train *u)
+{
+	/* Crash both trains. Two statements required to guarantee execution
+	 * order because RandomRange() is involved. */
+	uint victims = TrainCrashed(v);
+	victims += TrainCrashed(u);
+
 	/* Try to re-reserve track under already crashed train too.
-	 * Crash() clears the reservation! */
+	 * Crash() in TrainCrashed() clears the reservation! */
 	v->ReserveTrackUnderConsist();
+	u->ReserveTrackUnderConsist();
 
 	return victims;
 }
@@ -7363,10 +7383,7 @@ static uint CheckTrainCollision(Train *v, Train *moving_front)
 	 * so this is still not a crash (same semantics as the vanilla check). */
 	if (dist_sq >= min_diff * min_diff) return 0;
 
-	/* Crash both trains. Two statements required to guarantee execution
-	 * order because RandomRange() is involved. */
-	uint num_victims = TrainCrashed(moving_front->First());
-	return num_victims + TrainCrashed(v->First());
+	return TrainsCrashed(moving_front->First(), v->First());
 }
 
 /**

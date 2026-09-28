@@ -600,6 +600,7 @@ STR_NEWS_MENU_DELETE_ALL_MESSAGES                               :Διαγραφ�
 # About menu
 STR_ABOUT_MENU_LAND_BLOCK_INFO                                  :Πληροφορίες περιοχής εδάφους
 STR_ABOUT_MENU_HELP                                             :Βοήθεια και εγχειρίδια χρήσης
+STR_ABOUT_MENU_ENTER_SCREENSAVER_MODE                           :Εναλλαγή λειτουργίας προφύλαξης οθόνης
 STR_ABOUT_MENU_TOGGLE_CONSOLE                                   :Εναλλαγή κονσόλας
 STR_ABOUT_MENU_AI_DEBUG                                         :Αποσφαλμάτωση AI και δέσμης ενεργειών παιχνιδιού
 STR_ABOUT_MENU_SCREENSHOT                                       :Στιγμιότυπο οθόνης
@@ -1310,9 +1311,9 @@ STR_RIVERS_MODERATE                                             :Μεσαία
 STR_RIVERS_LOT                                                  :Πολλά
 
 ###length 3
-STR_DISASTER_NONE                                               :Καμία
-STR_DISASTER_REDUCED                                            :Μειωμένες
-STR_DISASTER_NORMAL                                             :Κανονικές
+STR_BREAKDOWNS_NONE                                             :Καμία
+STR_BREAKDOWNS_REDUCED                                          :Μειωμένες
+STR_BREAKDOWNS_NORMAL                                           :Κανονικές
 
 ###length 4
 STR_SUBSIDY_X1_5                                                :x1.5
@@ -3194,6 +3195,7 @@ STR_TREES_MODE_FOREST_LG_TOOLTIP                                :{BLACK}Φυτέ
 # Land generation window (SE)
 STR_TERRAFORM_TOOLBAR_LAND_GENERATION_CAPTION                   :{WHITE}Δημιουργία Εδάφους
 STR_TERRAFORM_TOOLTIP_PLACE_ROCKY_AREAS_ON_LANDSCAPE            :{BLACK}Τοποθέτηση πετρωδών περιοχών στο τοπίο.{}Ctrl+Click για αφαίρεση πετρωδών περιοχών
+STR_TERRAFORM_TOOLTIP_PLACE_ROUGH_AREAS_ON_LANDSCAPE            :{BLACK}Τοποθέτηση τραχιών περιοχών στο τοπίο.{}Ctrl+Κλικ για να αφαιρέσετε τραχιές περιοχές
 STR_TERRAFORM_TOOLTIP_DEFINE_DESERT_AREA                        :{BLACK}Ορίστε περιοχή ερήμου.{}Ctrl+Κλικ για αφαίρεση περιοχής ερήμου
 STR_TERRAFORM_TOOLTIP_INCREASE_SIZE_OF_LAND_AREA                :{BLACK}Αύξηση περιοχής για χαμήλωμα/ανύψωση εδάφους
 STR_TERRAFORM_TOOLTIP_DECREASE_SIZE_OF_LAND_AREA                :{BLACK}Μείωση περιοχής για χαμήλωμα/ανύψωση εδάφους
@@ -3379,6 +3381,8 @@ STR_LAI_WATER_DESCRIPTION_LOCK                                  :Κλείδωμ�
 STR_LAI_WATER_DESCRIPTION_RIVER                                 :Ποτάμι
 STR_LAI_WATER_DESCRIPTION_COAST_OR_RIVERBANK                    :Ακτή ή όχθη ποταμού
 STR_LAI_WATER_DESCRIPTION_SHIP_DEPOT                            :Ναυπηγείο πλοίων
+STR_LAI_WATER_DESCRIPTION_WATER_ROCKS                           :Πέτρες
+STR_LAI_WATER_DESCRIPTION_COAST_ROCKS                           :Ακτή ή όχθη ποταμού με πέτρες
 
 # Industries come directly from their industry names
 
@@ -3492,6 +3496,9 @@ STR_SAVELOAD_LOAD_BUTTON                                        :{BLACK}Φόρτ
 STR_SAVELOAD_LOAD_TOOLTIP                                       :{BLACK}Φόρτωση του επιλεγμένου παιχνιδιού
 STR_SAVELOAD_LOAD_HEIGHTMAP_TOOLTIP                             :{BLACK}Φόρτωση του επιλεγμένου χάρτη υψομετρίας
 STR_SAVELOAD_LOAD_TOWN_DATA_TOOLTIP                             :{BLACK}Φόρτωση των δεδομένων της επιλεγμένης πόλης
+STR_SAVELOAD_NEW_DIRECTORY_BUTTON                               :{BLACK}Nέος φάκελος
+STR_SAVELOAD_NEW_DIRECTORY_TOOLTIP                              :{BLACK}Δημιουργήστε έναν νέο φάκελο στην τρέχουσα τοποθεσία
+STR_SAVELOAD_NEW_DIRECTORY_QUERY_CAPTION                        :{WHITE}Εισαγάγετε ένα όνομα για το νέο φάκελο
 STR_SAVELOAD_DETAIL_CAPTION                                     :{BLACK}Λεπτομέρειες Παιχνιδιού
 STR_SAVELOAD_DETAIL_NOT_AVAILABLE                               :{BLACK}Δεν υπάρχουν πληροφορίες.
 STR_SAVELOAD_DETAIL_COMPANY_INDEX                               :{SILVER}{COMMA}: {WHITE}{STRING}
@@ -4824,9 +4831,9 @@ STR_ORDER_DROP_FULL_LOAD_ANY                                    :Πλήρης φ
 STR_ORDER_DROP_NO_LOADING                                       :Δίχως φόρτωση
 STR_ORDER_TOOLTIP_FULL_LOAD                                     :{BLACK}Αλλάξτε τη συμπεριφορά φόρτωσης για την επιλεγμένη εντολή
 
-STR_ORDER_TOGGLE_UNLOAD                                         :{BLACK}Ξεφόρτωμα όλων
+STR_ORDER_TOGGLE_UNLOAD                                         :{BLACK}Αναγκαστικό ξεφόρτωμα όλων
 STR_ORDER_DROP_UNLOAD_IF_ACCEPTED                               :Ξεφόρτωμα εάν είναι αποδεκτά
-STR_ORDER_DROP_UNLOAD                                           :Ξεφόρτωμα όλων
+STR_ORDER_DROP_UNLOAD                                           :Αναγκαστικό ξεφόρτωμα όλων ακόμη και αν το φορτίο δεν είναι αποδεκτό
 STR_ORDER_DROP_TRANSFER                                         :Μεταφορά
 STR_ORDER_DROP_NO_UNLOADING                                     :Δίχως ξεφόρτωση
 STR_ORDER_TOOLTIP_UNLOAD                                        :{BLACK}Αλλάξτε τη συμπεριφορά ξεφόρτωσης για την επιλεγμένη εντολή
@@ -4929,10 +4936,10 @@ STR_ORDER_IMPLICIT                                              :{SPACE}(υπο�
 STR_ORDER_FULL_LOAD                                             :{SPACE}(Πλήρης φόρτωση)
 STR_ORDER_FULL_LOAD_ANY                                         :{SPACE}(Πλήρης φόρτωση οποιουδήποτε εμπορεύματος)
 STR_ORDER_NO_LOAD                                               :{SPACE}(Χωρίς φόρτωση)
-STR_ORDER_UNLOAD                                                :{SPACE}(Ξεφόρτωσε και πάρε φορτίο)
-STR_ORDER_UNLOAD_FULL_LOAD                                      :{SPACE}(Ξεφόρτωμα και αναμονή για πλήρη φόρτωση)
-STR_ORDER_UNLOAD_FULL_LOAD_ANY                                  :{SPACE}(Ξεφόρτωμα και αναμονή για πλήρη φόρτωση οποιουδήποτε)
-STR_ORDER_UNLOAD_NO_LOAD                                        :{SPACE}(Ξεφόρτωμα και φύγε άδειο)
+STR_ORDER_UNLOAD                                                :{SPACE}(Ξεφόρτωσε αναγκαστικά και πάρε φορτίο)
+STR_ORDER_UNLOAD_FULL_LOAD                                      :{SPACE}(Αναγκαστικό ξεφόρτωμα και αναμονή για πλήρη φόρτωση)
+STR_ORDER_UNLOAD_FULL_LOAD_ANY                                  :{SPACE}(Αναγκαστικό ξεφόρτωμα και αναμονή για πλήρη φόρτωση οποιουδήποτε)
+STR_ORDER_UNLOAD_NO_LOAD                                        :{SPACE}(Αναγκαστικό ξεφόρτωμα και φύγε άδειο)
 STR_ORDER_TRANSFER                                              :{SPACE}(Μεταφορά και πάρε φορτίο)
 STR_ORDER_TRANSFER_FULL_LOAD                                    :{SPACE}(Μεταφορά και αναμονή για πλήρης φόρτωση)
 STR_ORDER_TRANSFER_FULL_LOAD_ANY                                :{SPACE}(Μεταφορά και αναμονή για πλήρης φόρτωση οποιοδήποτε φορτίου)
@@ -4945,9 +4952,9 @@ STR_ORDER_NO_UNLOAD_NO_LOAD                                     :{SPACE}(Χωρ�
 STR_ORDER_AUTO_REFIT                                            :{SPACE}(Αυτόματη μετατροπή σε {STRING})
 STR_ORDER_FULL_LOAD_REFIT                                       :{SPACE}(Πλήρης φόρτωση με αυτόματη μετατροπή σε {STRING})
 STR_ORDER_FULL_LOAD_ANY_REFIT                                   :{SPACE}(Πλήρης φόρτωση οποιουδήποτε φορτίου με αυτόματη μετατροπή σε {STRING})
-STR_ORDER_UNLOAD_REFIT                                          :{SPACE}(Εκφόρτωση και λήψη φορτίου με αυτόματη μετατροπή σε {STRING})
-STR_ORDER_UNLOAD_FULL_LOAD_REFIT                                :{SPACE}(Εκφόρτωση και αναμονή πλήρους φόρτωσης με αυτόματη μετατροπή σε {STRING})
-STR_ORDER_UNLOAD_FULL_LOAD_ANY_REFIT                            :{SPACE}(Εκφόρτωση και αναμονή οποιασδήποτε πλήρους φόρτωσης με αυτόματη μετατροπή σε {STRING})
+STR_ORDER_UNLOAD_REFIT                                          :{SPACE}(Αναγκαστικό ξεφόρτωμα και λήψη φορτίου με αυτόματη μετατροπή σε {STRING})
+STR_ORDER_UNLOAD_FULL_LOAD_REFIT                                :{SPACE}(Αναγκαστικό ξεφόρτωμα και αναμονή πλήρους φόρτωσης με αυτόματη μετατροπή σε {STRING})
+STR_ORDER_UNLOAD_FULL_LOAD_ANY_REFIT                            :{SPACE}(Αναγκαστικό ξεφόρτωμα και αναμονή οποιασδήποτε πλήρους φόρτωσης με αυτόματη μετατροπή σε {STRING})
 STR_ORDER_TRANSFER_REFIT                                        :{SPACE}(Μεταφορά και λήψη φορτίου με αυτόματη μετατροπή σε {STRING})
 STR_ORDER_TRANSFER_FULL_LOAD_REFIT                              :{SPACE}(Μεταφορά και αναμονή πλήρους φόρτωσης με αυτόματη μετατροπή σε {STRING})
 STR_ORDER_TRANSFER_FULL_LOAD_ANY_REFIT                          :{SPACE}(Μεταφορά και αναμονή οποιασδήποτε πλήρους φόρτωσης με αυτόματη μετατροπή σε {STRING})
@@ -5166,6 +5173,11 @@ STR_ERROR_AUTOSAVE_FAILED                                       :Η αυτόμα
 STR_ERROR_UNABLE_TO_READ_DRIVE                                  :{BLACK}Αδύνατη η ανάγνωση του δίσκου
 STR_ERROR_GAME_SAVE_FAILED                                      :Η αποθήκευση του παιχνιδιού απέτυχε...
 STR_ERROR_UNABLE_TO_DELETE_FILE                                 :Αδύνατη η διαγραφή του αρχείου
+STR_ERROR_CANNOT_CREATE_DIRECTORY                               :Δεν είναι δυνατή η δημιουργία φακέλου...
+STR_ERROR_DIRECTORY_NAME_IN_USE                                 :Υπάρχει ήδη ένα αρχείο ή φάκελος με αυτό το όνομα
+STR_ERROR_DIRECTORY_ILLEGAL_NAME                                :Το όνομα φακέλου δεν μπορεί να περιέχει ειδικούς χαρακτήρες
+STR_ERROR_DIRECTORY_LEADING_DOT                                 :Το όνομα του φακέλου δεν μπορεί να ξεκινά με τελεία
+STR_ERROR_DIRECTORY_PERMISSION_DENIED                           :Δεν έχετε άδεια να δημιουργήσετε φάκελο εδώ
 STR_ERROR_GAME_LOAD_FAILED                                      :Απέτυχε η φόρτωση του παιχνιδιού...
 STR_GAME_SAVELOAD_ERROR_BROKEN_INTERNAL_ERROR                   :Εσωτερικό λάθος: {STRING}
 STR_GAME_SAVELOAD_ERROR_BROKEN_SAVEGAME                         :Χαλασμένο αποθηκευμένο παιχνίδι - {STRING}

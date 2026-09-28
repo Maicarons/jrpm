@@ -20,18 +20,33 @@ struct BaseLabel : std::array<uint8_t, 4> {
 	 */
 	constexpr inline bool Empty() const
 	{
-		return std::ranges::all_of(*this, [](uint8_t b) { return b == 0; });
+		for (uint8_t b : *this) {
+			if (b != 0) return false;
+		}
+		return true;
 	};
 
 	/**
 	 * Get the label as a \c std::string.
-	 * If the label is all \c std::isgraph characters, it will return these characters as string,
+	 * If the label is all \c std::isgraph characters and format_hex is false, it will return these characters as string,
 	 * otherwise it will format it as a 8-digit hexadecimal.
+	 * @param format_hex Always format as hex.
 	 * @return The label as string.
 	 */
-	std::string AsString() const;
+	std::string AsString(bool format_hex = false) const;
 
-	void fmt_format_value(struct format_target &output) const;
+	void fmt_format_value(struct format_target &output, bool format_hex = false) const;
+
+	template <typename H>
+	size_t hash(H hasher) const noexcept
+	{
+		return hasher.hash_bytes(this->data(), this->size());
+	}
+};
+
+template <typename Tag>
+struct LabelFormatAsHex {
+	static constexpr bool value = false;
 };
 
 /**
@@ -43,7 +58,7 @@ struct Label : BaseLabel {
 	/** Create an empty label, i.e. all zeros. */
 	constexpr Label()
 	{
-		std::ranges::fill(*this, 0);
+		this->fill(0);
 	}
 
 	/**
@@ -80,6 +95,16 @@ struct Label : BaseLabel {
 	 * @return The comparison ordering.
 	 */
 	constexpr std::strong_ordering operator<=>(const Label<Tag> &other) const = default;
+
+	inline std::string AsString() const
+	{
+		return this->BaseLabel::AsString(LabelFormatAsHex<Tag>::value);
+	}
+
+	inline void fmt_format_value(struct format_target &output) const
+	{
+		this->BaseLabel::fmt_format_value(output, LabelFormatAsHex<Tag>::value);
+	}
 };
 
 #endif /* LABEL_TYPE_HPP */

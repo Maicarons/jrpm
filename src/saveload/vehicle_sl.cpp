@@ -62,10 +62,10 @@ public:
 		SLE_CONDVAR(Vehicle, dest_tile, VarFileType::U16 | VarMemType::U32, SaveLoadVersion::MinVersion, SaveLoadVersion::MultipleRoadStops),
 		SLE_CONDVAR(Vehicle, dest_tile, VarTypes::U32, SaveLoadVersion::MultipleRoadStops, SaveLoadVersion::MaxVersion),
 
-		SLE_CONDVAR(Vehicle, x_pos, VarFileType::U16 | VarMemType::U32, SaveLoadVersion::MinVersion, SaveLoadVersion::MultipleRoadStops),
-		SLE_CONDVAR(Vehicle, x_pos, VarTypes::U32, SaveLoadVersion::MultipleRoadStops, SaveLoadVersion::MaxVersion),
-		SLE_CONDVAR(Vehicle, y_pos, VarFileType::U16 | VarMemType::U32, SaveLoadVersion::MinVersion, SaveLoadVersion::MultipleRoadStops),
-		SLE_CONDVAR(Vehicle, y_pos, VarTypes::U32, SaveLoadVersion::MultipleRoadStops, SaveLoadVersion::MaxVersion),
+		SLE_CONDVAR(Vehicle, x_pos, VarFileType::U16 | VarMemType::I32, SaveLoadVersion::MinVersion, SaveLoadVersion::MultipleRoadStops),
+		SLE_CONDVAR(Vehicle, x_pos, VarFileType::U32 | VarMemType::I32, SaveLoadVersion::MultipleRoadStops, SaveLoadVersion::MaxVersion),
+		SLE_CONDVAR(Vehicle, y_pos, VarFileType::U16 | VarMemType::I32, SaveLoadVersion::MinVersion, SaveLoadVersion::MultipleRoadStops),
+		SLE_CONDVAR(Vehicle, y_pos, VarFileType::U32 | VarMemType::I32, SaveLoadVersion::MultipleRoadStops, SaveLoadVersion::MaxVersion),
 		SLE_CONDVAR(Vehicle, z_pos, VarFileType::U8 | VarMemType::I32, SaveLoadVersion::MinVersion, SaveLoadVersion::VehicleCentreAndZPos),
 		SLE_CONDVAR(Vehicle, z_pos, VarTypes::I32, SaveLoadVersion::VehicleCentreAndZPos, SaveLoadVersion::MaxVersion),
 		    SLE_VAR(Vehicle, direction,             VarTypes::U8),
@@ -369,6 +369,7 @@ public:
 		SLEG_CONDVECTOR("path", _path_td, VarTypes::U8, SaveLoadVersion::ShipPathCache, SaveLoadVersion::PathCacheFormat),
 		SLEG_CONDSTRUCTLIST("path", SlVehicleShipPath, SaveLoadVersion::PathCacheFormat, SaveLoadVersion::MaxVersion),
 		 SLE_CONDVAR(Ship, rotation, VarTypes::U8, SaveLoadVersion::ShipRotation, SaveLoadVersion::MaxVersion),
+		     SLE_VAR(Ship, flags, VarTypes::U8),
 	};
 	static inline const SaveLoadCompatTable compat_description = _vehicle_ship_sl_compat;
 

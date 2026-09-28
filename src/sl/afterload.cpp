@@ -442,11 +442,11 @@ static void CDECL HandleSavegameLoadCrash(int signum)
 		for (const auto &c : _grfconfig) {
 			if (c->flags.Test(GRFConfigFlag::Compatible)) {
 				const GRFIdentifier &replaced = GetOverriddenIdentifier(*c);
-				buffer.format("NewGRF {:08X} (checksum {}) not found.\n  Loaded NewGRF \"{}\" (checksum {}) with same GRF ID instead.\n",
-						std::byteswap(c->ident.grfid), c->original_md5sum, c->filename, replaced.md5sum);
+				buffer.format("NewGRF {} (checksum {}) not found.\n  Loaded NewGRF \"{}\" (checksum {}) with same GRF ID instead.\n",
+						c->ident.grfid, c->original_md5sum, c->filename, replaced.md5sum);
 			}
 			if (c->status == GRFStatus::NotFound) {
-				buffer.format("NewGRF {:08X} ({}) not found; checksum {}.\n", std::byteswap(c->ident.grfid), c->filename, c->ident.md5sum);
+				buffer.format("NewGRF {} ({}) not found; checksum {}.\n", c->ident.grfid, c->filename, c->ident.md5sum);
 			}
 		}
 	} else {
@@ -1595,17 +1595,17 @@ bool AfterLoadGame()
 		for (RoadType rt : EnumRange(ROADTYPE_END)) {
 			const RoadTypeInfo *rti = GetRoadTypeInfo(rt);
 			if (RoadTypeIsRoad(rt)) {
-				if (rti->label == 'ROAD') {
+				if (rti->label == RoadTypeLabel{"ROAD"}) {
 					road_types[0] = rt;
-				} else if (rti->label == 'ELRD') {
+				} else if (rti->label == RoadTypeLabel{"ELRD"}) {
 					road_types[1] = rt;
 				} else if (next_road_type < 31) {
 					road_types[next_road_type++] = rt;
 				}
 			} else {
-				if (rti->label == 'RAIL') {
+				if (rti->label == RoadTypeLabel{"RAIL"}) {
 					tram_types[0] = rt;
-				} else if (rti->label == 'ELRL') {
+				} else if (rti->label == RoadTypeLabel{"ELRL"}) {
 					tram_types[1] = rt;
 				} else if (next_tram_type < 31) {
 					tram_types[next_tram_type++] = rt;
@@ -3484,6 +3484,9 @@ bool AfterLoadGame()
 				u->direction = ReverseDir(u->direction);
 			}
 		}
+		for (Vehicle *v : Vehicle::Iterate()) {
+			v->vehicle_flags.Reset(VehicleFlag::DrivingBackwards);
+		}
 
 		/* Update the setting for train flipping. */
 		_settings_game.difficulty.train_flip_reverse_allowed = _settings_game.difficulty.line_reverse_mode ? TrainFlipReversingAllowed::EndOfLineOnly : TrainFlipReversingAllowed::All;
@@ -3537,7 +3540,7 @@ bool AfterLoadGame()
 	}
 	if (!SlXvIsFeaturePresent(XSLFI_IMPROVED_BREAKDOWNS, 3)) {
 		for (Vehicle *v : Vehicle::Iterate()) {
-			switch(v->type) {
+			switch (v->type) {
 				case VehicleType::Train:
 				case VehicleType::Road:
 					v->breakdown_chance_factor = 128;
@@ -3558,16 +3561,9 @@ bool AfterLoadGame()
 		}
 	}
 	if (!SlXvIsFeaturePresent(XSLFI_IMPROVED_BREAKDOWNS, 4)) {
-		for (Vehicle *v : Vehicle::Iterate()) {
-			switch(v->type) {
-				case VehicleType::Aircraft:
-					if (v->breakdown_type == BREAKDOWN_AIRCRAFT_SPEED && v->breakdown_severity == 0) {
-						v->breakdown_severity = std::max(1, std::min(v->vcache.cached_max_speed >> 4, 255));
-					}
-					break;
-
-				default:
-					break;
+		for (Aircraft *v : Aircraft::Iterate()) {
+			if (v->breakdown_type == BREAKDOWN_AIRCRAFT_SPEED && v->breakdown_severity == 0) {
+				v->breakdown_severity = std::max(1, std::min(v->vcache.cached_max_speed >> 4, 255));
 			}
 		}
 	}

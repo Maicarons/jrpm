@@ -5,21 +5,12 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file newgrf_type.h Commonly used types for the NewGRF implementation. */
+/** @file screensaver.h Exports a function to turn on and off a screensaver mode. */
 
-#ifndef NEWGRF_TYPE_H
-#define NEWGRF_TYPE_H
+#ifndef SCREENSAVER_H
+#define SCREENSAVER_H
 
-#include "core/label_type.hpp"
+void ExitScreensaverMode();
+void ToggleScreensaverMode();
 
-struct GRFConfig;
-
-using GrfID = Label<struct GrfIDTag>; ///< The unique identifier of a NewGRF.
-
-template <> struct LabelFormatAsHex<struct GrfIDTag> {
-	static constexpr bool value = true;
-};
-
-static const GrfID INVALID_GRFID{"\xFF\xFF\xFF\xFF"}; ///< An invalid NewGRF.
-
-#endif /* NEWGRF_TYPE_H */
+#endif /* SCREENSAVER_H */

@@ -430,7 +430,8 @@ enum SaveLoadVersion : uint16_t {
 	SLV_ORDER_DECOUPLE,                     ///< 368  Couple/decouple train orders.
 
 	/* Upstream load only */
-	SLV_LABEL_ORIENTATION_UNIFICATION,      ///< 367  PR#15888 Unify the orientation in which labels are written.
+	SLV_LABEL_ORIENTATION_UNIFICATION,      ///< 369 (upstream 367) PR#15888 Unify the orientation in which labels are written.
+	SLV_DOUBLE_ENDED_SHIPS,                 ///< 370 (upstream 368) PR#16002 Double-ended (NewGRF-only) ships can reverse without turning.
 
 	SL_MAX_VERSION,                         ///< Highest possible saveload version
 
@@ -461,9 +462,7 @@ enum SaveLoadVersion : uint16_t {
 
 static constexpr SaveLoadVersion SAVEGAME_VERSION = SLV_CUSTOM_SUBSIDY_DURATION;                    ///< Current savegame version of OpenTTD.
 static constexpr SaveLoadVersion MAX_LOAD_SAVEGAME_VERSION = (SaveLoadVersion)(SL_MAX_VERSION - 1); ///< Max loadable savegame version of OpenTTD.
-
-/* Temporary before label endianness changes, instead of MAX_LOAD_SAVEGAME_VERSION. */
-static constexpr SaveLoadVersion SL_UPSTREAM_VERSION = SLV_DEPOTS_UNDER_BRIDGES;                    ///< Savegame version to save/load in XSLFI_UPSTREAM_VERSION sub-chunk
+static constexpr SaveLoadVersion SL_UPSTREAM_VERSION = MAX_LOAD_SAVEGAME_VERSION;                   ///< Savegame version to save/load in XSLFI_UPSTREAM_VERSION sub-chunk
 
 uint8_t SlReadByte();
 void SlReadString(std::string &str, size_t length);

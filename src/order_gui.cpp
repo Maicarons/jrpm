@@ -47,6 +47,7 @@
 #include "core/backup_type.hpp"
 #include "core/string_consumer.hpp"
 #include "fios.h"
+#include "time_type.h"
 
 #include "widgets/order_widget.h"
 
@@ -1846,6 +1847,8 @@ private:
 	std::array<int, 4> current_aux_planes{};
 	int current_value_plane = 0;
 	int current_mgmt_plane = 0;
+	Point drag_start_pt{};         ///< Start point for order drags.
+	uint64_t drag_start_time_us{}; ///< Start time for order drags, from MicrosecondsRealtimeTicks().
 	int decouple_schedule_part = -1; ///< While the decouple schedule picker is open: 0 for the first train part, 1 for the second, -1 otherwise.
 	OrderDecoupleOrdersFlags decouple_schedule_orders_type = ODOF_EXECUTE_SCHEDULE; ///< Decouple orders type the open schedule picker applies.
 	OrderListID list_id = OrderListID::Invalid(); ///< Target list id when editing a standalone (player-created) order list.
@@ -3626,7 +3629,7 @@ public:
 		}
 	}
 
-	void OnClick([[maybe_unused]] Point pt, WidgetID widget, [[maybe_unused]] int click_count) override
+	void OnClick(Point pt, WidgetID widget, [[maybe_unused]] int click_count) override
 	{
 		switch (widget) {
 			case WID_O_ORDER_LIST: {
@@ -3666,6 +3669,8 @@ public:
 				if (sel == INVALID_VEH_ORDER_ID || !IsLocalTarget()) {
 					/* Deselect clicked order */
 					this->selected_order = -1;
+					this->UpdateButtonState();
+					return;
 				} else if (sel == this->selected_order) {
 					if (sel >= NumOrders()) {
 						this->UpdateButtonState();
@@ -3674,11 +3679,11 @@ public:
 
 					const Order *order = OrderAt(sel);
 
-					if (order->IsType(OT_LABEL) && order->GetLabelSubType() == OLST_TEXT) {
+					if (order->IsType(OT_LABEL) && order->GetLabelSubType() == OLST_TEXT && click_count > 1) {
 						if (this->IsWidgetActiveInLayout(WID_O_TEXT_LABEL)) this->OnClick({}, WID_O_TEXT_LABEL, click_count);
 						return;
 					}
-					if (this->RefType() == VehicleType::Train) {
+					if (this->RefType() == VehicleType::Train && order->IsType(OT_GOTO_STATION) && click_count > 1) {
 						OrderStopLocation osl = static_cast<OrderStopLocation>((to_underlying(order->GetStopLocation()) + 1) % to_underlying(OrderStopLocation::End));
 						if (osl == OrderStopLocation::Through && !_settings_client.gui.show_adv_load_mode_features) {
 							osl = OrderStopLocation::NearEnd;
@@ -3693,26 +3698,30 @@ public:
 							}
 						}
 						this->ModifyOrder(sel, MOF_STOP_LOCATION, to_underlying(osl));
+						return;
 					}
-					if (this->HasVehicle() && this->vehicle->type == VehicleType::Road) {
+					if (this->HasVehicle() && this->vehicle->type == VehicleType::Road && (order->IsType(OT_GOTO_STATION) || order->IsType(OT_GOTO_WAYPOINT)) && click_count > 1) {
 						DiagDirection current = order->GetRoadVehTravelDirection();
 						if (_settings_client.gui.show_adv_load_mode_features || current != DiagDirection::Invalid) {
 							uint dir = (to_underlying(current) + 1) & 0xFF;
 							if (dir >= to_underlying(DiagDirection::End)) dir = to_underlying(DiagDirection::Invalid);
 							this->ModifyOrder(sel, MOF_RV_TRAVEL_DIR, dir);
+							return;
 						}
 					}
 				} else {
 					/* Select clicked order */
 					this->selected_order = sel;
-
-					if (IsLocalTarget()) {
-						/* Activate drag and drop */
-						SetObjectToPlaceWnd(SPR_CURSOR_MOUSE, PAL_NONE, HT_DRAG, this);
-					}
+					this->UpdateButtonState();
 				}
 
-				this->UpdateButtonState();
+				if (IsLocalTarget()) {
+					/* Activate drag and drop */
+					this->drag_start_pt = pt;
+					this->drag_start_time_us = MicrosecondsRealtimeTicks();
+					SetObjectToPlaceWnd(SPR_CURSOR_MOUSE, PAL_NONE, HT_DRAG, this);
+				}
+
 				break;
 			}
 
@@ -4028,7 +4037,7 @@ public:
 
 				int selected = (order->GetConditionValue() & GetBitMaskSC<uint16_t>(ODFLCB_TAG_START, ODFLCB_TAG_COUNT));
 				SB(selected, ODCB_MODE_START, ODCB_MODE_COUNT, OCDM_TAG);
-				ShowDropDownList(this, std::move(list), selected, WID_O_COND_SCHED_VALUE, 0, DropDownOptions{}, DDSF_SHARED);
+				if (!list.empty()) ShowDropDownList(this, std::move(list), selected, WID_O_COND_SCHED_VALUE, 0, DropDownOptions{}, DDSF_SHARED);
 				break;
 			}
 
@@ -4864,6 +4873,12 @@ public:
 						this->PostMove(from_order, to_order, 1)) {
 					this->selected_order = -1;
 					this->UpdateButtonState();
+				}
+				if (from_order == to_order && from_order < this->vehicle->GetNumOrders() && EuclideanDistanceSquared(pt, this->drag_start_pt) <= 40 && (MicrosecondsRealtimeTicks() - this->drag_start_time_us) < 250000) {
+					const Order *order = this->vehicle->GetOrder(from_order);
+					if (order != nullptr && order->IsType(OT_LABEL) && order->GetLabelSubType() == OLST_TEXT) {
+						if (this->IsWidgetActiveInLayout(WID_O_TEXT_LABEL)) this->OnClick({}, WID_O_TEXT_LABEL, 1);
+					}
 				}
 				break;
 			}

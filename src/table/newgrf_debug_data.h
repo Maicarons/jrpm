@@ -49,29 +49,17 @@ static InspectTargetId GetTownInspectTargetId(const Town *town)
 	return InspectTargetId(GrfSpecFeature::FakeTowns, town->index.base());
 }
 
-struct label_dumper : public NewGRFLabelDumper {
-	inline const char *RailTypeLabel(RailType rt)
-	{
-		return this->Label(GetRailTypeInfo(rt)->label);
-	}
-
-	inline const char *RoadTypeLabel(RoadType rt)
-	{
-		return this->Label(GetRoadTypeInfo(rt)->label);
-	}
-};
-
 static void DumpRailTypeList(NIExtraInfoOutput &output, const char *prefix, RailTypes rail_types, RailTypes mark = {})
 {
 	for (RailType rt : EnumRange(RAILTYPE_END)) {
 		if (!rail_types.Test(rt)) continue;
 		const RailTypeInfo *rti = GetRailTypeInfo(rt);
-		if (rti->label == 0) continue;
+		if (rti->label.Empty()) continue;
 
 		output.Print("{}{:02} {}{}",
 				prefix,
 				(uint)rt,
-				label_dumper().Label(rti->label),
+				rti->label,
 				mark.Test(rt) ? " !!!" : "");
 	}
 }
@@ -81,13 +69,13 @@ static void DumpRoadTypeList(NIExtraInfoOutput &output, const char *prefix, Road
 	for (RoadType rt : EnumRange(ROADTYPE_END)) {
 		if (!road_types.Test(rt)) continue;
 		const RoadTypeInfo *rti = GetRoadTypeInfo(rt);
-		if (rti->label == 0) continue;
+		if (rti->label.Empty()) continue;
 
 		output.Print("{}{:02} {} {}",
 				prefix,
 				(uint)rt,
 				RoadTypeIsTram(rt) ? "Tram" : "Road",
-				label_dumper().Label(rti->label));
+				rti->label);
 	}
 }
 
@@ -264,7 +252,7 @@ class NIHVehicle : public NIHelper {
 			const uint rt_count = CountBits(t->railtypes);
 			if (rt_count == 1) {
 				const RailType rt = *t->railtypes.begin();
-				output.buffer.format("{:02}, {}", rt, label_dumper().RailTypeLabel(rt));
+				output.buffer.format("{:02}, {}", rt, GetRailTypeInfo(rt)->label);
 			} else {
 				output.buffer.format("count: {}", rt_count);
 			}
@@ -421,7 +409,7 @@ class NIHVehicle : public NIHelper {
 
 			output.register_next_line_click_flag_toggle(8 << flag_shift);
 			output.Print("  [{}] Roadtype: {} ({}), Compatible: 0x{:X}",
-					(output.flags & (8 << flag_shift)) ? '-' : '+', rv->roadtype, label_dumper().RoadTypeLabel(rv->roadtype), rv->compatible_roadtypes);
+					(output.flags & (8 << flag_shift)) ? '-' : '+', rv->roadtype, GetRoadTypeInfo(rv->roadtype)->label, rv->compatible_roadtypes);
 			if (output.flags & (8 << flag_shift)) {
 				DumpRoadTypeList(output, "    ", rv->compatible_roadtypes);
 			}
@@ -447,6 +435,19 @@ class NIHVehicle : public NIHelper {
 				if (output.buffer.size() > 0) output.FinishPrint();
 			} else {
 				output.buffer.append("none");
+				output.FinishPrint();
+			}
+			{
+				output.buffer.append("  Ship flags: ");
+				bool first = true;
+				auto add_cb_flag = [&](VehicleShipFlag flag, const char *name) {
+					if (!s->flags.Test(flag)) return;
+					if (!first) output.buffer.append(", ");
+					output.buffer.append(name);
+					first = false;
+				};
+				add_cb_flag(VehicleShipFlag::SecondEndFacingForward, "SecondEndFacingForward");
+				if (first) output.buffer.append("[NONE]");
 				output.FinishPrint();
 			}
 		}
@@ -662,7 +663,7 @@ class NIHVehicle : public NIHelper {
 					const uint rt_count = CountBits(rts);
 					if (rt_count == 1) {
 						const RailType rt = *rts.begin();
-						output.buffer.format("{}, {}", rt, label_dumper().RailTypeLabel(rt));
+						output.buffer.format("{}, {}", rt, GetRailTypeInfo(rt)->label);
 					} else {
 						output.buffer.format("count: {}", rt_count);
 					}
@@ -680,7 +681,7 @@ class NIHVehicle : public NIHelper {
 					const RoadVehicleInfo &rvi = e->VehInfo<RoadVehicleInfo>();
 					const RoadTypeInfo *rti = GetRoadTypeInfo(rvi.roadtype);
 					output.Print("    [{}] Roadtype: {} ({}), Powered: 0x{:X}",
-							(output.flags & (16 << flag_shift)) ? '-' : '+', rvi.roadtype, label_dumper().RoadTypeLabel(rvi.roadtype), rti->powered_roadtypes);
+							(output.flags & (16 << flag_shift)) ? '-' : '+', rvi.roadtype, GetRoadTypeInfo(rvi.roadtype)->label, rti->powered_roadtypes);
 					if (output.flags & (16 << flag_shift)) {
 						DumpRoadTypeList(output, "      ", rti->powered_roadtypes);
 					}
@@ -705,12 +706,16 @@ class NIHVehicle : public NIHelper {
 					print_bit(ExtraEngineFlag::NoPreview,       "NoPreview");
 					print_bit(ExtraEngineFlag::JoinPreview,     "JoinPreview");
 					print_bit(ExtraEngineFlag::SyncReliability, "SyncReliability");
+					print_bit(ExtraEngineFlag::HasCab,          "HasCab");
+					print_bit(ExtraEngineFlag::IsDoubleEnded,   "IsDoubleEnded");
 				} else {
-					output.Print("    [+] Extra Engine Flags: {}{}{}{}",
+					output.Print("    [+] Extra Engine Flags: {}{}{}{}{}{}",
 							e->info.extra_flags.Test(ExtraEngineFlag::NoNews)          ? 'n' : '-',
 							e->info.extra_flags.Test(ExtraEngineFlag::NoPreview)       ? 'p' : '-',
 							e->info.extra_flags.Test(ExtraEngineFlag::JoinPreview)     ? 'j' : '-',
-							e->info.extra_flags.Test(ExtraEngineFlag::SyncReliability) ? 's' : '-');
+							e->info.extra_flags.Test(ExtraEngineFlag::SyncReliability) ? 's' : '-',
+							e->info.extra_flags.Test(ExtraEngineFlag::HasCab)          ? 'c' : '-',
+							e->info.extra_flags.Test(ExtraEngineFlag::IsDoubleEnded)   ? 'd' : '-');
 				}
 			}
 		}
@@ -799,7 +804,7 @@ class NIHStation : public NIHelper {
 		}
 
 		const StationClass *cls = StationClass::Get(statspec->class_index);
-		output.Print("Class ID: {}", label_dumper().Label(cls->global_id));
+		output.Print("Class ID: {}", cls->global_id);
 
 		for (size_t i = 0; i < statspec->renderdata.size(); i++) {
 			output.Print("Tile Layout {}:", i);
@@ -1208,16 +1213,16 @@ class NIHIndustry : public NIHelper {
 		return ro.GetScope(VarSpriteGroupScope::Self)->GetVariable(var, param, extra);
 	}
 
-	const std::span<int32_t> GetPSA(uint index, uint32_t) const override
+	const std::span<int32_t> GetPSA(uint index, GrfID) const override
 	{
 		const Industry *i = (const Industry *)this->GetInstance(index);
 		if (i->psa == nullptr) return {};
 		return i->psa->storage;
 	}
 
-	std::vector<uint32_t> GetPSAGRFIDs(uint index) const override
+	std::vector<GrfID> GetPSAGRFIDs(uint index) const override
 	{
-		return { 0 };
+		return { GrfID{} };
 	}
 
 	void ExtraInfo(uint index, NIExtraInfoOutput &output) const override
@@ -1354,7 +1359,7 @@ class NIHCargo : public NIHelper {
 		const CargoSpec *spec = CargoSpec::Get(index);
 		output.Print("  Bit: {:2}, Label: {}, Callback mask: 0x{:02X}",
 				spec->bitnum,
-				label_dumper().Label(spec->label.base()),
+				spec->label,
 				spec->callback_mask);
 
 		{
@@ -1625,8 +1630,8 @@ class NIHObject : public NIHelper {
 				output.buffer.format("  (local ID: {})", spec->grf_prop.local_id);
 			}
 			if (spec->class_index != ObjectClassID::Invalid()) {
-				uint class_id = ObjectClass::Get(spec->class_index)->global_id;
-				output.buffer.format(", class ID: {}", label_dumper().Label(class_id));
+				ObjectClass::GlobalID class_id = ObjectClass::Get(spec->class_index)->global_id;
+				output.buffer.format(", class ID: {}", class_id);
 			}
 			output.FinishPrint();
 
@@ -1710,14 +1715,13 @@ static const NIVariable _niv_railtypes[] = {
 	NIV(A2VRI_RAILTYPE_ADJACENT_CROSSING, "adjacent crossing"),
 };
 
-static void PrintTypeLabels(NIExtraInfoOutput &output, const char *prefix, uint32_t label, const uint32_t *alternate_labels, size_t alternate_labels_count)
+static void PrintAlternateLabels(NIExtraInfoOutput &output, const char *prefix, const BaseLabel *alternate_labels, size_t alternate_labels_count)
 {
 	if (alternate_labels_count > 0) {
 		output.buffer.format("{}Alternate labels: ", prefix);
 		for (size_t i = 0; i < alternate_labels_count; i++) {
 			if (i != 0) output.buffer.append(", ");
-			uint32_t l = alternate_labels[i];
-			output.buffer.append(label_dumper().Label(l));
+			alternate_labels[i].fmt_format_value(output.buffer);
 		}
 		output.FinishPrint();
 	}
@@ -1749,7 +1753,7 @@ class NIHRailType : public NIHelper {
 
 		auto writeRailType = [&](RailType type) {
 			const RailTypeInfo *info = GetRailTypeInfo(type);
-			output.Print("  Type: {} ({})", type, label_dumper().RailTypeLabel(type));
+			output.Print("  Type: {} ({})", type, info->label);
 			output.Print("  Flags: {}{}{}{}{}{}",
 					info->flags.Test(RailTypeFlag::Catenary)        ? 'c' : '-',
 					info->flags.Test(RailTypeFlag::NoLevelCrossing) ? 'l' : '-',
@@ -1778,7 +1782,7 @@ class NIHRailType : public NIHelper {
 			dump_railtypes("Compatible", info->compatible_railtypes, {});
 			dump_railtypes("Indirect compatible", info->indirect_compatible_railtypes, RailTypes(~info->compatible_railtypes.base()));
 
-			PrintTypeLabels(output, "  ", info->label, (const uint32_t*) info->alternate_labels.data(), info->alternate_labels.size());
+			PrintAlternateLabels(output, "  ", (const BaseLabel *)info->alternate_labels.data(), info->alternate_labels.size());
 			output.Print("  Cost multiplier: {}/8, Maintenance multiplier: {}/8", info->cost_multiplier, info->maintenance_multiplier);
 
 			CalTime::YearMonthDay ymd = CalTime::ConvertDateToYMD(info->introduction_date);
@@ -1933,7 +1937,7 @@ class NIHAirport : public NIHelper {
 		return ro.GetScope(VarSpriteGroupScope::Self)->GetVariable(var, param, extra);
 	}
 
-	const std::span<int32_t> GetPSA(uint index, uint32_t) const override
+	const std::span<int32_t> GetPSA(uint index, GrfID) const override
 	{
 		const Station *st = (const Station *)this->GetInstance(index);
 		if (st->airport.psa == nullptr) return {};
@@ -1999,11 +2003,11 @@ class NIHTown : public NIHelper {
 		return {};
 	}
 
-	virtual std::vector<uint32_t> GetPSAGRFIDs(uint index) const override
+	virtual std::vector<GrfID> GetPSAGRFIDs(uint index) const override
 	{
-		Town *t = Town::Get(index);
+		const Town *t = Town::Get(index);
 
-		std::vector<uint32_t> output;
+		std::vector<GrfID> output;
 		for (const auto &iter : t->psa_list) {
 			output.push_back(iter->grfid);
 		}
@@ -2364,7 +2368,7 @@ private:
 			if (type == INVALID_ROADTYPE) return;
 
 			const RoadTypeInfo* rti = GetRoadTypeInfo(type);
-			output.Print("  {} Type: {} ({})", rtt == RoadTramType::Tram ? "Tram" : "Road", type, label_dumper().RoadTypeLabel(type));
+			output.Print("  {} Type: {} ({})", rtt == RoadTramType::Tram ? "Tram" : "Road", type, rti->label);
 			output.Print("    Flags: {}{}{}{}{}",
 					rti->flags.Test(RoadTypeFlag::Catenary)        ? 'c' : '-',
 					rti->flags.Test(RoadTypeFlag::NoLevelCrossing) ? 'l' : '-',
@@ -2384,7 +2388,7 @@ private:
 			if (output.flags & rtt_click_flag) {
 				DumpRoadTypeList(output, "      ", rti->powered_roadtypes);
 			}
-			PrintTypeLabels(output, "    ", rti->label, (const uint32_t*) rti->alternate_labels.data(), rti->alternate_labels.size());
+			PrintAlternateLabels(output, "    ", (const BaseLabel *)rti->alternate_labels.data(), rti->alternate_labels.size());
 			output.Print("    Cost multiplier: {}/8, Maintenance multiplier: {}/8", rti->cost_multiplier, rti->maintenance_multiplier);
 		};
 		writeInfo(RoadTramType::Road);
@@ -2498,8 +2502,8 @@ class NIHRoadStop : public NIHelper {
 		output.Print("Debug Info:");
 		const RoadStopSpec *spec = GetRoadStopSpec(tile);
 		if (spec != nullptr) {
-			uint class_id = RoadStopClass::Get(spec->class_index)->global_id;
-			output.buffer.format("  class ID: {}", label_dumper().Label(class_id));
+			RoadStopClass::GlobalID class_id = RoadStopClass::Get(spec->class_index)->global_id;
+			output.buffer.format("  class ID: {}", class_id);
 			if (spec->grf_prop.grffile != nullptr) {
 				output.buffer.format("  (local ID: {})", spec->grf_prop.local_id);
 			}
@@ -2570,7 +2574,7 @@ class NIHNewLandscape : public NIHelper {
 	{
 		output.Print("New Landscape GRFs:");
 		for (const GRFFile *grf : _new_landscape_rocks_grfs) {
-			output.Print("  GRF: {:08X}", std::byteswap(grf->grfid));
+			output.Print("  GRF: {}", grf->grfid);
 			output.Print("    Enable rocks recolour: {}, Enable drawing snowy rocks: {}",
 					HasBit(grf->new_landscape_ctrl_flags, NLCF_ROCKS_RECOLOUR_ENABLED), HasBit(grf->new_landscape_ctrl_flags, NLCF_ROCKS_DRAW_SNOWY_ENABLED));
 		}

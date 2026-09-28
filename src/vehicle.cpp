@@ -513,7 +513,7 @@ void VehicleLengthChanged(const Vehicle *u)
 	const Engine *engine = u->GetEngine();
 	if (engine->grf_prop.grffile == nullptr) {
 		// This can be reached if an engine is unexpectedly no longer attached to a GRF at all
-		if (GamelogGRFBugReverse(0, engine->grf_prop.local_id)) {
+		if (GamelogGRFBugReverse({}, engine->grf_prop.local_id)) {
 			ShowNewGrfVehicleError(u->engine_type, STR_NEWGRF_BROKEN, STR_NEWGRF_BROKEN_VEHICLE_LENGTH, GRFBug::VehLength, true);
 		}
 		return;
@@ -4354,7 +4354,8 @@ static void SpawnAdvancedVisualEffect(const Vehicle *v)
 	}
 
 	Direction l_dir = v->direction;
-	if (v->type == VehicleType::Train && Train::From(v)->flags.Test(VehicleRailFlag::Flipped)) l_dir = ReverseDir(l_dir);
+	if ((v->type == VehicleType::Train && Train::From(v)->flags.Test(VehicleRailFlag::Flipped))
+			|| (v->type == VehicleType::Ship && Ship::From(v)->flags.Test(VehicleShipFlag::SecondEndFacingForward))) l_dir = ReverseDir(l_dir);
 	Direction t_dir = ChangeDir(l_dir, DirDiff::Right90);
 
 	int8_t x_center = _vehicle_smoke_pos[l_dir] * l_center;
@@ -4562,7 +4563,8 @@ void Vehicle::ShowVisualEffect(uint max_speed) const
 			int x = _vehicle_smoke_pos[v->direction] * effect_offset;
 			int y = _vehicle_smoke_pos[ChangeDir(v->direction, DirDiff::Right90)] * effect_offset;
 
-			if (v->type == VehicleType::Train && Train::From(v)->flags.Test(VehicleRailFlag::Flipped)) {
+			if ((v->type == VehicleType::Train && Train::From(v)->flags.Test(VehicleRailFlag::Flipped))
+					|| (v->type == VehicleType::Ship && Ship::From(v)->flags.Test(VehicleShipFlag::SecondEndFacingForward))) {
 				x = -x;
 				y = -y;
 			}

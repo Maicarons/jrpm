@@ -465,6 +465,8 @@ add_files(
     schdispatch.h
     schdispatch_cmd.cpp
     schdispatch_gui.cpp
+    screensaver.cpp
+    screensaver.h
     screenshot_bmp.cpp
     screenshot_gui.cpp
     screenshot_gui.h
