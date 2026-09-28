@@ -675,7 +675,7 @@ void WriteValue(void *ptr, VarMemType conv, int64_t val)
 static void SlSaveLoadConv128(void *ptr, VarType conv)
 {
 	switch (_sl.action) {
-		case SLA_SAVE: {
+		case SaveLoadAction::Save: {
 			Uint128 x = *static_cast<const Uint128 *>(ptr);
 
 			switch (conv.file) {
@@ -708,8 +708,8 @@ static void SlSaveLoadConv128(void *ptr, VarType conv)
 			}
 			break;
 		}
-		case SLA_LOAD_CHECK:
-		case SLA_LOAD: {
+		case SaveLoadAction::LoadCheck:
+		case SaveLoadAction::Load: {
 			Uint128 x;
 
 			switch (conv.file) {
@@ -744,8 +744,8 @@ static void SlSaveLoadConv128(void *ptr, VarType conv)
 			*static_cast<Uint128 *>(ptr) = x;
 			break;
 		}
-		case SLA_PTRS: break;
-		case SLA_NULL: break;
+		case SaveLoadAction::Ptrs: break;
+		case SaveLoadAction::Null: break;
 		default: NOT_REACHED();
 	}
 }

@@ -122,6 +122,10 @@ static constexpr VarType SLE_CNAME        = SLE_FILE_STRINGID   | SLE_VAR_CNAME;
 static constexpr VarType SLE_VEHORDERID   = SLE_FILE_VEHORDERID | SLE_VAR_U16;
 static constexpr VarType SLE_LABEL        = SLE_FILE_U32        | SLE_VAR_LABEL;
 
+/* Shortcut aliases used by some upstream settings tables. */
+static constexpr VarType SLE_UINT         = SLE_UINT32;
+static constexpr VarType SLE_INT          = SLE_INT32;
+
 /** Type of data saved. */
 enum SaveLoadTypes {
 	SL_VAR = 0,          ///< Save/load a variable.

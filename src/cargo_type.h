@@ -70,7 +70,7 @@ static constexpr CargoLabel CT_PLASTIC{"PLST"};
 static constexpr CargoLabel CT_FIZZY_DRINKS{"FZDR"};
 
 /** Dedicated cargo for road vehicle transport: trains refit to it to carry road vehicles (label "VEHC", VEHicle Car). */
-static constexpr CargoLabel CT_VEHICLES{'VEHC'};
+static constexpr CargoLabel CT_VEHICLES{"VEHC"};
 
 /** Dummy label for engines that carry no cargo; they actually carry 0 passengers. */
 static constexpr CargoLabel CT_NONE = CT_PASSENGERS;

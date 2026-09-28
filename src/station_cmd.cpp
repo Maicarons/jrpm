@@ -26,6 +26,7 @@
 #include "pathfinder/yapf/yapf_cache.h"
 #include "road_internal.h" /* For drawing catenary/checking road removal */
 #include "autoslope.h"
+#include "slope_func.h"
 #include "water.h"
 #include "tilehighlight_func.h"
 #include "strings_func.h"
@@ -3203,8 +3204,7 @@ void DrawAirportTracks(const TileInfo *ti)
 	if (IsRunwayStart(ti->tile))
 	{
 		PaletteID palette = IsLandingTypeTile(ti->tile) ? PALETTE_SEL_TILE_BLUE : PALETTE_SEL_TILE_RED;
-		extern const uint8_t _slope_to_sprite_offset[32];
-		DrawSelectionSprite(SPR_SELECT_TILE + _slope_to_sprite_offset[ti->tileh], palette, ti,
+		DrawSelectionSprite(SPR_SELECT_TILE + SlopeToSpriteOffset(ti->tileh), palette, ti,
 				7, FoundationPart::Normal);
 	}
 

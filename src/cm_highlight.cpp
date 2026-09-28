@@ -770,7 +770,7 @@ void ObjectHighlight::UpdateTiles() {
                 while(tile <= Map::Size()) {
                     this->sprites.emplace_back(
                         RemapCoords(TileX(tile) * TILE_SIZE, TileY(tile) * TILE_SIZE, z * TILE_HEIGHT + 7 /* z_offset */),
-                        SPR_AUTORAIL_BASE + _autorail_slope_sprite_offsets[0][TrackdirToTrack(trackdir)],
+                        SPR_AUTORAIL_BASE + _autorail_slope_sprite_offsets[SLOPE_FLAT][to_underlying(TrackdirToTrack(trackdir))],
                         palette
                     );
                     // this->AddTile(tile, std::move(ObjectTileHighlight::make_rail_track(palette, TrackdirToTrack(trackdir)).set_z(z)));

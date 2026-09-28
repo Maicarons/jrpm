@@ -226,7 +226,7 @@ static void WriteCargoSpecInfo(JsonWriter &j)
 		j.ks("units_volume", cs->units_volume);
 		j.ks("quantifier", cs->quantifier);
 		j.ks("abbrev", cs->abbrev);
-		j.kv("label", cs->label.base());
+		j.kv("label", cs->label.AsString());
 		j.end_dict();
 	}
 	j.end_list();
