@@ -627,6 +627,7 @@ struct NetworkSettings {
 	uint8_t content_download_parallel = 4;                ///< number of content files to download concurrently
 	CalTime::Year restart_game_year;                      ///< year the server restarts
 	uint16_t      restart_hours;                          ///< number of hours to run the server before automatic restart
+	uint16_t      invite_code_keepalive_interval;         ///< interval, in minutes, of the invite-code registration self-check with the Game Coordinator; 0 disables the check
 	uint8_t       min_active_clients;                     ///< minimum amount of active clients to unpause the game
 	bool        reload_cfg;                               ///< reload the config file before restarting
 	std::string last_joined;                              ///< Last joined server
@@ -847,6 +848,9 @@ struct VehicleSettings {
 	uint8_t                roadveh_slope_steepness;               ///< Steepness of hills for road vehicles when using realistic acceleration
 	bool                   wagon_speed_limits;                    ///< enable wagon speed limits
 	bool                   train_speed_adaptation;                ///< Faster trains slow down when behind slower trains
+	uint8_t                rv_transport_carrier_parts;            ///< Carrying road vehicles (RoRo): which carrier parts may take them (RVTransportCarrierParts)
+	uint16_t               rv_transport_unload_warn_days;         ///< Carrying road vehicles (RoRo): warn when a carried road vehicle was not unloaded for this many days (0 = no warning)
+	bool                   rv_transport_enabled;                  ///< Carrying road vehicles (RoRo): may road vehicles be loaded onto carriers at all (unloading always works)
 	bool                   slow_road_vehicles_in_curves;          ///< Road vehicles slow down in curves.
 	bool                   disable_elrails;                       ///< when true, the elrails are disabled
 	UnitID                 max_trains;                            ///< max trains in game per company
@@ -876,8 +880,8 @@ struct VehicleSettings {
 	bool                   roadveh_articulated_overtaking;        ///< enable articulated road vehicles overtaking other vehicles
 	bool                   roadveh_cant_quantum_tunnel;           ///< enable or disable vehicles quantum tunnelling through other vehicles when blocked
 	bool                   drive_through_train_depot;             ///< enable drive-through train depot emulation
-	bool     train_service_at_station;          ///< allow trains to be serviced at stations (requires infrastructure maintenance)
-	bool     train_no_depot_temporary_stop;     ///< forbid trains from temporarily stopping in depots and routing through them
+	bool                   train_service_at_station;              ///< allow trains to be serviced at stations (requires infrastructure maintenance)
+	bool                   train_no_depot_temporary_stop;         ///< forbid trains from temporarily stopping in depots and routing through them
 	uint16_t               through_load_speed_limit;              ///< maximum speed for through load
 	uint16_t               rail_depot_speed_limit;                ///< maximum speed entering/existing rail depots
 	bool                   non_leading_engines_keep_name;         ///< allow engines moved to a non-leading position to retain their custom name
@@ -930,6 +934,8 @@ struct EconomySettings {
 	bool     infrastructure_sharing[4];      ///< enable infrastructure sharing for rail/road/water/air
 	bool     allow_coupling_other_company_trains; ///< allow coupling with trains owned by other companies
 	uint     sharing_fee[4];                 ///< fees for infrastructure sharing for rail/road/water/air
+	bool     infrastructure_sharing_rv;      ///< enable road vehicle transport between companies
+	uint     rv_sharing_fee;                 ///< fee for road vehicle transport between companies, per 1000 tonnes per 8 tiles
 	bool     sharing_payment_in_debt;        ///< allow fee payment for companies with more loan than money (switch off to prevent MP exploits)
 	bool     allow_town_level_crossings;     ///< towns are allowed to build level crossings
 	TownTunnelMode town_build_tunnels;       ///< if/when towns are allowed to build road tunnels

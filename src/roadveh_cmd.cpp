@@ -27,6 +27,7 @@
 #include "depot_map.h"
 #include "effectvehicle_func.h"
 #include "roadstop_base.h"
+#include "roadveh_transport.h"
 #include "core/random_func.hpp"
 #include "company_base.h"
 #include "core/backup_type.hpp"
@@ -538,8 +539,13 @@ inline int RoadVehicle::GetCurrentMaxSpeed() const
 			}
 		}
 
-		/* Vehicle is on the middle part of a bridge. */
+		/* Vehicle is on the middle part of a bridge. RVSB_WORMHOLE covers "in a tunnel and/or on
+		 * a bridge", but a vehicle in a tunnel is always hidden, so only a bridge gets here. Spell
+		 * the assumption out: a vehicle which is in a tunnel and not hidden means its state and
+		 * its visibility disagree, and that has to be reported here instead of silently reading a
+		 * bridge type out of a tunnel. */
 		if (u->state == RVSB_WORMHOLE && !u->vehstatus.Test(VehState::Hidden)) {
+			assert_tile(IsBridgeTile(u->tile), u->tile);
 			max_speed = std::min(max_speed, GetBridgeSpec(GetBridgeType(u->tile))->speed * 2);
 		}
 	}
@@ -2150,6 +2156,12 @@ static bool RoadVehController(RoadVehicle *v)
 
 	/* road vehicle has broken down? */
 	if (v->HandleBreakdown()) return true;
+
+	/* RoRo: stop waiting to be transported when the order no longer asks for it (the player skipped
+	 * the order or sent the vehicle to a depot); this has to happen before the stopped check below,
+	 * because a waiting vehicle is stopped and would otherwise never carry that order out. */
+	RVTransportTickWaiting(v);
+
 	if (v->IsRoadVehicleStopped()) {
 		v->cur_speed = 0;
 		v->SetLastSpeed();

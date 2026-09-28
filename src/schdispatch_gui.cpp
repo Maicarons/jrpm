@@ -100,7 +100,12 @@ static void SetScheduleStartDateCallback(const Window *w, StateTicks date, void 
  */
 static void SetScheduleLastDispatchedCallback(const Window *w, StateTicks date, void *callback_data)
 {
-	Command<Commands::SchDispatchSetLastDispatch>::Post(STR_ERROR_CAN_T_TIMETABLE_VEHICLE, w->window_number, static_cast<uint32_t>(reinterpret_cast<uintptr_t>(callback_data)), date);
+	const uintptr_t data = reinterpret_cast<uintptr_t>(callback_data);
+	const bool is_list = (data & 1) != 0;
+	const uint32_t sched_idx = static_cast<uint32_t>(data >> 1);
+	Command<Commands::SchDispatchSetLastDispatch>::Post(STR_ERROR_CAN_T_TIMETABLE_VEHICLE,
+			is_list ? OrderTargetType::OrderList : OrderTargetType::Vehicle,
+			w->window_number, sched_idx, date);
 }
 
 /**
@@ -1562,8 +1567,8 @@ struct SchdispatchWindow : GeneralVehicleWindow {
 						if (_settings_client.gui.timetable_start_text_entry) {
 							flags.Set(SetDateWindowFlag::TextMode);
 						}
-						ShowSetDateWindow(this, this->vehicle->index.base(), initial, EconTime::CurYear() - 15, EconTime::CurYear() + 15,
-								SetScheduleLastDispatchedCallback, reinterpret_cast<void *>(static_cast<uintptr_t>(this->schedule_index)),
+						ShowSetDateWindow(this, this->TargetId(), initial, EconTime::CurYear() - 15, EconTime::CurYear() + 15,
+								SetScheduleLastDispatchedCallback, reinterpret_cast<void *>(static_cast<uintptr_t>((this->schedule_index << 1) | (this->TargetKind() == OrderTargetType::OrderList ? 1 : 0))),
 								STR_SCHDISPATCH_SET_LAST_DISPATCH, STR_SCHDISPATCH_SET_LAST_DISPATCH_TOOLTIP, flags);
 						break;
 					}

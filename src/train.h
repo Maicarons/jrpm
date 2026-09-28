@@ -203,19 +203,28 @@ struct Train final : public GroundVehicle<Train, VehicleType::Train> {
 
 	std::unique_ptr<TrainReservationLookAhead> lookahead{};
 
-	/* Transient coupling-approach state (not saved): the physical end vehicle of
-	 * the consist we are approaching, resolved by the couple pathfinder. */
+	/* Coupling-approach state (persisted via XSLFI_COUPLE_CLAIM_STATE): the
+	 * physical end vehicle of the consist we are approaching, resolved by the
+	 * couple pathfinder. Must be persisted: clients joining while an approach
+	 * is in flight otherwise run diverging target selection. Kept on the
+	 * consist Primary; validated after load (AfterLoadValidateCoupleClaims). */
 	VehicleID couple_target = VehicleID::Invalid();
-	/* Transient couple-claim state (not saved): which approaching consist has
-	 * claimed this (waiting) consist as its couple target. Only one moving
-	 * train may home onto a waiting train; a challenger with a cheaper path
-	 * takes the claim over. Kept on the consist Primary. */
+	/* Couple-claim state (persisted via XSLFI_COUPLE_CLAIM_STATE): which
+	 * approaching consist has claimed this (waiting) consist as its couple
+	 * target. Only one moving train may home onto a waiting train; a
+	 * challenger with a cheaper path takes the claim over. Kept on the
+	 * consist Primary; validated after load (AfterLoadValidateCoupleClaims). */
 	VehicleID couple_claimant = VehicleID::Invalid();
 	uint32_t couple_claim_cost = 0;
-	/* Transient couple state (not saved): the waiting consist has released
-	 * everything beyond its body once, so its partner can reserve up to the
-	 * contact point with the regular reservation machinery. */
+	/* Couple state (persisted via XSLFI_COUPLE_CLAIM_STATE): the waiting
+	 * consist has released everything beyond its body once, so its partner
+	 * can reserve up to the contact point with the regular reservation
+	 * machinery. Kept on the consist Primary. */
 	bool couple_body_hold = false;
+	/* Transient state (not saved): the player manually ordered this train to
+	 * a depot and we are pathfinding for the nearest depot before the order
+	 * is set, so the depot-impassability rule must not block depot tiles. */
+	bool finding_manual_depot = false;
 
 	RailTypes railtypes{}; ///< On which rail types the train can run.
 	RailTypes compatible_railtypes{}; ///< With which rail types the train is compatible.
@@ -275,6 +284,14 @@ struct Train final : public GroundVehicle<Train, VehicleType::Train> {
 	uint16_t GetCurveSpeedLimit() const;
 
 	void ConsistChanged(ConsistChangeFlags allowed_changes);
+
+	/**
+	 * Copy the consist-level caches from this chain head to every other
+	 * vehicle of the chain. Must be called whenever the head's copies are
+	 * (re)computed outside ConsistChanged, or the per-vehicle copies go stale
+	 * and diverge between network peers.
+	 */
+	void BroadcastConsistCaches();
 
 	/**
 	 * Check whether the consist changes described by #allowed_changes would be possible,

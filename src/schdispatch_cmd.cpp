@@ -336,24 +336,24 @@ CommandCost CmdSchDispatchResetLastDispatch(DoCommandFlags flags, OrderTargetTyp
  * Set scheduled dispatch last dispatch vehicle time
  *
  * @param flags Operation to perform.
- * @param veh Vehicle index
+ * @param target_type Target type (vehicle or order list).
+ * @param id Target id.
  * @param schedule_index Schedule index.
  * @param last_dispatched_tick New last dispatched tick.
  * @return the cost of this operation or an error
  */
-CommandCost CmdSchDispatchSetLastDispatch(DoCommandFlags flags, VehicleID veh, uint32_t schedule_index, StateTicks last_dispatched_tick)
+CommandCost CmdSchDispatchSetLastDispatch(DoCommandFlags flags, OrderTargetType target_type, uint32_t id, uint32_t schedule_index, StateTicks last_dispatched_tick)
 {
-	Vehicle *v = Vehicle::GetIfValid(veh);
-	if (v == nullptr || !IsCompanyBuildableVehicleType(v) || !v->IsPrimaryVehicle()) return CMD_ERROR;
+	Vehicle *v = nullptr;
+	OrderList *ol = ResolveSchDispatchTarget(target_type, id, &v);
+	if (ol == nullptr) return CMD_ERROR;
 
-	CommandCost ret = CheckOwnership(v->owner);
+	CommandCost ret = CheckSchDispatchOwnership(target_type, ol, v);
 	if (ret.Failed()) return ret;
 
-	if (v->orders == nullptr) return CMD_ERROR;
+	if (schedule_index >= ol->GetScheduledDispatchScheduleCount()) return CMD_ERROR;
 
-	if (schedule_index >= v->orders->GetScheduledDispatchScheduleCount()) return CMD_ERROR;
-
-	DispatchSchedule &ds = v->orders->GetDispatchScheduleByIndex(schedule_index);
+	DispatchSchedule &ds = ol->GetDispatchScheduleByIndex(schedule_index);
 	Ticks last_dispatched_offset = (last_dispatched_tick - ds.GetScheduledDispatchStartTick()).AsTicks();
 	if (last_dispatched_offset == INT32_MIN || last_dispatched_offset == INT32_MAX) return CMD_ERROR;
 

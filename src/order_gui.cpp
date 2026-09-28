@@ -24,6 +24,7 @@
 #include "station_base.h"
 #include "depot_base.h"
 #include "depot_map.h"
+#include "roadveh_transport.h"
 #include "industry.h"
 #include "waypoint_base.h"
 #include "core/geometry_func.hpp"
@@ -51,6 +52,10 @@
 
 #include "widgets/order_widget.h"
 
+#include "gfx_func.h"
+#include "window_func.h"
+#include "querystring_gui.h"
+#include "stringfilter_type.h"
 #include "table/strings.h"
 
 #include "safeguards.h"
@@ -438,6 +443,506 @@ void ShowCargoTypeOrdersWindow(const Vehicle *v, Window *parent, VehicleOrderID 
 }
 
 
+
+
+/** Widgets of the #RVTransportWindow (road vehicle transport, RoRo). */
+enum RVTransportWidgets : WidgetID {
+	WID_RVT_CAPTION,          ///< Caption of the window.
+	WID_RVT_LOAD_STATE_LABEL, ///< Label of the candidate load state criterion.
+	WID_RVT_LOAD_STATE,       ///< Candidate load state criterion.
+	WID_RVT_CARGO_LABEL,      ///< Label of the candidate cargo criterion.
+	WID_RVT_CARGO,            ///< Candidate cargo criterion.
+	WID_RVT_CARGO_MODE_LABEL, ///< Label of the candidate cargo mode criterion.
+	WID_RVT_CARGO_MODE,       ///< Candidate cargo mode criterion (can carry / is carrying).
+	WID_RVT_MIN_WAIT_LABEL,   ///< Label of the minimum waiting time criterion.
+	WID_RVT_MIN_WAIT,         ///< Minimum waiting time criterion.
+	WID_RVT_SLOT_LABEL,       ///< Label of the trace restrict slot criterion.
+	WID_RVT_SLOT,             ///< Trace restrict slot criterion.
+	WID_RVT_MAX_LABEL,        ///< Label of the per-visit load limit.
+	WID_RVT_MAX,              ///< Per-visit load limit (how many road vehicles are taken at once).
+	WID_RVT_CLOSE,            ///< Close button.
+};
+
+/** Values used by the dropdowns of the road vehicle transport window. */
+static const int RVTC_CARGO_ANY = 0xFF;         ///< "Any cargo" entry of the cargo dropdown.
+static const int RVTC_CARGO_MODE_ANY = 2;        ///< Cargo criterion: unrestricted (entry of the cargo mode dropdown).
+static const int RVTC_CARGO_MODE_CAN_CARRY = 0; ///< Cargo criterion: the candidate must be able to carry the cargo.
+static const int RVTC_CARGO_MODE_CARRYING = 1;  ///< Cargo criterion: the candidate must currently carry the cargo.
+
+/** Value of the "any" entry of the trace restrict slot criterion. The slot list itself is built with
+ * trace restrict slot ids, which start at 0, so this needs a value no slot id can have. */
+static const int RVTC_SLOT_ANY = 0xFFFE;
+
+/** Waiting times which the "minimum waiting time" criterion offers (in days). */
+static const uint16_t _rv_transport_min_wait_presets[] = { 0, 1, 2, 5, 10, 30, 60 };
+
+/** Numbers of road vehicles the per-visit load limit offers (0 = no limit). */
+static const uint8_t _rv_transport_max_presets[] = { 0, 1, 2, 3, 5, 10 };
+
+/**
+ * Complete text of the load state criterion for a button: a widget string can only be a plain
+ * StringID (it cannot carry a parameter), so every value has a string of its own.
+ */
+static StringID RVTransportLoadStateCriterionText(uint8_t state)
+{
+	if (state == RVTLS_EMPTY) return STR_RV_TRANSPORT_CRITERIA_LOAD_STATE_EMPTY;
+	if (state == RVTLS_FULL) return STR_RV_TRANSPORT_CRITERIA_LOAD_STATE_FULL;
+	return STR_RV_TRANSPORT_CRITERIA_LOAD_STATE_ANY;
+}
+
+/** Complete text of the minimum waiting time criterion for a button (one string per preset). */
+static StringID RVTransportMinWaitCriterionText(uint16_t days)
+{
+	switch (days) {
+		case 0:  return STR_RV_TRANSPORT_CRITERIA_MIN_WAIT_NONE;
+		case 1:  return STR_RV_TRANSPORT_CRITERIA_MIN_WAIT_1;
+		case 2:  return STR_RV_TRANSPORT_CRITERIA_MIN_WAIT_2;
+		case 5:  return STR_RV_TRANSPORT_CRITERIA_MIN_WAIT_5;
+		case 10: return STR_RV_TRANSPORT_CRITERIA_MIN_WAIT_10;
+		case 30: return STR_RV_TRANSPORT_CRITERIA_MIN_WAIT_30;
+		case 60: return STR_RV_TRANSPORT_CRITERIA_MIN_WAIT_60;
+		default: return STR_RV_TRANSPORT_CRITERIA_MIN_WAIT_CUSTOM; // a value set from the console, not a preset
+	}
+}
+
+/**
+ * Complete text of the per-visit load limit button. As with the other criteria, a widget string cannot
+ * carry a parameter, so the presets have strings of their own and everything else is "custom".
+ */
+static StringID RVTransportMaxLoadText(uint8_t max_load)
+{
+	switch (max_load) {
+		case 0:  return STR_RV_TRANSPORT_CRITERIA_MAX_ANY;
+		case 1:  return STR_RV_TRANSPORT_CRITERIA_MAX_1;
+		case 2:  return STR_RV_TRANSPORT_CRITERIA_MAX_2;
+		case 3:  return STR_RV_TRANSPORT_CRITERIA_MAX_3;
+		case 5:  return STR_RV_TRANSPORT_CRITERIA_MAX_5;
+		case 10: return STR_RV_TRANSPORT_CRITERIA_MAX_10;
+		default: return STR_RV_TRANSPORT_CRITERIA_MAX_CUSTOM;
+	}
+}
+
+/**
+ * Window with every road vehicle transport (RoRo) setting of one station order: whether road
+ * vehicles are loaded here (or unloaded here, for a road vehicle itself), whether the carrier waits
+ * for them, and which road vehicles are taken (load state, cargo, minimum waiting time, declared
+ * destination). The order window only has one entry which opens this window.
+ */
+class RVTransportWindow : public Window {
+private:
+	const Vehicle *vehicle;  ///< Vehicle the edited order belongs to.
+	VehicleOrderID order_id; ///< Order which is being edited.
+	const Order *order;      ///< The order itself (used to check the window is still valid).
+	uint order_count;        ///< Number of orders the vehicle had when the window was opened.
+
+	/**
+	 * Snapshot of the settings which are shown, so that the buttons and dropdowns can be refreshed
+	 * when the order changes. The order commands are executed asynchronously, and they do not
+	 * invalidate this window, so the state is polled instead of relying on an invalidation.
+	 */
+	struct SettingsSnapshot {
+		uint8_t flags = 0;
+		uint8_t load_state = 0;
+		uint8_t cargo_mode = 0;
+		uint8_t cargo = 0;
+		uint16_t min_wait = 0;
+		uint16_t slot = 0;
+		uint8_t max_load = 0;
+
+		bool operator==(const SettingsSnapshot &other) const
+		{
+			return this->flags == other.flags && this->load_state == other.load_state && this->cargo_mode == other.cargo_mode &&
+					this->cargo == other.cargo && this->min_wait == other.min_wait && this->slot == other.slot &&
+					this->max_load == other.max_load;
+		}
+	};
+
+	SettingsSnapshot last_settings{}; ///< Settings the widgets currently show.
+
+	/** Read the settings which the widgets should show. */
+	SettingsSnapshot GetSettings() const
+	{
+		SettingsSnapshot s;
+		s.flags = this->order->GetRVTransportFlags();
+		s.load_state = this->order->GetRVTransportLoadState();
+		s.cargo_mode = this->order->GetRVTransportCargoMode();
+		s.cargo = this->order->GetRVTransportCargo();
+		s.min_wait = this->order->GetRVTransportMinWait();
+		s.slot = this->order->GetRVTransportSlot();
+		s.max_load = this->order->GetRVTransportMax();
+		return s;
+	}
+
+	/** Show the current settings on the buttons and dropdowns. */
+	void UpdateWidgetTexts()
+	{
+		/* The window only contains the selection criteria; the load/unload toggles live in the
+		 * order window's load/unload dropdowns now. */
+		this->GetWidget<NWidgetCore>(WID_RVT_LOAD_STATE)->SetString(RVTransportLoadStateCriterionText(this->order->GetRVTransportLoadState()));
+
+		const uint8_t cargo_mode = this->order->GetRVTransportCargoMode();
+		const CargoType cargo = static_cast<CargoType>(this->order->GetRVTransportCargo());
+		if (cargo_mode == RVTC_ANY || !IsValidCargoType(cargo)) {
+			this->GetWidget<NWidgetCore>(WID_RVT_CARGO)->SetString(STR_ORDER_RV_LOAD_STATE_ANY);
+		} else {
+			this->GetWidget<NWidgetCore>(WID_RVT_CARGO)->SetString(CargoSpec::Get(cargo)->name);
+		}
+		/* The cargo mode dropdown names the current restriction, or "any" when there is none. */
+		this->GetWidget<NWidgetCore>(WID_RVT_CARGO_MODE)->SetString(cargo_mode == RVTC_ANY ? STR_ORDER_RV_LOAD_STATE_ANY :
+				(cargo_mode == RVTC_CAN_CARRY ? STR_RV_TRANSPORT_CRITERIA_CAN_CARRY : STR_RV_TRANSPORT_CRITERIA_IS_CARRYING));
+
+		this->GetWidget<NWidgetCore>(WID_RVT_MIN_WAIT)->SetString(RVTransportMinWaitCriterionText(this->order->GetRVTransportMinWait()));
+
+		/* Trace restrict slot ("路签"): the road vehicle must be an occupant of that slot. */
+		const uint16_t slot_raw = this->order->GetRVTransportSlot();
+		if (slot_raw == 0) {
+			this->GetWidget<NWidgetCore>(WID_RVT_SLOT)->SetString(STR_ORDER_RV_LOAD_STATE_ANY);
+		} else {
+			const TraceRestrictSlot *slot = TraceRestrictSlot::GetIfValid(TraceRestrictSlotID{static_cast<uint16_t>(slot_raw - 1)});
+			/* A widget string cannot carry a parameter, so a deleted slot is shown as "any" as well. */
+			this->GetWidget<NWidgetCore>(WID_RVT_SLOT)->SetString((slot != nullptr) ? STR_RV_TRANSPORT_CRITERIA_SLOT_SET : STR_ORDER_RV_LOAD_STATE_ANY);
+		}
+
+		this->GetWidget<NWidgetCore>(WID_RVT_MAX)->SetString(RVTransportMaxLoadText(this->order->GetRVTransportMax()));
+	}
+
+	/** Is the edited order still there? */
+	bool CheckOrderStillValid() const
+	{
+		if (this->vehicle->GetNumOrders() != this->order_count) return false;
+		return this->vehicle->GetOrder(this->order_id) == this->order;
+	}
+
+	/** Apply an order change through the real order modification command. */
+	void ModifyOrder(ModifyOrderFlags mof, uint16_t data, CargoType cargo = INVALID_CARGO)
+	{
+		if (!this->CheckOrderStillValid()) return;
+		Command<Commands::ModifyOrder>::Post(STR_ERROR_CAN_T_MODIFY_THIS_ORDER, this->vehicle->tile, OrderTargetType::Vehicle, this->vehicle->index.base(),
+				this->order_id, mof, data, cargo, {});
+	}
+
+	/** Currently selected cargo of the cargo criterion, or INVALID_CARGO when the criterion is off. */
+	CargoType GetSelectedCargo() const
+	{
+		if (this->order->GetRVTransportCargoMode() == RVTC_ANY) return INVALID_CARGO;
+		const CargoType cargo = static_cast<CargoType>(this->order->GetRVTransportCargo());
+		return IsValidCargoType(cargo) ? cargo : INVALID_CARGO;
+	}
+
+	/** Build the dropdown which selects the load state criterion. */
+	DropDownList BuildLoadStateList() const
+	{
+		const uint8_t current = this->order->GetRVTransportLoadState();
+		DropDownList list;
+		list.push_back(MakeDropDownListCheckedItem(current == RVTLS_ANY, STR_ORDER_RV_LOAD_STATE_ANY, RVTLS_ANY));
+		list.push_back(MakeDropDownListCheckedItem(current == RVTLS_EMPTY, STR_ORDER_RV_LOAD_STATE_EMPTY, RVTLS_EMPTY));
+		list.push_back(MakeDropDownListCheckedItem(current == RVTLS_FULL, STR_ORDER_RV_LOAD_STATE_FULL, RVTLS_FULL));
+		return list;
+	}
+
+	/** Build the dropdown which selects the cargo criterion. */
+	DropDownList BuildCargoList() const
+	{
+		const CargoType current = this->GetSelectedCargo();
+		DropDownList list;
+		list.push_back(MakeDropDownListCheckedItem(current == INVALID_CARGO, STR_ORDER_RV_LOAD_STATE_ANY, RVTC_CARGO_ANY));
+		list.push_back(MakeDropDownListDividerItem());
+		for (const CargoSpec *cs : _sorted_cargo_specs) {
+			list.push_back(MakeDropDownListCheckedItem(current == cs->Index(), cs->name, cs->Index()));
+		}
+		return list;
+	}
+
+	/** Build the dropdown which selects the cargo mode criterion. */
+	DropDownList BuildCargoModeList() const
+	{
+		const uint8_t current = this->order->GetRVTransportCargoMode();
+		DropDownList list;
+		list.push_back(MakeDropDownListCheckedItem(current == RVTC_ANY, STR_ORDER_RV_LOAD_STATE_ANY, RVTC_CARGO_MODE_ANY));
+		list.push_back(MakeDropDownListDividerItem());
+		list.push_back(MakeDropDownListCheckedItem(current == RVTC_CAN_CARRY, STR_RV_TRANSPORT_CRITERIA_CAN_CARRY, RVTC_CARGO_MODE_CAN_CARRY));
+		list.push_back(MakeDropDownListCheckedItem(current == RVTC_IS_CARRYING, STR_RV_TRANSPORT_CRITERIA_IS_CARRYING, RVTC_CARGO_MODE_CARRYING));
+		return list;
+	}
+
+	/** Build the dropdown which selects the minimum waiting time criterion. */
+	DropDownList BuildMinWaitList() const
+	{
+		const uint16_t current = this->order->GetRVTransportMinWait();
+		DropDownList list;
+		for (const uint16_t days : _rv_transport_min_wait_presets) {
+			std::string text = (days == 0) ? GetString(STR_ORDER_RV_MIN_WAIT_NONE) : GetString(STR_ORDER_RV_MIN_WAIT_DAYS, days);
+			list.push_back(MakeDropDownListCheckedItem(current == days, std::move(text), days));
+		}
+		return list;
+	}
+
+	/** Build the dropdown which selects the per-visit load limit (how many road vehicles are taken). */
+	DropDownList BuildMaxList() const
+	{
+		const uint8_t current = this->order->GetRVTransportMax();
+		DropDownList list;
+		for (const uint8_t max_load : _rv_transport_max_presets) {
+			std::string text = (max_load == 0) ? GetString(STR_RV_TRANSPORT_CRITERIA_MAX_ANY) : GetString(STR_RV_TRANSPORT_CRITERIA_MAX_N, max_load);
+			list.push_back(MakeDropDownListCheckedItem(current == max_load, std::move(text), max_load));
+		}
+		return list;
+	}
+
+	/**
+	 * Build the dropdown which selects the trace restrict slot criterion ("路签").
+	 *
+	 * This is the list the "try acquire trace restrict slot" order offers: a normal click shows the own
+	 * company's road vehicle slots, holding shift also shows the other companies' public ones grouped
+	 * per company, and holding control shows the recently used ones. The criterion needs an "any" entry
+	 * of its own, which takes the place of the entry which creates a new trace restrict slot - this
+	 * window cannot create one.
+	 */
+	DropDownList BuildSlotList() const
+	{
+		const uint16_t current = this->order->GetRVTransportSlot();
+		const TraceRestrictSlotID slot_id = (current == 0) ? TraceRestrictSlotID{} : TraceRestrictSlotID{static_cast<uint16_t>(current - 1)};
+
+		int selected;
+		DropDownList slots = GetSlotDropDownList(this->vehicle->owner, slot_id, selected, VehicleType::Road, false);
+
+		DropDownList list;
+		list.push_back(MakeDropDownListCheckedItem(current == 0, STR_ORDER_RV_LOAD_STATE_ANY, RVTC_SLOT_ANY));
+		for (auto &item : slots) {
+			/* Leave out the entry which creates a new trace restrict slot, and the divider which
+			 * separates it from the slots: the "any" entry above is in its place. */
+			if (item->result == NEW_TRACE_RESTRICT_SLOT_ID.base()) continue;
+			if (list.size() == 1 && item->result == -1) continue;
+			list.push_back(std::move(item));
+		}
+		return list;
+	}
+
+public:
+	RVTransportWindow(WindowDesc &desc, const Vehicle *v, VehicleOrderID order_id) : Window(desc)
+	{
+		this->vehicle = v;
+		this->order_id = order_id;
+		this->order_count = v->GetNumOrders();
+		this->order = v->GetOrder(order_id);
+
+		this->CreateNestedTree();
+		/* Set the widget texts before the layout is computed, so that the dropdowns are sized to fit
+		 * their current value (there is no fixed minimum width for them). */
+		this->UpdateWidgetTexts();
+		this->FinishInitNested(v->index);
+		this->last_settings = this->GetSettings();
+		this->owner = v->owner;
+	}
+
+	/**
+	 * Refresh the widgets when the order changed. The order commands run asynchronously and do not
+	 * invalidate this window, and the game may well be paused while the player edits, so this polls
+	 * from the realtime tick (which runs regardless of the pause state).
+	 */
+	void OnRealtimeTick([[maybe_unused]] uint delta_ms) override
+	{
+		if (!this->CheckOrderStillValid()) {
+			this->Close();
+			return;
+		}
+		this->order = this->vehicle->GetOrder(this->order_id);
+		const SettingsSnapshot current = this->GetSettings();
+		if (!(current == this->last_settings)) {
+			this->last_settings = current;
+			this->UpdateWidgetTexts();
+			/* Re-run the layout so the dropdowns fit the (possibly longer) new value. */
+			this->ReInit();
+			this->SetDirty();
+		}
+	}
+
+	void Close(int data = 0) override
+	{
+		FocusWindowById(WindowClass::VehicleOrders, this->window_number);
+		this->Window::Close();
+	}
+
+	void OnClick([[maybe_unused]] Point pt, WidgetID widget, [[maybe_unused]] int click_count) override
+	{
+		if (!this->CheckOrderStillValid()) {
+			this->Close();
+			return;
+		}
+
+		switch (widget) {
+			/* A dropdown widget has to open its list itself. */
+			case WID_RVT_LOAD_STATE:
+				ShowDropDownList(this, this->BuildLoadStateList(), -1, WID_RVT_LOAD_STATE, 0);
+				return;
+			case WID_RVT_CARGO:
+				ShowDropDownList(this, this->BuildCargoList(), -1, WID_RVT_CARGO, 0);
+				return;
+			case WID_RVT_CARGO_MODE:
+				ShowDropDownList(this, this->BuildCargoModeList(), -1, WID_RVT_CARGO_MODE, 0);
+				return;
+			case WID_RVT_MIN_WAIT:
+				ShowDropDownList(this, this->BuildMinWaitList(), -1, WID_RVT_MIN_WAIT, 0);
+				return;
+			case WID_RVT_SLOT:
+				/* The list works with trace restrict slot ids, the criterion stores them offset by one. */
+				ShowDropDownList(this, this->BuildSlotList(),
+						(this->order->GetRVTransportSlot() == 0) ? RVTC_SLOT_ANY : static_cast<int>(this->order->GetRVTransportSlot() - 1),
+						WID_RVT_SLOT, 0);
+				return;
+			case WID_RVT_MAX:
+				ShowDropDownList(this, this->BuildMaxList(), -1, WID_RVT_MAX, 0);
+				return;
+
+			case WID_RVT_CLOSE:
+				this->Close();
+				return;
+
+			default:
+				return;
+		}
+
+		InvalidateWindowData(WindowClass::VehicleOrders, this->window_number, 0);
+		this->SetDirty();
+	}
+
+	void OnDropdownSelect(WidgetID widget, int index, int) override
+	{
+		if (!this->CheckOrderStillValid()) return;
+
+		const CargoType cargo = this->GetSelectedCargo();
+		switch (widget) {
+			case WID_RVT_LOAD_STATE:
+				this->ModifyOrder(MOF_RV_LOAD_STATE, static_cast<uint16_t>(index));
+				break;
+
+			case WID_RVT_CARGO:
+				/* Keep the current mode (can carry / is carrying) and only change the cargo. */
+				if (index == RVTC_CARGO_ANY) {
+					this->ModifyOrder(MOF_RV_CARGO_MODE, RVTC_ANY, INVALID_CARGO);
+				} else {
+					const uint8_t mode = (this->order->GetRVTransportCargoMode() == RVTC_IS_CARRYING) ? RVTC_IS_CARRYING : RVTC_CAN_CARRY;
+					this->ModifyOrder(MOF_RV_CARGO_MODE, mode, static_cast<CargoType>(index));
+				}
+				break;
+
+			case WID_RVT_CARGO_MODE:
+				if (index == RVTC_CARGO_MODE_ANY) {
+					/* Unrestricted: clear the whole cargo criterion. */
+					this->ModifyOrder(MOF_RV_CARGO_MODE, RVTC_ANY, INVALID_CARGO);
+				} else if (cargo == INVALID_CARGO) {
+					/* A mode without a cargo is meaningless: start with the first cargo of the game. */
+					if (!_sorted_cargo_specs.empty()) {
+						this->ModifyOrder(MOF_RV_CARGO_MODE, (index == RVTC_CARGO_MODE_CARRYING) ? RVTC_IS_CARRYING : RVTC_CAN_CARRY,
+								_sorted_cargo_specs.front()->Index());
+					}
+				} else {
+					this->ModifyOrder(MOF_RV_CARGO_MODE, (index == RVTC_CARGO_MODE_CARRYING) ? RVTC_IS_CARRYING : RVTC_CAN_CARRY, cargo);
+				}
+				break;
+
+			case WID_RVT_MIN_WAIT:
+				this->ModifyOrder(MOF_RV_MIN_WAIT, static_cast<uint16_t>(index));
+				break;
+
+			case WID_RVT_SLOT:
+				/* The list works with trace restrict slot ids, the criterion stores them offset by one,
+				 * with 0 meaning "any". */
+				if (index == RVTC_SLOT_ANY) {
+					this->ModifyOrder(MOF_RV_SLOT, uint16_t{0});
+				} else if (index >= 0) {
+					TraceRestrictRecordRecentSlot(TraceRestrictSlotID{static_cast<uint16_t>(index)});
+					this->ModifyOrder(MOF_RV_SLOT, static_cast<uint16_t>(index + 1));
+				}
+				break;
+
+			case WID_RVT_MAX:
+				this->ModifyOrder(MOF_RV_MAX, static_cast<uint16_t>(index));
+				break;
+
+			default:
+				return;
+		}
+
+		InvalidateWindowData(WindowClass::VehicleOrders, this->window_number, 0);
+		this->SetDirty();
+	}
+
+	void OnInvalidateData([[maybe_unused]] int data = 0, [[maybe_unused]] bool gui_scope = true) override
+	{
+		if (!this->CheckOrderStillValid()) {
+			this->Close();
+			return;
+		}
+		this->order = this->vehicle->GetOrder(this->order_id);
+		this->UpdateWidgetTexts();
+		this->ReInit();
+		this->SetDirty();
+	}
+};
+
+/** Widgets of the road vehicle transport window. */
+static constexpr NWidgetPart _nested_rv_transport_widgets[] = {
+	NWidget(NWID_HORIZONTAL),
+		NWidget(WWT_CLOSEBOX, Colours::Grey),
+		NWidget(WWT_CAPTION, Colours::Grey, WID_RVT_CAPTION), SetStringTip(STR_RV_TRANSPORT_CRITERIA_CAPTION, STR_TOOLTIP_WINDOW_TITLE_DRAG_THIS),
+		NWidget(WWT_SHADEBOX, Colours::Grey),
+		NWidget(WWT_DEFSIZEBOX, Colours::Grey),
+		NWidget(WWT_STICKYBOX, Colours::Grey),
+	EndContainer(),
+	NWidget(WWT_PANEL, Colours::Grey),
+		NWidget(NWID_HORIZONTAL),
+			NWidget(WWT_TEXT, Colours::Invalid, WID_RVT_LOAD_STATE_LABEL), SetFill(1, 0), SetResize(1, 0), SetStringTip(STR_RV_TRANSPORT_CRITERIA_LOAD_STATE, STR_NULL),
+			NWidget(WWT_DROPDOWN, Colours::Grey, WID_RVT_LOAD_STATE), SetFill(0, 0), SetResize(0, 0),
+		EndContainer(),
+		NWidget(NWID_HORIZONTAL),
+			NWidget(WWT_TEXT, Colours::Invalid, WID_RVT_CARGO_LABEL), SetFill(1, 0), SetResize(1, 0), SetStringTip(STR_RV_TRANSPORT_CRITERIA_CARGO, STR_NULL),
+			NWidget(WWT_DROPDOWN, Colours::Grey, WID_RVT_CARGO), SetFill(0, 0), SetResize(0, 0),
+		EndContainer(),
+		NWidget(NWID_HORIZONTAL),
+			NWidget(WWT_TEXT, Colours::Invalid, WID_RVT_CARGO_MODE_LABEL), SetFill(1, 0), SetResize(1, 0), SetStringTip(STR_RV_TRANSPORT_CRITERIA_CARGO_MODE, STR_NULL),
+			NWidget(WWT_DROPDOWN, Colours::Grey, WID_RVT_CARGO_MODE), SetFill(0, 0), SetResize(0, 0),
+		EndContainer(),
+		NWidget(NWID_HORIZONTAL),
+			NWidget(WWT_TEXT, Colours::Invalid, WID_RVT_MIN_WAIT_LABEL), SetFill(1, 0), SetResize(1, 0), SetStringTip(STR_RV_TRANSPORT_CRITERIA_MIN_WAIT, STR_NULL),
+			NWidget(WWT_DROPDOWN, Colours::Grey, WID_RVT_MIN_WAIT), SetFill(0, 0), SetResize(0, 0),
+		EndContainer(),
+		NWidget(NWID_HORIZONTAL),
+			NWidget(WWT_TEXT, Colours::Invalid, WID_RVT_SLOT_LABEL), SetFill(1, 0), SetResize(1, 0), SetStringTip(STR_RV_TRANSPORT_CRITERIA_SLOT, STR_NULL),
+			NWidget(WWT_DROPDOWN, Colours::Grey, WID_RVT_SLOT), SetFill(0, 0), SetResize(0, 0),
+		EndContainer(),
+		NWidget(NWID_HORIZONTAL),
+			NWidget(WWT_TEXT, Colours::Invalid, WID_RVT_MAX_LABEL), SetFill(1, 0), SetResize(1, 0), SetStringTip(STR_RV_TRANSPORT_CRITERIA_MAX, STR_NULL),
+			NWidget(WWT_DROPDOWN, Colours::Grey, WID_RVT_MAX), SetFill(0, 0), SetResize(0, 0),
+		EndContainer(),
+	EndContainer(),
+	NWidget(NWID_HORIZONTAL),
+		NWidget(WWT_TEXTBTN, Colours::Grey, WID_RVT_CLOSE), SetFill(1, 0), SetResize(1, 0), SetStringTip(STR_CARGO_TYPE_ORDERS_CLOSE_BUTTON, STR_TOOLTIP_CLOSE_WINDOW),
+		NWidget(WWT_RESIZEBOX, Colours::Grey),
+	EndContainer(),
+};
+
+/** Window description of the road vehicle transport window. */
+static WindowDesc _rv_transport_desc(__FILE__, __LINE__,
+	WindowPosition::Automatic, nullptr, 260, 130,
+	WindowClass::VehicleRVTransportCriteria, WindowClass::VehicleOrders,
+	WindowDefaultFlag::Construction,
+	_nested_rv_transport_widgets
+);
+
+/**
+ * Show the window with all road vehicle transport settings of an order.
+ * @param v The vehicle the order belongs to.
+ * @param parent The parent window.
+ * @param order_id Which order to edit.
+ */
+void ShowRVTransportWindow(const Vehicle *v, Window *parent, VehicleOrderID order_id)
+{
+	CloseWindowById(WindowClass::VehicleRVTransportCriteria, v->index);
+	RVTransportWindow *w = new RVTransportWindow(_rv_transport_desc, v, order_id);
+	w->parent = parent;
+}
+
 /** Order load types that could be given to station orders. */
 static const StringID _station_load_types[][8][8] = {
 	{
@@ -585,6 +1090,23 @@ static const StringID _order_unload_dropdown[] = {
 	STR_ORDER_DROP_CARGO_TYPE_UNLOAD,
 };
 
+/**
+ * Result values of the road vehicle transport (RoRo) entries which the order window appends to the
+ * load and unload dropdowns, and to the manage-order dropdown of a road vehicle's own orders. The
+ * values must not collide with the OrderLoadType/OrderUnloadType values used by the standard
+ * entries.
+ */
+enum RVTransportDropDownResult {
+	RVDD_TRANSPORT     = 0x100, ///< Open the window with the road vehicle transport (RoRo) selection criteria.
+	RVDD_LOAD_ANY      = 0x101, ///< Carrier: load any road vehicles.
+	RVDD_LOAD_MATCH    = 0x102, ///< Carrier: only load road vehicles heading for the carrier's next stop.
+	RVDD_LOAD_WAIT     = 0x103, ///< Carrier: keep waiting until road vehicles have been loaded.
+	RVDD_UNLOAD        = 0x111, ///< Carrier: unload the road vehicles which want to get off here.
+	RVDD_UNLOAD_ALL    = 0x112, ///< Carrier: unload every road vehicle here.
+	RVDD_RV_WAIT       = 0x700, ///< Road vehicle: wait to be transported here. Kept out of the 0x1xx-0x6xx ranges used by the order management menu.
+	RVDD_RV_UNLOAD     = 0x701, ///< Road vehicle: be unloaded here.
+};
+
 enum OrderDropDownID {
 	ODDI_GO_TO,
 	ODDI_GO_TO_NEAREST_DEPOT,
@@ -651,6 +1173,10 @@ static const StringID _order_manage_list_dropdown[] = {
 	STR_ORDER_IMPORT_ORDER_LIST_APPEND,
 	STR_ORDER_IMPORT_ORDER_LIST_APPEND_REVERSED
 };
+
+struct OrdersWindow;
+
+void ShowDecoupleSchedulePicker(OrdersWindow &w, bool first, OrderDecoupleOrdersFlags type);
 
 /** Variables for conditional orders; this defines the order of appearance in the dropdown box */
 static const OrderConditionVariable _order_conditional_variable[] = {
@@ -816,6 +1342,17 @@ static int DepotActionStringIndex(const Order *order)
 	}
 }
 
+/**
+ * With the train_no_depot_temporary_stop setting every train always stops in a depot, so the
+ * depot action of a train order is fixed to "stop" and cannot be changed by the player.
+ */
+static bool IsDepotActionFixedToStop(const Vehicle *v, const Order *order)
+{
+	return _settings_game.vehicle.train_no_depot_temporary_stop &&
+			v != nullptr && v->type == VehicleType::Train &&
+			order != nullptr && order->IsType(OT_GOTO_DEPOT);
+}
+
 static const StringID _order_refit_action_dropdown[] = {
 	STR_ORDER_DROP_REFIT_AUTO,
 	STR_ORDER_DROP_REFIT_AUTO_ANY,
@@ -877,6 +1414,72 @@ static StringID GetDepotOrderGoToString(const Order &order)
 	} else {
 		return (order.GetNonStopType() & ONSF_NO_STOP_AT_INTERMEDIATE_STATIONS) ? STR_ORDER_GO_NON_STOP_TO : STR_ORDER_GO_TO;
 	}
+}
+
+/**
+ * Append the "(...)" group which the order list shows for a station order of a road vehicle carrier:
+ * the road vehicle transport parts of the order (wait, load, unload) inside the parentheses,
+ * followed by a single "(other options)" marker when selection criteria are set, instead of listing
+ * every criterion in the order list. The group replaces the normal-cargo load/unload parentheses,
+ * which for a carrier order would only say "no loading / no unloading".
+ * @param line The line to append to.
+ * @param order The station order.
+ */
+/** Standalone text of a normal-cargo load type, for the road vehicle transport order summary. */
+static StringID RVTransportCargoLoadText(OrderLoadType load)
+{
+	switch (load) {
+		case OrderLoadType::FullLoad:      return STR_ORDER_DROP_FULL_LOAD_ALL;
+		case OrderLoadType::FullLoadAny:   return STR_ORDER_DROP_FULL_LOAD_ANY;
+		case OrderLoadType::NoLoad:        return STR_ORDER_DROP_NO_LOADING;
+		case OrderLoadType::CargoTypeLoad: return STR_ORDER_DROP_CARGO_TYPE_LOAD;
+		default:                           return STR_ORDER_RV_CARGO_LOAD_DEFAULT; // LoadIfPossible
+	}
+}
+
+/** Standalone text of a normal-cargo unload type, for the road vehicle transport order summary. */
+static StringID RVTransportCargoUnloadText(OrderUnloadType unload)
+{
+	switch (unload) {
+		case OrderUnloadType::Unload:          return STR_ORDER_DROP_UNLOAD;
+		case OrderUnloadType::Transfer:        return STR_ORDER_DROP_TRANSFER;
+		case OrderUnloadType::NoUnload:        return STR_ORDER_DROP_NO_UNLOADING;
+		case OrderUnloadType::CargoTypeUnload: return STR_ORDER_DROP_CARGO_TYPE_UNLOAD;
+		default:                               return STR_ORDER_RV_CARGO_UNLOAD_DEFAULT; // UnloadIfPossible
+	}
+}
+
+static void AppendRVTransportOrderSummary(format_buffer &line, const Order &order)
+{
+	const uint8_t rvf = order.GetRVTransportFlags();
+	line.push_back(' ');
+	line.push_back('(');
+	bool first = true;
+	auto part = [&](StringID str) {
+		if (str == INVALID_STRING_ID) return;
+		if (!first) line.append(", ");
+		first = false;
+		line.append(GetString(str));
+	};
+	if ((rvf & ORVTF_WAIT) != 0) part(STR_ORDER_DROP_WAIT_FOR_ROAD_VEHICLES);
+	/* The load side is either road vehicles or normal cargo (they are mutually exclusive); the
+	 * normal-cargo side is shown with its own wording, so a mixed order shows both parts. */
+	if ((rvf & ORVTF_LOAD) != 0) {
+		part(((rvf & ORVTF_MATCH_DEST) != 0) ? STR_ORDER_DROP_RV_LOAD_NEXT : STR_ORDER_DROP_LOAD_ROAD_VEHICLES);
+	} else {
+		part(RVTransportCargoLoadText(order.GetLoadType()));
+	}
+	if ((rvf & ORVTF_UNLOAD) != 0) {
+		part(((rvf & ORVTF_UNLOAD_ALL) != 0) ? STR_ORDER_DROP_UNLOAD_ALL_ROAD_VEHICLES : STR_ORDER_DROP_UNLOAD_ROAD_VEHICLES);
+	} else {
+		part(RVTransportCargoUnloadText(order.GetUnloadType()));
+	}
+	if (order.GetRVTransportLoadState() != RVTLS_ANY || order.GetRVTransportCargoMode() != RVTC_ANY ||
+			order.GetRVTransportMinWait() != 0 || order.GetRVTransportSlot() != 0 || order.GetRVTransportMax() != 0) {
+		line.push_back(' ');
+		line.append(GetString(STR_ORDER_RV_TRANSPORT_MORE_OPTIONS));
+	}
+	line.push_back(')');
 }
 
 /**
@@ -951,13 +1554,29 @@ void DrawOrderString(const Vehicle *v, const Order *order, int order_index, int 
 				timetable_wait_time_valid = true;
 			} else {
 				/* Show non-stop, refit and stop location only in the order window. */
+				/* The road vehicle transport feature has two independent sets of bits, so an order can
+				 * carry both readings at once: the carrier ones (load/unload road vehicles) are
+				 * summarised in the parentheses below, the road vehicle's own ones ("wait to be
+				 * transported" / "be unloaded here") as a suffix. Which of them has any effect
+				 * depends on the vehicle running the order; a vehicle-less standalone/shared order
+				 * list simply shows what it carries. */
+				const uint8_t rvf = order->GetRVTransportFlags();
+				const bool rv_transport = (rvf & (ORVTF_LOAD | ORVTF_UNLOAD)) != 0;
+				const bool rv_own = (rvf & (ORVTF_OWN_WAIT | ORVTF_OWN_UNLOAD)) != 0;
+
 				if (!(order->GetNonStopType() & ONSF_NO_STOP_AT_DESTINATION_STATION)) {
-					StringID str = _station_load_types[order->IsRefit()][to_underlying(unload)][to_underlying(load)];
-					if (str != INVALID_STRING_ID) {
-						if (order->IsRefit()) {
-							AppendStringInPlace(line, str, order->IsAutoRefit() ? STR_ORDER_AUTO_REFIT_ANY : CargoSpec::Get(order->GetRefitCargo())->name);
-						} else {
-							AppendStringInPlace(line, str);
+					if (rv_transport) {
+						/* A road vehicle carrier's order shows its road vehicle transport parts
+						 * inside the parentheses instead of the normal-cargo load/unload text. */
+						AppendRVTransportOrderSummary(line, *order);
+					} else {
+						StringID str = _station_load_types[order->IsRefit()][to_underlying(unload)][to_underlying(load)];
+						if (str != INVALID_STRING_ID) {
+							if (order->IsRefit()) {
+								AppendStringInPlace(line, str, order->IsAutoRefit() ? STR_ORDER_AUTO_REFIT_ANY : CargoSpec::Get(order->GetRefitCargo())->name);
+							} else {
+								AppendStringInPlace(line, str);
+							}
 						}
 					}
 				}
@@ -975,6 +1594,21 @@ void DrawOrderString(const Vehicle *v, const Order *order, int order_index, int 
 				if ((v != nullptr && v->type == VehicleType::Road) && order->GetRoadVehTravelDirection() != DiagDirection::Invalid) {
 					line.push_back(' ');
 					AppendStringInPlace(line, STR_ORDER_RV_DIR_NE + to_underlying(order->GetRoadVehTravelDirection()));
+				}
+
+				/* RoRo: the road vehicle's own "wait to be transported" / "be unloaded here" toggles as
+				 * a suffix. A carrier's own road vehicle transport parts are already in the
+				 * parentheses above, and its selection criteria are only shown as the "(other
+				 * options)" marker (see AppendRVTransportOrderSummary). */
+				if (rv_own) {
+					if ((rvf & ORVTF_OWN_WAIT) != 0) {
+						line.push_back(' ');
+						AppendStringInPlace(line, STR_ORDER_DROP_WAIT_TO_BE_TRANSPORTED);
+					}
+					if ((rvf & ORVTF_OWN_UNLOAD) != 0) {
+						line.push_back(' ');
+						AppendStringInPlace(line, STR_ORDER_DROP_BE_UNLOADED_HERE);
+					}
 				}
 			}
 			break;
@@ -1008,7 +1642,7 @@ void DrawOrderString(const Vehicle *v, const Order *order, int order_index, int 
 				AppendStringInPlace(line, STR_ORDER_SELL_ORDER);
 			} else {
 				/* Do not show stopping in the depot in the timetable window. */
-				if (!timetable && (order->GetDepotActionType() & ODATFB_HALT)) {
+				if (!timetable && ((order->GetDepotActionType() & ODATFB_HALT) || IsDepotActionFixedToStop(v, order))) {
 					AppendStringInPlace(line, STR_ORDER_STOP_ORDER);
 				}
 
@@ -1853,11 +2487,14 @@ private:
 	OrderDecoupleOrdersFlags decouple_schedule_orders_type = ODOF_EXECUTE_SCHEDULE; ///< Decouple orders type the open schedule picker applies.
 	OrderListID list_id = OrderListID::Invalid(); ///< Target list id when editing a standalone (player-created) order list.
 
+public:
+	/** Owner the picked schedule must be visible to. */
+	Owner TargetOwner() const { return this->HasVehicle() ? this->vehicle->owner : (this->order_list != nullptr ? this->order_list->GetCompany() : OWNER_NONE); }
+
 private:
 	/* ---- target mode helpers: order-content access goes through these ---- */
 	VehicleOrderID NumOrders() const { return this->HasVehicle() ? this->vehicle->GetNumOrders() : (this->order_list != nullptr ? this->order_list->GetNumOrders() : 0); }
 	const Order *OrderAt(VehicleOrderID i) const { return this->HasVehicle() ? this->vehicle->GetOrder(i) : (this->order_list != nullptr ? this->order_list->GetOrderAt(i) : nullptr); }
-	Owner TargetOwner() const { return this->HasVehicle() ? this->vehicle->owner : (this->order_list != nullptr ? this->order_list->GetCompany() : OWNER_NONE); }
 	bool IsLocalTarget() const { return this->TargetOwner() == _local_company; }
 	bool IsDispatchEnabled() const {
 		if (this->HasVehicle()) {
@@ -2014,6 +2651,160 @@ private:
 	}
 
 	/**
+	 * Is this vehicle a dedicated road vehicle carrier, i.e. every cargo-carrying part of its chain
+	 * is refitted to the dedicated road vehicle transport cargo? A dedicated carrier never
+	 * transports normal cargo, so its order buttons and dropdowns advertise (and its new orders
+	 * default to) road vehicle transport; every other vehicle defaults to the normal-cargo options.
+	 */
+	bool IsVehicleOnlyCarrier() const
+	{
+		return RVTransportVehicleCarriesOnlyVehicles(this->vehicle);
+	}
+
+	/**
+	 * Whether the road vehicle's own transport options ("wait to be transported" / "be unloaded
+	 * here") apply to the order being edited. They only make sense on a road vehicle, but a
+	 * standalone/shared order list is not bound to a vehicle and may be run by any of them, so
+	 * such a list offers the options as well; the flags simply do nothing for the vehicle types
+	 * which never act on them.
+	 * @return true when the options have to be offered.
+	 */
+	bool RoadTransportTogglesApply() const
+	{
+		return !this->HasVehicle() || this->vehicle->type == VehicleType::Road;
+	}
+
+	/**
+	 * Whether the carrier side of the road vehicle transport options ("load road vehicles" /
+	 * "unload road vehicles" and the selection criteria) is offered for the order being edited.
+	 * That is the case for every vehicle type but a road vehicle - a road vehicle is never a
+	 * carrier of other road vehicles - and for a standalone/shared order list, which may be run
+	 * by a carrier just as well as by a road vehicle.
+	 * @return true when the options have to be offered.
+	 */
+	bool CarrierTransportTogglesApply() const
+	{
+		return !this->HasVehicle() || this->vehicle->type != VehicleType::Road;
+	}
+
+	/**
+	 * Build the road vehicle transport entries of the load dropdown: the two load modes ("load any"
+	 * / "load for the next stop") as plain entries, the "wait for road vehicles" checkbox (it can be
+	 * active together with either load mode) and the entry which opens the selection criteria window.
+	 * "Wait" and the criteria-window entry are only usable while the order actually loads road
+	 * vehicles, as they are meaningful only in that mode.
+	 * @param order The selected station order.
+	 * @return The list of entries.
+	 */
+	DropDownList BuildRVLoadDropDown(const Order *order) const
+	{
+		DropDownList list;
+		const uint8_t rvf = order->GetRVTransportFlags();
+		const bool loads = (rvf & ORVTF_LOAD) != 0;
+		list.push_back(MakeDropDownListStringItem(STR_ORDER_DROP_RV_LOAD_ANY, RVDD_LOAD_ANY));
+		list.push_back(MakeDropDownListStringItem(STR_ORDER_DROP_RV_LOAD_NEXT, RVDD_LOAD_MATCH));
+		list.push_back(MakeDropDownListCheckedItem((rvf & ORVTF_WAIT) != 0, STR_ORDER_DROP_WAIT_FOR_ROAD_VEHICLES, RVDD_LOAD_WAIT, false, !loads));
+		list.push_back(MakeDropDownListStringItem(STR_ORDER_DROP_RV_LOAD_OPTIONS, RVDD_TRANSPORT, false, !loads));
+		return list;
+	}
+
+	/**
+	 * Build the road vehicle transport entries of the unload dropdown: the two unload options as
+	 * plain entries. There is no criteria entry because the selection criteria only concern loading.
+	 * @return The list of entries.
+	 */
+	DropDownList BuildRVUnloadDropDown() const
+	{
+		DropDownList list;
+		list.push_back(MakeDropDownListStringItem(STR_ORDER_DROP_UNLOAD_ROAD_VEHICLES, RVDD_UNLOAD));
+		list.push_back(MakeDropDownListStringItem(STR_ORDER_DROP_UNLOAD_ALL_ROAD_VEHICLES, RVDD_UNLOAD_ALL));
+		return list;
+	}
+
+	/**
+	 * Build the standard cargo load/unload dropdown entries.
+	 * @param unload Whether to build the unload entries (instead of the load entries).
+	 * @return The list of entries.
+	 */
+	DropDownList BuildCargoLoadUnloadDropDown(bool unload) const
+	{
+		DropDownList list;
+		const StringID *array = unload ? _order_unload_dropdown : _order_full_load_dropdown;
+		const uint count = unload ? lengthof(_order_unload_dropdown) : lengthof(_order_full_load_dropdown);
+		for (uint i = 0; i < count; i++) {
+			if (array[i] == STR_EMPTY) continue;
+			list.push_back(MakeDropDownListStringItem(array[i], i));
+		}
+		return list;
+	}
+
+	/**
+	 * Build the contents of the load dropdown.
+	 * Both the normal-cargo load types and the road vehicle transport options are offered, separated
+	 * by a divider; which group comes first depends on whether this vehicle is a dedicated road
+	 * vehicle carrier. The normal-cargo and road vehicle transport loads are mutually exclusive, so
+	 * choosing one clear the other.
+	 * @return The dropdown list.
+	 */
+	DropDownList BuildLoadDropDownList() const
+	{
+		const Order *order = OrderAt(this->OrderGetSel());
+		const bool station = (order != nullptr) && order->IsType(OT_GOTO_STATION);
+		const bool is_carrier = this->CarrierTransportTogglesApply();
+
+		DropDownList cargo_items = this->BuildCargoLoadUnloadDropDown(false);
+		/* The road vehicle transport options only apply to a carrier (train/ship/aircraft) order; a
+		 * road vehicle's own "wait to be transported" toggle lives in the manage-order menu. */
+		DropDownList rv_items = (station && is_carrier) ? this->BuildRVLoadDropDown(order) : DropDownList{};
+
+		DropDownList list;
+		if (this->IsVehicleOnlyCarrier()) {
+			/* A dedicated carrier presents the road vehicle transport options first. */
+			for (auto &i : rv_items) list.push_back(std::move(i));
+			if (!rv_items.empty()) list.push_back(MakeDropDownListDividerItem());
+			for (auto &i : cargo_items) list.push_back(std::move(i));
+		} else {
+			for (auto &i : cargo_items) list.push_back(std::move(i));
+			if (!rv_items.empty()) list.push_back(MakeDropDownListDividerItem());
+			for (auto &i : rv_items) list.push_back(std::move(i));
+		}
+		return list;
+	}
+
+	/**
+	 * Build the contents of the unload dropdown.
+	 * Both the normal-cargo unload types and the road vehicle transport options are offered, separated
+	 * by a divider; which group comes first depends on whether this vehicle is a dedicated road
+	 * vehicle carrier. The normal-cargo and road vehicle transport unloads are mutually exclusive, so
+	 * choosing one clear the other.
+	 * @return The dropdown list.
+	 */
+	DropDownList BuildUnloadDropDownList() const
+	{
+		const Order *order = OrderAt(this->OrderGetSel());
+		const bool station = (order != nullptr) && order->IsType(OT_GOTO_STATION);
+		const bool is_carrier = this->CarrierTransportTogglesApply();
+
+		DropDownList cargo_items = this->BuildCargoLoadUnloadDropDown(true);
+		/* The road vehicle transport options only apply to a carrier (train/ship/aircraft) order; a
+		 * road vehicle's own "be unloaded here" toggle lives in the manage-order menu. */
+		DropDownList rv_items = (station && is_carrier) ? this->BuildRVUnloadDropDown() : DropDownList{};
+
+		DropDownList list;
+		if (this->IsVehicleOnlyCarrier()) {
+			/* A dedicated carrier presents the road vehicle transport options first. */
+			for (auto &i : rv_items) list.push_back(std::move(i));
+			if (!rv_items.empty()) list.push_back(MakeDropDownListDividerItem());
+			for (auto &i : cargo_items) list.push_back(std::move(i));
+		} else {
+			for (auto &i : cargo_items) list.push_back(std::move(i));
+			if (!rv_items.empty()) list.push_back(MakeDropDownListDividerItem());
+			for (auto &i : rv_items) list.push_back(std::move(i));
+		}
+		return list;
+	}
+
+	/**
 	 * Handle the click on the goto button.
 	 * @param type The variant of goto button/dropdown options.
 	 */
@@ -2147,16 +2938,29 @@ private:
 		this->OrderClick_OrdersType(index, false);
 	}
 
+public:
 	/**
-	 * Get the modify-order flag storing the pending schedule picker selection.
+	 * Get the modify-order flag storing a decouple schedule picker selection.
 	 * @param first true for the first part of the train, false for the second
+	 * @param type the decouple orders type the selection applies to
 	 */
-	ModifyOrderFlags DecoupleScheduleMof(bool first) const
+	ModifyOrderFlags DecoupleScheduleMof(bool first, OrderDecoupleOrdersFlags type) const
 	{
-		if (this->decouple_schedule_orders_type == ODOF_LOAD_AND_SCHEDULE) {
+		if (type == ODOF_LOAD_AND_SCHEDULE) {
 			return first ? MOF_DECOUPLE_FIRST_LOAD_SCHEDULE : MOF_DECOUPLE_SECOND_LOAD_SCHEDULE;
 		}
 		return first ? MOF_DECOUPLE_FIRST_SCHEDULE : MOF_DECOUPLE_SECOND_SCHEDULE;
+	}
+
+	/**
+	 * Apply a schedule picked in the decouple schedule picker window.
+	 * @param first true for the first part of the train, false for the second
+	 * @param type the decouple orders type the selection applies to
+	 * @param id the picked order list
+	 */
+	void DecoupleSchedulePicked(bool first, OrderDecoupleOrdersFlags type, OrderListID id)
+	{
+		this->ModifyOrder(this->OrderGetSel(), this->DecoupleScheduleMof(first, type), id.base());
 	}
 
 	/**
@@ -2169,35 +2973,14 @@ private:
 		if (index < 0 || (uint)index >= lengthof(_order_decouple_orders_drowdown_flags)) return;
 		OrderDecoupleOrdersFlags flag = _order_decouple_orders_drowdown_flags[index];
 		if (flag == ODOF_EXECUTE_SCHEDULE || flag == ODOF_LOAD_AND_SCHEDULE) {
-			/* Show the schedule picker for this part. */
-			this->decouple_schedule_part = first ? 0 : 1;
-			this->decouple_schedule_orders_type = flag;
-			this->ShowDecoupleScheduleDropdown(first ? WID_O_ORDERS_FIRST : WID_O_ORDERS_SECOND);
+			/* Open the schedule picker window for this part. */
+			ShowDecoupleSchedulePicker(*this, first, flag);
 			return;
 		}
 		this->ModifyOrder(this->OrderGetSel(), first ? MOF_FIRST_ORDERS : MOF_SECOND_ORDERS, to_underlying(flag));
 	}
 
-	/**
-	 * Show a filterable dropdown with all visible player-created order lists,
-	 * used to pick the schedule a decoupled train part adopts.
-	 * @param widget the widget to attach the dropdown to
-	 */
-	void ShowDecoupleScheduleDropdown(WidgetID widget)
-	{
-		DropDownList list;
-		for (const OrderList *ol : OrderList::Iterate()) {
-			if (!ol->IsPlayerCreated()) continue;
-			if (!ol->IsVisibleToCompany(this->TargetOwner())) continue;
-			std::string name = ol->GetName().empty() ? GetString(STR_ORDER_LIST_DEFAULT_NAME, ol->index.base() + 1) : ol->GetName();
-			list.push_back(MakeDropDownListStringItem(std::move(name), ol->index.base(), false));
-		}
-		if (list.empty()) {
-			ShowErrorMessage(GetEncodedString(STR_ERROR_NO_SCHEDULE_AVAILABLE), {}, WarningLevel::Warning);
-			return;
-		}
-		ShowDropDownList(this, std::move(list), -1, widget, 0, DropDownOption::Filterable, DDSF_SHARED);
-	}
+private:
 
 	/**
 	 * Handle the click on the full load button.
@@ -2211,6 +2994,15 @@ private:
 
 		if (order == nullptr) return;
 
+		/* RoRo: choosing a normal-cargo load leaves road vehicle transport - loading road vehicles
+		 * and its selection options (destination match, waiting) are mutually exclusive with loading
+		 * normal cargo. A road vehicle's own "wait to be transported" is a separate toggle and is not
+		 * touched here. */
+		if (order->IsType(OT_GOTO_STATION) && this->CarrierTransportTogglesApply()) {
+			const uint8_t flags = order->GetRVTransportFlags() & ~(ORVTF_LOAD | ORVTF_MATCH_DEST | ORVTF_WAIT);
+			if (flags != order->GetRVTransportFlags()) this->ModifyOrder(sel_ord, MOF_RV_TRANSPORT, flags);
+		}
+
 		if (toggle && order->GetLoadType() == load_type) {
 			load_type = OrderLoadType::LoadIfPossible; // reset to 'default'
 		}
@@ -2218,7 +3010,93 @@ private:
 			this->ModifyOrder(sel_ord, MOF_LOAD, to_underlying(load_type));
 		}
 
-		if (load_type == OrderLoadType::CargoTypeLoad) ShowCargoTypeOrdersWindow(this->vehicle, this, sel_ord, CTOWV_LOAD);
+		/* A standalone list has no engine to offer cargo types for, so the per-cargo
+		 * window (which needs the vehicle) is only reachable for a vehicle's orders. */
+		if (load_type == OrderLoadType::CargoTypeLoad && this->HasVehicle()) ShowCargoTypeOrdersWindow(this->vehicle, this, sel_ord, CTOWV_LOAD);
+	}
+
+	/**
+	 * Handle the click on the full load button of a road vehicle carrier: toggles between the
+	 * default "load any road vehicles" and "load road vehicles going to the next stop", like the
+	 * cargo button toggles the full load type.
+	 */
+	void OrderClick_RVLoadToggle()
+	{
+		VehicleOrderID sel_ord = this->OrderGetSel();
+		const Order *order = OrderAt(sel_ord);
+		if (order == nullptr || !order->IsType(OT_GOTO_STATION)) return;
+
+		uint8_t flags = order->GetRVTransportFlags() | ORVTF_LOAD;
+		flags ^= ORVTF_MATCH_DEST;
+		if (flags != order->GetRVTransportFlags()) this->ModifyOrder(sel_ord, MOF_RV_TRANSPORT, flags);
+
+		/* RoRo: loading road vehicles is mutually exclusive with loading normal cargo. */
+		if (order->GetLoadType() != OrderLoadType::NoLoad) {
+			this->ModifyOrder(sel_ord, MOF_LOAD, to_underlying(OrderLoadType::NoLoad));
+		}
+	}
+
+	/**
+	 * Handle the click on the unload button of a road vehicle carrier: toggles between the default
+	 * "unload the road vehicles which want to get off here" and "unload all road vehicles", like
+	 * the cargo button toggles the unload type.
+	 */
+	void OrderClick_RVUnloadToggle()
+	{
+		VehicleOrderID sel_ord = this->OrderGetSel();
+		const Order *order = OrderAt(sel_ord);
+		if (order == nullptr || !order->IsType(OT_GOTO_STATION)) return;
+
+		uint8_t flags = order->GetRVTransportFlags() | ORVTF_UNLOAD;
+		flags ^= ORVTF_UNLOAD_ALL;
+		if (flags != order->GetRVTransportFlags()) this->ModifyOrder(sel_ord, MOF_RV_TRANSPORT, flags);
+
+		/* RoRo: unloading road vehicles is mutually exclusive with unloading normal cargo. */
+		if (order->GetUnloadType() != OrderUnloadType::NoUnload) {
+			this->ModifyOrder(sel_ord, MOF_UNLOAD, to_underlying(OrderUnloadType::NoUnload));
+		}
+	}
+
+	/**
+	 * Handle a road vehicle transport load choice from the load dropdown: set the given vehicle
+	 * transport load flags, and (being mutually exclusive) stop loading normal cargo. The normal-cargo
+	 * load type is always reset, so that the two systems never load at the same station order.
+	 */
+	void OrderClick_RVLoad(uint8_t load_flags)
+	{
+		VehicleOrderID sel_ord = this->OrderGetSel();
+		const Order *order = OrderAt(sel_ord);
+		if (order == nullptr || !order->IsType(OT_GOTO_STATION)) return;
+
+		/* Only the load-side bits change: unloading road vehicles is an independent choice which may
+		 * stay set on the same order (the mutual exclusion is only between loading and unloading
+		 * *normal cargo*). */
+		const uint8_t flags = (order->GetRVTransportFlags() & (ORVTF_UNLOAD | ORVTF_UNLOAD_ALL)) |
+				(load_flags & (ORVTF_LOAD | ORVTF_MATCH_DEST | ORVTF_WAIT));
+		if (flags != order->GetRVTransportFlags()) this->ModifyOrder(sel_ord, MOF_RV_TRANSPORT, flags);
+		if (order->GetLoadType() != OrderLoadType::NoLoad) {
+			this->ModifyOrder(sel_ord, MOF_LOAD, to_underlying(OrderLoadType::NoLoad));
+		}
+	}
+
+	/**
+	 * Handle a road vehicle transport unload choice from the unload dropdown: set the given vehicle
+	 * transport unload flags, and (being mutually exclusive) stop unloading normal cargo.
+	 */
+	void OrderClick_RVUnload(uint8_t unload_flags)
+	{
+		VehicleOrderID sel_ord = this->OrderGetSel();
+		const Order *order = OrderAt(sel_ord);
+		if (order == nullptr || !order->IsType(OT_GOTO_STATION)) return;
+
+		/* Only the unload-side bits change: loading road vehicles is an independent choice which may
+		 * stay set on the same order. */
+		const uint8_t flags = (order->GetRVTransportFlags() & (ORVTF_LOAD | ORVTF_MATCH_DEST | ORVTF_WAIT)) |
+				(unload_flags & (ORVTF_UNLOAD | ORVTF_UNLOAD_ALL));
+		if (flags != order->GetRVTransportFlags()) this->ModifyOrder(sel_ord, MOF_RV_TRANSPORT, flags);
+		if (order->GetUnloadType() != OrderUnloadType::NoUnload) {
+			this->ModifyOrder(sel_ord, MOF_UNLOAD, to_underlying(OrderUnloadType::NoUnload));
+		}
 	}
 
 	/**
@@ -2328,6 +3206,14 @@ private:
 
 		if (order == nullptr) return;
 
+		/* RoRo: choosing a normal-cargo unload leaves road vehicle transport - unloading road vehicles
+		 * (and unload-all) is mutually exclusive with unloading normal cargo. A road vehicle's own
+		 * "be unloaded here" is a separate toggle and is not touched here. */
+		if (order->IsType(OT_GOTO_STATION) && this->CarrierTransportTogglesApply()) {
+			const uint8_t flags = order->GetRVTransportFlags() & ~(ORVTF_UNLOAD | ORVTF_UNLOAD_ALL);
+			if (flags != order->GetRVTransportFlags()) this->ModifyOrder(sel_ord, MOF_RV_TRANSPORT, flags);
+		}
+
 		if (toggle && order->GetUnloadType() == unload_type) {
 			unload_type = OrderUnloadType::UnloadIfPossible;
 		}
@@ -2434,6 +3320,11 @@ private:
 	 */
 	void OrderClick_Refit(int i, bool auto_refit)
 	{
+		/* A standalone/shared order list has no vehicle, and Commands::OrderRefit (the only
+		 * way to set the refit cargo of an order) works on a vehicle's orders only, so there
+		 * is nothing to do here. */
+		if (!this->HasVehicle()) return;
+
 		if (_ctrl_pressed) {
 			/* Cancel refitting */
 			Command<Commands::OrderRefit>::Post(this->vehicle->tile, this->vehicle->index, this->OrderGetSel(), CARGO_NO_REFIT);
@@ -2588,6 +3479,7 @@ public:
 	{
 		CloseWindowById(WindowClass::VehicleCargoTypeLoadOrders, this->window_number, false);
 		CloseWindowById(WindowClass::VehicleCargoTypeUnloadOrders, this->window_number, false);
+		CloseWindowById(WindowClass::DecoupleSchedulePicker, this->window_number, false);
 		if (this->HasVehicle()) FocusWindowById(WindowClass::VehicleView, this->window_number);
 		this->GeneralVehicleWindow::Close();
 	}
@@ -2862,6 +3754,25 @@ public:
 			this->SetWidgetDisabledState(WID_O_UNLOAD,    (order->GetNonStopType() & ONSF_NO_STOP_AT_DESTINATION_STATION) != 0); // unload
 			this->EnableWidget(WID_O_MGMT_BTN);
 
+			/* RoRo: road vehicle carriers show their own load/unload option on the buttons; for a
+			 * road vehicle itself the toggles live in the manage-order menu now. */
+			{
+				/* this->vehicle is nullptr while a standalone/shared order list is edited; such a
+				 * list is not a carrier, so it gets the normal cargo button labels. */
+				const bool is_rv = this->RoadTransportTogglesApply();
+				const bool is_vehicle_only = !is_rv && this->IsVehicleOnlyCarrier();
+				if (is_vehicle_only) {
+					/* Fixed labels, like the cargo buttons always show "full load any cargo" /
+					 * "unload all": the pressed state and the dropdown show which of the two
+					 * options (any / next stop, matching / unload all) is currently active. */
+					this->GetWidget<NWidgetCore>(WID_O_FULL_LOAD)->SetString(STR_ORDER_DROP_RV_LOAD_NEXT);
+					this->GetWidget<NWidgetCore>(WID_O_UNLOAD)->SetString(STR_ORDER_DROP_UNLOAD_ALL_ROAD_VEHICLES);
+				} else {
+					this->GetWidget<NWidgetCore>(WID_O_FULL_LOAD)->SetString(STR_ORDER_TOGGLE_FULL_LOAD);
+					this->GetWidget<NWidgetCore>(WID_O_UNLOAD)->SetString(STR_ORDER_TOGGLE_UNLOAD);
+				}
+			}
+
 			switch (order->GetType()) {
 				case OT_GOTO_STATION:
 					if (row_sel != nullptr) {
@@ -2874,14 +3785,21 @@ public:
 						this->EnableWidget(WID_O_NON_STOP);
 						this->SetWidgetLoweredState(WID_O_NON_STOP, order->GetNonStopType() & ONSF_NO_STOP_AT_INTERMEDIATE_STATIONS);
 					}
-					this->SetWidgetLoweredState(WID_O_FULL_LOAD, order->GetLoadType() == OrderLoadType::FullLoadAny);
-					this->SetWidgetLoweredState(WID_O_UNLOAD, order->GetUnloadType() == OrderUnloadType::Unload);
+					/* RoRo: a dedicated road vehicle carrier marks the "next stop" / "unload all" options
+					 * as pressed; every other vehicle shows the plain cargo pressed states. */
+					if (!this->IsVehicleOnlyCarrier()) {
+						this->SetWidgetLoweredState(WID_O_FULL_LOAD, order->GetLoadType() == OrderLoadType::FullLoadAny);
+						this->SetWidgetLoweredState(WID_O_UNLOAD, order->GetUnloadType() == OrderUnloadType::Unload);
+					} else {
+						this->SetWidgetLoweredState(WID_O_FULL_LOAD, (order->GetRVTransportFlags() & ORVTF_MATCH_DEST) != 0);
+						this->SetWidgetLoweredState(WID_O_UNLOAD, (order->GetRVTransportFlags() & ORVTF_UNLOAD_ALL) != 0);
+					}
 
-					/* Can only do refitting when stopping at the destination and loading cargo.
-					 * Also enable the button if a refit is already set to allow clearing it. */
-					this->SetWidgetDisabledState(WID_O_REFIT_DROPDOWN,
-							order->GetLoadType() == OrderLoadType::NoLoad || (order->GetNonStopType() & ONSF_NO_STOP_AT_DESTINATION_STATION) ||
-							((!this->can_do_refit || !this->can_do_autorefit) && !order->IsRefit()));
+				/* Can only do refitting when stopping at the destination and loading cargo.
+				 * Also enable the button if a refit is already set to allow clearing it. */
+				this->SetWidgetDisabledState(WID_O_REFIT_DROPDOWN,
+						order->GetLoadType() == OrderLoadType::NoLoad || (order->GetNonStopType() & ONSF_NO_STOP_AT_DESTINATION_STATION) ||
+						((!this->can_do_refit || !this->can_do_autorefit) && !order->IsRefit()));
 
 					break;
 
@@ -2903,6 +3821,7 @@ public:
 					break;
 
 				case OT_GOTO_DEPOT:
+					this->SetWidgetDisabledState(WID_O_DEPOT_ACTION, IsDepotActionFixedToStop(this->vehicle, order));
 					if (row_sel != nullptr) {
 						row_sel->SetDisplayedPlane(DP_ROW_DEPOT);
 					} else {
@@ -2913,11 +3832,11 @@ public:
 						this->EnableWidget(WID_O_NON_STOP);
 						this->SetWidgetLoweredState(WID_O_NON_STOP, order->GetNonStopType() & ONSF_NO_STOP_AT_INTERMEDIATE_STATIONS);
 					}
-					/* Disable refit button if the order is no 'always go' order.
-					 * However, keep the service button enabled for refit-orders to allow clearing refits (without knowing about ctrl). */
-					this->SetWidgetDisabledState(WID_O_REFIT,
-							order->GetDepotOrderType().Test(OrderDepotTypeFlag::Service) || (order->GetDepotActionType() & ODATFB_HALT) ||
-							(!this->can_do_refit && !order->IsRefit()));
+				/* Disable refit button if the order is no 'always go' order.
+				 * However, keep the service button enabled for refit-orders to allow clearing refits (without knowing about ctrl). */
+				this->SetWidgetDisabledState(WID_O_REFIT,
+						order->GetDepotOrderType().Test(OrderDepotTypeFlag::Service) || (order->GetDepotActionType() & ODATFB_HALT) ||
+						(!this->can_do_refit && !order->IsRefit()));
 					break;
 
 				case OT_CONDITIONAL: {
@@ -3517,6 +4436,7 @@ public:
 				VehicleOrderID sel = this->OrderGetSel();
 				const Order *order = OrderAt(sel);
 				if (order == nullptr || !order->IsType(OT_GOTO_DEPOT)) return {};
+				if (IsDepotActionFixedToStop(this->vehicle, order)) return GetString(STR_ORDER_DROP_HALT_DEPOT);
 
 				/* Select the current action selected in the dropdown. The flags don't match the dropdown so we can't just use an index. */
 				if (order->GetDepotActionType() & ODATFB_SELL) {
@@ -3794,6 +4714,15 @@ public:
 					}
 				}
 
+				if (this->RoadTransportTogglesApply() && order->IsType(OT_GOTO_STATION)) {
+					/* RoRo: a road vehicle's own transport toggles live in this menu. They are also
+					 * offered for a standalone list, which is not bound to a vehicle type. */
+					const uint8_t rvf = order->GetRVTransportFlags();
+					list.push_back(MakeDropDownListDividerItem());
+					list.push_back(MakeDropDownListCheckedItem((rvf & ORVTF_OWN_WAIT) != 0, STR_ORDER_DROP_WAIT_TO_BE_TRANSPORTED, RVDD_RV_WAIT, false));
+					list.push_back(MakeDropDownListCheckedItem((rvf & ORVTF_OWN_UNLOAD) != 0, STR_ORDER_DROP_BE_UNLOADED_HERE, RVDD_RV_UNLOAD, false));
+				}
+
 				if (!order->IsType(OT_IMPLICIT)) {
 					list.push_back(MakeDropDownListDividerItem());
 					const Colours current_colour = order->GetColour();
@@ -3893,17 +4822,39 @@ public:
 
 			case WID_O_FULL_LOAD:
 				if (this->GetWidget<NWidgetLeaf>(widget)->ButtonHit(pt)) {
-					this->OrderClick_FullLoad(OrderLoadType::FullLoadAny, true);
+					if (this->IsVehicleOnlyCarrier()) {
+						this->OrderClick_RVLoadToggle();
+					} else {
+						this->OrderClick_FullLoad(OrderLoadType::FullLoadAny, true);
+					}
 				} else {
-					ShowDropDownMenu(this, _order_full_load_dropdown, to_underlying(OrderAt(this->OrderGetSel())->GetLoadType()), WID_O_FULL_LOAD, 0, 0x22 /* 010 0010 */, 0, DDSF_SHARED);
+					/* RoRo: both the normal-cargo and the road vehicle transport options are listed; the
+					 * current selection marks whichever of the two the order uses at the moment. */
+					const Order *lo = OrderAt(this->OrderGetSel());
+					int sel = (lo != nullptr) ? to_underlying(lo->GetLoadType()) : 0;
+					if (lo != nullptr && lo->IsType(OT_GOTO_STATION) && this->CarrierTransportTogglesApply() && (lo->GetRVTransportFlags() & ORVTF_LOAD) != 0) {
+						sel = ((lo->GetRVTransportFlags() & ORVTF_MATCH_DEST) != 0) ? RVDD_LOAD_MATCH : RVDD_LOAD_ANY;
+					}
+					ShowDropDownList(this, this->BuildLoadDropDownList(), sel, WID_O_FULL_LOAD, 0, DropDownOptions{}, DDSF_SHARED);
 				}
 				break;
 
 			case WID_O_UNLOAD:
 				if (this->GetWidget<NWidgetLeaf>(widget)->ButtonHit(pt)) {
-					this->OrderClick_Unload(OrderUnloadType::Unload, true);
+					if (this->IsVehicleOnlyCarrier()) {
+						this->OrderClick_RVUnloadToggle();
+					} else {
+						this->OrderClick_Unload(OrderUnloadType::Unload, true);
+					}
 				} else {
-					ShowDropDownMenu(this, _order_unload_dropdown, to_underlying(OrderAt(this->OrderGetSel())->GetUnloadType()), WID_O_UNLOAD, 0, 0x08 /* 00 1000 */, 0, DDSF_SHARED);
+					/* RoRo: both the normal-cargo and the road vehicle transport options are listed; the
+					 * current selection marks whichever of the two the order uses at the moment. */
+					const Order *lo = OrderAt(this->OrderGetSel());
+					int sel = (lo != nullptr) ? to_underlying(lo->GetUnloadType()) : 0;
+					if (lo != nullptr && lo->IsType(OT_GOTO_STATION) && this->CarrierTransportTogglesApply() && (lo->GetRVTransportFlags() & ORVTF_UNLOAD) != 0) {
+						sel = ((lo->GetRVTransportFlags() & ORVTF_UNLOAD_ALL) != 0) ? RVDD_UNLOAD_ALL : RVDD_UNLOAD;
+					}
+					ShowDropDownList(this, this->BuildUnloadDropDownList(), sel, WID_O_UNLOAD, 0, DropDownOptions{}, DDSF_SHARED);
 				}
 				break;
 
@@ -4395,7 +5346,6 @@ public:
 			case WID_O_ORDERS_FIRST:
 			case WID_O_ORDERS_SECOND: {
 				/* Clicking anywhere opens the dropdown; the selection is only changed there. */
-				this->decouple_schedule_part = -1;
 				const Order *order = OrderAt(this->OrderGetSel());
 				int selected = 0;
 				if (order != nullptr && order->IsType(OT_DECOUPLE)) {
@@ -4549,10 +5499,42 @@ public:
 				break;
 
 			case WID_O_FULL_LOAD:
+				switch (index) {
+					case RVDD_TRANSPORT:
+						/* RoRo: open the window with the road vehicle transport selection criteria. */
+						HideDropDownMenu(this);
+						ShowRVTransportWindow(this->vehicle, this, this->OrderGetSel());
+						return;
+					case RVDD_LOAD_ANY:
+						this->OrderClick_RVLoad(ORVTF_LOAD);
+						return;
+					case RVDD_LOAD_MATCH:
+						this->OrderClick_RVLoad(ORVTF_LOAD | ORVTF_MATCH_DEST);
+						return;
+					case RVDD_LOAD_WAIT: {
+						const Order *o = OrderAt(this->OrderGetSel());
+						if (o == nullptr) return;
+						uint8_t flags = (o->GetRVTransportFlags() | ORVTF_LOAD) ^ ORVTF_WAIT;
+						this->OrderClick_RVLoad(flags);
+						return;
+					}
+					default:
+						break;
+				}
 				this->OrderClick_FullLoad(static_cast<OrderLoadType>(index));
 				break;
 
 			case WID_O_UNLOAD:
+				switch (index) {
+					case RVDD_UNLOAD:
+						this->OrderClick_RVUnload(ORVTF_UNLOAD);
+						return;
+					case RVDD_UNLOAD_ALL:
+						this->OrderClick_RVUnload(ORVTF_UNLOAD | ORVTF_UNLOAD_ALL);
+						return;
+					default:
+						break;
+				}
 				this->OrderClick_Unload(static_cast<OrderUnloadType>(index));
 				break;
 
@@ -4581,20 +5563,10 @@ public:
 				break;
 
 			case WID_O_ORDERS_FIRST:
-				if (this->decouple_schedule_part == 0) {
-					this->decouple_schedule_part = -1;
-					this->ModifyOrder(this->OrderGetSel(), this->DecoupleScheduleMof(true), index);
-					break;
-				}
 				this->OrderClick_OrdersFirst(index);
 				break;
 
 			case WID_O_ORDERS_SECOND:
-				if (this->decouple_schedule_part == 1) {
-					this->decouple_schedule_part = -1;
-					this->ModifyOrder(this->OrderGetSel(), this->DecoupleScheduleMof(false), index);
-					break;
-				}
 				this->OrderClick_OrdersSecond(index);
 				break;
 
@@ -4820,6 +5792,24 @@ public:
 					this->ModifyOrder(this->OrderGetSel(), MOF_RV_TRAVEL_DIR, index & 0xFF);
 					break;
 				}
+				if (index == RVDD_RV_WAIT || index == RVDD_RV_UNLOAD) {
+					/* RoRo: toggle a road vehicle's own "wait to be transported" / "be unloaded here". The
+					 * two are mutually exclusive - a vehicle cannot wait to be taken and be put down at the
+					 * same station - so switching one on switches the other off. Clicking the one that is
+					 * already set still turns it off again. */
+					const Order *o = OrderAt(this->OrderGetSel());
+					if (o == nullptr) break;
+					const bool wait = (index == RVDD_RV_WAIT);
+					const uint8_t bit = wait ? ORVTF_OWN_WAIT : ORVTF_OWN_UNLOAD;
+					const uint8_t other = wait ? ORVTF_OWN_UNLOAD : ORVTF_OWN_WAIT;
+					uint8_t flags = o->GetRVTransportFlags();
+					if ((flags & bit) != 0) {
+						flags &= ~bit;
+					} else {
+						flags = (uint8_t)((flags & ~other) | bit);
+					}
+					if (flags != o->GetRVTransportFlags()) this->ModifyOrder(this->OrderGetSel(), MOF_RV_TRANSPORT, flags);
+					break;				}
 				switch (index) {
 					case 0:
 						this->OrderClick_Duplicate();
@@ -5165,6 +6155,185 @@ public:
 		Hotkey(0, "close", OHK_CLOSE),
 	}};
 };
+
+/** Nested widget definition for the decouple schedule picker popup. */
+static constexpr NWidgetPart _nested_decouple_schedule_picker_widgets[] = {
+	NWidget(NWID_HORIZONTAL),
+		NWidget(WWT_CLOSEBOX, Colours::Grey),
+		NWidget(WWT_CAPTION, Colours::Grey, WID_DSP_CAPTION), SetStringTip(STR_ORDER_PICK_SCHEDULE_CAPTION, STR_NULL),
+		NWidget(WWT_SHADEBOX, Colours::Grey),
+		NWidget(WWT_STICKYBOX, Colours::Grey),
+	EndContainer(),
+
+	NWidget(NWID_HORIZONTAL),
+		NWidget(WWT_EDITBOX, Colours::Grey, WID_DSP_FILTER), SetFill(1, 0), SetResize(1, 0), SetStringTip(STR_LIST_FILTER_OSKTITLE, STR_LIST_FILTER_TOOLTIP),
+	EndContainer(),
+
+	NWidget(NWID_HORIZONTAL),
+		NWidget(WWT_PANEL, Colours::Grey),
+			NWidget(WWT_INSET, Colours::Grey, WID_DSP_LIST), SetFill(1, 1), SetPadding(2, 1, 2, 2), SetResize(1, 0), SetScrollbar(WID_DSP_SCROLL), SetToolTip(STR_ORDER_PICK_SCHEDULE_LIST_TOOLTIP),
+			EndContainer(),
+		EndContainer(),
+		NWidget(NWID_VSCROLLBAR, Colours::Grey, WID_DSP_SCROLL),
+	EndContainer(),
+};
+
+static WindowDesc _decouple_schedule_picker_desc(__FILE__, __LINE__,
+	WindowPosition::Manual, "decouple_schedule_picker", 320, 220,
+	WindowClass::DecoupleSchedulePicker, WindowClass::None,
+	WindowDefaultFlag::Construction,
+	_nested_decouple_schedule_picker_widgets
+);
+
+/**
+ * Window to pick the schedule a decoupled train part adopts after decoupling.
+ * Lists the same player-created, visible order lists the old attached dropdown
+ * offered, in its own popup window.
+ */
+struct DecoupleSchedulePickerWindow : Window {
+	OrdersWindow *orders_window = nullptr;  ///< Orders window the picked schedule is applied to; may be closed while the picker is open.
+	bool first = true;                      ///< True when picking for the first part of the train.
+	OrderDecoupleOrdersFlags orders_type = ODOF_EXECUTE_SCHEDULE; ///< Decouple orders type the picked schedule applies to.
+	Owner owner = OWNER_NONE;               ///< Owner the schedule must be visible to.
+	std::vector<OrderListID> list{};        ///< The translation table linking panel rows to their related OrderListID.
+	StringFilter string_filter;             ///< Filter for schedule names.
+	QueryString filter_editbox;             ///< Filter editbox.
+	Scrollbar *vscroll = nullptr;           ///< Vertical scrollbar of the list of order lists.
+
+	DecoupleSchedulePickerWindow(OrdersWindow *orders_window, bool first, OrderDecoupleOrdersFlags type, Owner owner)
+		: Window(_decouple_schedule_picker_desc), orders_window(orders_window), first(first), orders_type(type), owner(owner),
+		filter_editbox(64 * MAX_CHAR_LENGTH, 64)
+	{
+		this->CreateNestedTree();
+		this->vscroll = this->GetScrollbar(WID_DSP_SCROLL);
+		this->FinishInitNested(orders_window != nullptr ? (WindowNumber)(uint32_t)orders_window->window_number : (WindowNumber)0);
+
+		this->querystrings[WID_DSP_FILTER] = &this->filter_editbox;
+		this->filter_editbox.cancel_button = QueryString::ACTION_CLEAR;
+
+		this->RebuildList();
+	}
+
+	Point OnInitialPosition(int16_t sm_width, int16_t sm_height, int window_number) override
+	{
+		/* Open near the cursor. Prefer below-right; flip when that would go off screen. View is clamped
+		 * between the main toolbar and the status bar. */
+		int scr_top = GetMainViewTop();
+		int scr_bot = GetMainViewBottom();
+
+		Point pt;
+		pt.x = SoftClamp(_cursor.pos.x - (sm_width >> 1), 0, _screen.width - sm_width);
+		pt.y = _cursor.pos.y + 12;
+		if (pt.y + sm_height > scr_bot) pt.y = std::max(_cursor.pos.y - sm_height - 12, scr_top);
+		return pt;
+	}
+
+	void RebuildList()
+	{
+		this->list.clear();
+		for (const OrderList *ol : OrderList::Iterate()) {
+			if (!ol->IsPlayerCreated()) continue;
+			if (!ol->IsVisibleToCompany(this->owner)) continue;
+			if (!this->string_filter.IsEmpty()) {
+				this->string_filter.ResetState();
+				this->string_filter.AddLine(ol->GetName());
+				if (!this->string_filter.GetState()) continue;
+			}
+			this->list.push_back(ol->index);
+		}
+		this->vscroll->SetCount((uint)this->list.size());
+		this->SetDirty();
+	}
+
+	void UpdateWidgetSize(WidgetID widget, [[maybe_unused]] Dimension &size, [[maybe_unused]] const Dimension &padding, Dimension &fill, Dimension &resize) override
+	{
+		switch (widget) {
+			case WID_DSP_LIST:
+				resize.height = GetCharacterHeight(FontSize::Normal);
+				break;
+		}
+	}
+
+	void DrawWidget(const Rect &r, WidgetID widget) const override
+	{
+		switch (widget) {
+			case WID_DSP_LIST: {
+				Rect ir = r.Shrink(WidgetDimensions::scaled.framerect);
+				uint y = ir.top;
+				if (this->vscroll->GetCount() == 0) {
+					DrawString(ir, STR_STATION_LIST_NONE);
+					return;
+				}
+				for (int32_t i = this->vscroll->GetPosition(); this->vscroll->IsVisible(i) && i < this->vscroll->GetCount(); i++) {
+					const OrderList *ol = OrderList::GetIfValid(this->list[i]);
+					if (ol != nullptr) {
+						std::string name = ol->GetName().empty() ? GetString(STR_ORDER_LIST_DEFAULT_NAME, ol->index.base() + 1) : ol->GetName();
+						DrawString(ir.left, ir.right, y + (this->resize.step_height - GetCharacterHeight(FontSize::Normal)) / 2, name, TextColour::White);
+					}
+					y += this->resize.step_height;
+				}
+				break;
+			}
+		}
+	}
+
+	void OnResize() override
+	{
+		this->vscroll->SetCapacityFromWidget(this, WID_DSP_LIST, WidgetDimensions::scaled.framerect.Vertical());
+	}
+
+	void OnClick(Point pt, WidgetID widget, int) override
+	{
+		switch (widget) {
+			case WID_DSP_LIST: {
+				int row = this->vscroll->GetScrolledRowFromWidget(pt.y, this, WID_DSP_LIST, WidgetDimensions::scaled.framerect.top);
+				if (row < 0 || (size_t)row >= this->list.size()) break;
+				OrderListID id = this->list[row];
+				if (!OrderList::IsValidID(id)) break;
+				if (this->orders_window != nullptr) this->orders_window->DecoupleSchedulePicked(this->first, this->orders_type, id);
+				this->Close();
+				break;
+			}
+		}
+	}
+
+	void OnEditboxChanged(WidgetID widget) override
+	{
+		if (widget != WID_DSP_FILTER) return;
+		this->string_filter.SetFilterTerm(this->filter_editbox.text.GetText());
+		this->RebuildList();
+	}
+
+	void OnInvalidateData([[maybe_unused]] int data = 0, [[maybe_unused]] bool gui_scope = true) override
+	{
+		this->RebuildList();
+	}
+};
+
+/**
+ * Open the decouple schedule picker window for one part of a decoupled train.
+ * @param w the orders window the picker belongs to
+ * @param first true for the first part of the train, false for the second
+ * @param type the decouple orders type the picked schedule applies to
+ */
+void ShowDecoupleSchedulePicker(OrdersWindow &w, bool first, OrderDecoupleOrdersFlags type)
+{
+	/* Count visible schedules first; without any, warn instead of opening an empty picker. */
+	bool any = false;
+	for (const OrderList *ol : OrderList::Iterate()) {
+		if (ol->IsPlayerCreated() && ol->IsVisibleToCompany(w.TargetOwner())) {
+			any = true;
+			break;
+		}
+	}
+	if (!any) {
+		ShowErrorMessage(GetEncodedString(STR_ERROR_NO_SCHEDULE_AVAILABLE), {}, WarningLevel::Warning);
+		return;
+	}
+
+	CloseWindowById(WindowClass::DecoupleSchedulePicker, w.window_number, false);
+	new DecoupleSchedulePickerWindow(&w, first, type, w.TargetOwner());
+}
 
 void InvalidateOrderListWindowOnOrderMove(VehicleID veh, VehicleOrderID from, VehicleOrderID to, uint16_t count)
 {

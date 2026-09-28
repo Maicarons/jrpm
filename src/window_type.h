@@ -261,6 +261,12 @@ enum class WindowClass : uint16_t {
 	VehicleCargoTypeUnloadOrders,
 
 	/**
+	 * Road vehicle transport (RoRo) selection criteria of an order; %Window numbers:
+	 *   - #VehicleID = #RVTransportCriteriaWidgets
+	 */
+	VehicleRVTransportCriteria,
+
+	/**
 	 * Vehicle order import errors; %Window numbers:
 	 *   - #VehicleID = #OrderWidgets
 	 */
@@ -893,6 +899,12 @@ enum class WindowClass : uint16_t {
 	 *   - id = target order list id
 	 */
 	OrderListSchedule,
+
+	/**
+	 * Decouple schedule picker popup; %Window numbers:
+	 *   - id = the #OrdersWindow window number the picker was opened from
+	 */
+	DecoupleSchedulePicker,
 
 	TemplateReplacementGuiMain,
 	BuildVirtualTrain,

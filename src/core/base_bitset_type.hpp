@@ -114,7 +114,7 @@ public:
 	 */
 	inline constexpr Timpl &Reset(Tvalue_type value)
 	{
-		this->data &= ~(1ULL << Timpl::DecayValueType(value));
+		this->data &= ~(Tstorage{1} << Timpl::DecayValueType(value));
 		return static_cast<Timpl&>(*this);
 	}
 
@@ -171,7 +171,7 @@ public:
 	 */
 	inline constexpr bool Test(Tvalue_type value) const
 	{
-		return (this->data & (1ULL << Timpl::DecayValueType(value))) != 0;
+		return (this->data & (Tstorage{1} << Timpl::DecayValueType(value))) != 0;
 	}
 
 	/**

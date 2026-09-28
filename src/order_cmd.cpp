@@ -8,7 +8,11 @@
 /** @file order_cmd.cpp Handling of orders. */
 
 #include "stdafx.h"
+#include <map>
+#include <string>
+#include "3rdparty/fmt/format.h"
 #include "debug.h"
+
 #include "command_func.h"
 #include "company_func.h"
 #include "news_func.h"
@@ -36,6 +40,7 @@
 #include "cheat_type.h"
 #include "viewport_func.h"
 #include "order_dest_func.h"
+#include "roadveh_transport.h"
 #include "vehiclelist.h"
 #include "tracerestrict.h"
 #include "train.h"
@@ -654,6 +659,19 @@ void OrderList::InitializePlayerCreated()
 	assert(this->IsPlayerCreated());
 	assert(this->GetNumVehicles() == 0 && this->first_shared == nullptr);
 
+	this->RecalculateDerivedCounters();
+}
+
+/**
+ * Recompute the counters derived from the orders that are never saved: the number of manual
+ * orders and the timetable/total durations.
+ *
+ * Order lists that have no vehicles are never passed to #Initialize, so on loading a savegame
+ * these counters would stay zero. A zero #num_manual_orders makes #SkipToNextRealOrderIndex fall
+ * back to order 0, which loses the resume position of an execute-schedule detour.
+ */
+void OrderList::RecalculateDerivedCounters()
+{
 	this->num_manual_orders = 0;
 	this->timetable_duration = 0;
 	this->total_duration = 0;
@@ -671,6 +689,50 @@ void OrderList::InitializePlayerCreated()
  * @param keep_orderlist If this is true only delete the orders, otherwise also delete the OrderList.
  * @note do not use on "current_order" vehicle orders!
  */
+
+/**
+ * Detach every vehicle that still names \a going_away as its home order list.
+ *
+ * #primary_order is a plain pool index, so a value left behind after the list is destroyed
+ * silently refers to whatever list reuses the slot next, and the vehicle then believes it is
+ * away on an execute-schedule detour towards a foreign list. Any list that is still named as
+ * someone's home must therefore not be destroyed without this.
+ *
+ * Vehicles that still have the list as their own orders are the caller's business: it clears
+ * that reference itself right after we return.
+ *
+ * @param going_away the order list that is about to be destroyed
+ */
+static void DetachHomeReferences(OrderList *going_away)
+{
+	for (Vehicle *u : Vehicle::Iterate()) {
+		if (u->primary_order != going_away->index || u->orders == going_away) continue;
+		u->primary_order = (u->orders != nullptr) ? u->orders->index : OrderListID::Invalid();
+		u->primary_order_index = INVALID_VEH_ORDER_ID;
+	}
+}
+
+/**
+ * Whether any vehicle that is away on an execute-schedule detour still names \a ol as its home.
+ *
+ * Such a list must neither be emptied nor destroyed: the vehicle has to come back to it, and
+ * #primary_order is a plain pool index, so the list going away would silently hand the vehicle
+ * whatever list reuses the slot next.
+ *
+ * Vehicles that have the list as their own orders do not count: they are the caller's business
+ * and it drops that reference itself.
+ *
+ * @param ol the order list to test
+ * @return true when the list is still needed as the home of another vehicle
+ */
+bool OrderListIsSomeonesHome(const OrderList *ol)
+{
+	for (const Vehicle *u : Vehicle::Iterate()) {
+		if (u->primary_order == ol->index && u->orders != ol) return true;
+	}
+	return false;
+}
+
 void OrderList::FreeChain(bool keep_orderlist)
 {
 	if (this->IsPlayerCreated()) {
@@ -1406,8 +1468,7 @@ static void StandaloneListInsertUpdateVehicles(OrderList *ol, VehicleOrderID sel
 			/* We are inserting an order just before the current implicit order.
 			 * We do not know whether we will reach current implicit or the newly inserted order first.
 			 * So, disable creation of implicit orders until we are on track again. */
-			GroundVehicleFlags &gv_flags = u->GetGroundVehicleFlags();
-			gv_flags.Set(GroundVehicleFlag::SuppressImplicitOrders);
+			u->GetGroundVehicleFlags().Set(GroundVehicleFlag::SuppressImplicitOrders);
 		}
 		if (sel_ord <= u->cur_implicit_order_index) {
 			uint cur = u->cur_implicit_order_index + 1;
@@ -2050,7 +2111,18 @@ static CommandCost CmdInsertOrderIntl(DoCommandFlags flags, Vehicle *v, VehicleO
 	if (v->orders == nullptr && !OrderList::CanAllocateItem()) return CommandCost(STR_ERROR_NO_MORE_SPACE_FOR_ORDERS);
 
 	if (flags.Test(DoCommandFlag::Execute)) {
-		InsertOrder(v, Order(new_order), sel_ord);
+		Order order(new_order);
+		/* RoRo: a dedicated road vehicle carrier (every cargo part refitted to the "Vehicles" cargo)
+		 * defaults newly added station orders to road vehicle transport: load the road vehicles going
+		 * to the next stop and unload every road vehicle which wants to get off here. Every other
+		 * vehicle keeps the normal-cargo defaults (load/unload if possible, no vehicle transport).
+		 * Orders copied from another vehicle already carry their own flags and are left alone. */
+		if (order.IsType(OT_GOTO_STATION) && order.GetRVTransportFlags() == 0 && RVTransportVehicleCarriesOnlyVehicles(v)) {
+			order.GetRVTransportFlagsRef() = ORVTF_LOAD | ORVTF_UNLOAD;
+			order.SetLoadType(OrderLoadType::NoLoad);
+			order.SetUnloadType(OrderUnloadType::NoUnload);
+		}
+		InsertOrder(v, std::move(order), sel_ord);
 	}
 
 	CommandCost cost;
@@ -2810,7 +2882,8 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 	} else {
 		switch (order->GetType()) {
 			case OT_GOTO_STATION:
-				if (mof != MOF_NON_STOP && mof != MOF_STOP_LOCATION && mof != MOF_UNLOAD && mof != MOF_LOAD && mof != MOF_CARGO_TYPE_UNLOAD && mof != MOF_CARGO_TYPE_LOAD && mof != MOF_RV_TRAVEL_DIR && mof != MOF_DECOUPLE) return CMD_ERROR;
+				if (mof != MOF_NON_STOP && mof != MOF_STOP_LOCATION && mof != MOF_UNLOAD && mof != MOF_LOAD && mof != MOF_CARGO_TYPE_UNLOAD && mof != MOF_CARGO_TYPE_LOAD && mof != MOF_RV_TRAVEL_DIR && mof != MOF_DECOUPLE
+						&& mof != MOF_RV_TRANSPORT && mof != MOF_RV_LOAD_STATE && mof != MOF_RV_CARGO_MODE && mof != MOF_RV_MIN_WAIT && mof != MOF_RV_SLOT && mof != MOF_RV_MAX) return CMD_ERROR;
 				break;
 
 			case OT_GOTO_DEPOT:
@@ -2872,7 +2945,7 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 			if (data >= ONSF_END) return CMD_ERROR;
 			if ((data & ONSF_NO_STOP_AT_DESTINATION_STATION) && order->IsType(OT_GOTO_DEPOT)) return CMD_ERROR;
 			if (data == order->GetNonStopType()) return CommandCost();
-			if (_settings_game.order.nonstop_only && !(data & ONSF_NO_STOP_AT_INTERMEDIATE_STATIONS) && v->IsGroundVehicle()) return CMD_ERROR;
+			if (!is_list && _settings_game.order.nonstop_only && !(data & ONSF_NO_STOP_AT_INTERMEDIATE_STATIONS) && v->IsGroundVehicle()) return CMD_ERROR;
 			break;
 
 		case MOF_STOP_LOCATION:
@@ -2912,8 +2985,51 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 			if (order->GetNonStopType() & ONSF_NO_STOP_AT_DESTINATION_STATION) return CMD_ERROR;
 			if ((data > to_underlying(OrderLoadType::NoLoad) && data != to_underlying(OrderLoadType::CargoTypeLoad)) || data == 1) return CMD_ERROR;
 			if (data == to_underlying(order->GetLoadType())) return CommandCost();
-			if (IsFullLoadOrderLoadType(static_cast<OrderLoadType>(data)) && v->HasUnbunchingOrder()) return CommandCost(STR_ERROR_UNBUNCHING_NO_FULL_LOAD);
+			if (IsFullLoadOrderLoadType(static_cast<OrderLoadType>(data)) &&
+					(is_list ? StandaloneHasUnbunchingOrder(ol) : v->HasUnbunchingOrder())) return CommandCost(STR_ERROR_UNBUNCHING_NO_FULL_LOAD);
 			break;
+
+		case MOF_RV_TRANSPORT:
+			/* Road vehicle transport (RoRo): only meaningful for station orders, value = load/unload/match flags. */
+			if (!order->IsType(OT_GOTO_STATION)) return CommandCost(STR_ERROR_RV_TRANSPORT_STATION_ORDER_ONLY);
+			if ((data & ~(ORVTF_LOAD | ORVTF_UNLOAD | ORVTF_MATCH_DEST | ORVTF_WAIT | ORVTF_UNLOAD_ALL |
+					ORVTF_OWN_WAIT | ORVTF_OWN_UNLOAD)) != 0) return CMD_ERROR;
+			break;
+
+		case MOF_RV_LOAD_STATE:
+			/* RoRo selection criterion: load state of a candidate road vehicle. */
+			if (!order->IsType(OT_GOTO_STATION)) return CommandCost(STR_ERROR_RV_TRANSPORT_STATION_ORDER_ONLY);
+			if (data > RVTLS_FULL) return CMD_ERROR;
+			break;
+
+		case MOF_RV_CARGO_MODE:
+			/* RoRo selection criterion: cargo of a candidate road vehicle; the cargo itself is passed along. */
+			if (!order->IsType(OT_GOTO_STATION)) return CommandCost(STR_ERROR_RV_TRANSPORT_STATION_ORDER_ONLY);
+			if (data > RVTC_IS_CARRYING) return CMD_ERROR;
+			if (data != RVTC_ANY && !IsValidCargoType(cargo_id)) return CMD_ERROR;
+			break;
+
+		case MOF_RV_MIN_WAIT:
+			/* RoRo selection criterion: minimum waiting time of a candidate road vehicle (in days). */
+			if (!order->IsType(OT_GOTO_STATION)) return CommandCost(STR_ERROR_RV_TRANSPORT_STATION_ORDER_ONLY);
+			break;
+
+		case MOF_RV_MAX:
+			/* RoRo: most road vehicles to load in one visit (0 = no limit). */
+			if (!order->IsType(OT_GOTO_STATION)) return CommandCost(STR_ERROR_RV_TRANSPORT_STATION_ORDER_ONLY);
+			if (data > 0xFF) return CMD_ERROR;
+			break;
+
+		case MOF_RV_SLOT: {
+			/* RoRo selection criterion: trace restrict slot the candidate must hold (slot id + 1, 0 = any). */
+			if (!order->IsType(OT_GOTO_STATION)) return CommandCost(STR_ERROR_RV_TRANSPORT_STATION_ORDER_ONLY);
+			if (data != 0) {
+				/* Only a road vehicle slot can be held by a road vehicle candidate. */
+				const TraceRestrictSlot *slot = TraceRestrictSlot::GetIfValid(TraceRestrictSlotID{static_cast<uint16_t>(data - 1)});
+				if (slot == nullptr || slot->vehicle_type != VehicleType::Road) return CMD_ERROR;
+			}
+			break;
+		}
 
 		case MOF_DEPOT_ACTION:
 			if (data >= DA_END) return CMD_ERROR;
@@ -3299,6 +3415,31 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 			case MOF_LOAD:
 				order->SetLoadType(static_cast<OrderLoadType>(data));
 				if (static_cast<OrderLoadType>(data) == OrderLoadType::NoLoad) order->SetRefit(CARGO_NO_REFIT);
+				break;
+
+			case MOF_RV_TRANSPORT:
+				order->GetRVTransportFlagsRef() = static_cast<uint8_t>(data);
+				break;
+
+			case MOF_RV_LOAD_STATE:
+				order->GetRVTransportLoadStateRef() = static_cast<uint8_t>(data);
+				break;
+
+			case MOF_RV_CARGO_MODE:
+				order->GetRVTransportCargoModeRef() = static_cast<uint8_t>(data);
+				order->GetRVTransportCargoRef() = (data == RVTC_ANY) ? INVALID_CARGO : static_cast<uint8_t>(cargo_id);
+				break;
+
+			case MOF_RV_MIN_WAIT:
+				order->GetRVTransportMinWaitRef() = static_cast<uint16_t>(data);
+				break;
+
+			case MOF_RV_SLOT:
+				order->GetRVTransportSlotRef() = static_cast<uint16_t>(data);
+				break;
+
+			case MOF_RV_MAX:
+				order->GetRVTransportMaxRef() = static_cast<uint8_t>(data);
 				break;
 
 			case MOF_CARGO_TYPE_LOAD:
@@ -3728,6 +3869,16 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 			if (sel_ord == u->cur_real_order_index && u->current_order.IsType(OT_GOTO_STATION)) {
 				u->current_order.SetDecouple(order->GetDecouple());
 				u->current_order.SetNumDecouple(order->GetNumDecouple());
+				/* Road vehicle transport: the vehicle acts on the road vehicle transport state of
+				 * its current order (see the loading code and the waiting logic), so all of it
+				 * has to follow the order the player just changed. */
+				u->current_order.GetRVTransportFlagsRef() = order->GetRVTransportFlags();
+				u->current_order.GetRVTransportLoadStateRef() = order->GetRVTransportLoadState();
+				u->current_order.GetRVTransportCargoModeRef() = order->GetRVTransportCargoMode();
+				u->current_order.GetRVTransportCargoRef() = order->GetRVTransportCargo();
+				u->current_order.GetRVTransportMinWaitRef() = order->GetRVTransportMinWait();
+				u->current_order.GetRVTransportSlotRef() = order->GetRVTransportSlot();
+				u->current_order.GetRVTransportMaxRef() = order->GetRVTransportMax();
 			}
 			if (sel_ord == u->cur_real_order_index && u->current_order.IsType(OT_GOTO_COUPLE)) {
 				u->current_order.SetCoupleLoad(order->GetCoupleLoad());
@@ -3887,12 +4038,7 @@ CommandCost CmdDeleteOrderList(DoCommandFlags flags, OrderListID list_id)
 		/* Vehicles away on an execute-schedule detour may still call this list
 		 * home (they are not part of its shared chain). Their home is gone, so
 		 * they adopt the list they are currently executing. */
-		for (Vehicle *u : Vehicle::Iterate()) {
-			if (u->orders != nullptr && u->IsExecutingSchedule() && u->primary_order == list_id) {
-				u->primary_order = u->orders->index;
-				u->primary_order_index = INVALID_VEH_ORDER_ID;
-			}
-		}
+		DetachHomeReferences(ol);
 
 		/* Destinations were never registered for standalone lists; FreeChain's guard
 		 * handles clearing without unregistering. We never free via FreeChain(false). */
@@ -4268,6 +4414,9 @@ CommandCost CmdOrderRefit(DoCommandFlags flags, VehicleID veh, VehicleOrderID or
 	CommandCost ret = CheckOwnership(v->owner);
 	if (ret.Failed()) return ret;
 
+	/* Road vehicle transport: the built-in "Vehicles (Car)" cargo is selectable as an order refit
+	 * target like any other cargo, and a chain may be converted from normal cargo to road vehicle
+	 * transport and back through station/depot orders as well. */
 	Order *order = v->GetOrder(order_number);
 	if (order == nullptr) return CMD_ERROR;
 
@@ -4322,7 +4471,7 @@ void CheckOrders(const Vehicle *v)
 
 	/* Only check every 20 days, so that we don't flood the message log */
 	/* The check is skipped entirely in case the current vehicle is virtual (a.k.a a 'template train') */
-	if (v->owner == _local_company && v->day_counter % 20 == 0 && !HasBit(v->subtype, GVSF_VIRTUAL)) {
+	if (v->owner == _local_company && v->day_counter % 20 == 0 && !v->IsVirtualOrCarried()) {
 		StringID message = INVALID_STRING_ID;
 
 		/* Check the order list */
@@ -4501,6 +4650,7 @@ bool Vehicle::HasDepotOrder() const
 	return false;
 }
 
+
 /**
  * Free a vehicle-owned order list that served as the home of execute-schedule
  * vehicles when the last reference to it is gone.
@@ -4511,9 +4661,38 @@ static void FreeOrphanedExecuteScheduleHome(OrderList *home)
 	if (home == nullptr || home->IsPlayerCreated()) return;
 	if (home->GetNumVehicles() != 0) return;
 	for (const Vehicle *u : Vehicle::Iterate()) {
-		if (u->orders != nullptr && u->primary_order == home->index) return;
+		/* A vehicle keeps the list alive whenever it names it as its home, whether or not it
+		 * currently has any orders of its own. */
+		if (u->primary_order == home->index) return;
 	}
 	home->FreeChain(false);
+}
+
+/** Attach a prepared private active-list copy without discarding execute-schedule context. */
+void SetDecoupleWaitOrderList(Vehicle *v, OrderList *orders)
+{
+	OrderList *old = v->orders;
+	const bool executing = v->IsExecutingSchedule();
+	const VehicleFlags flags = v->vehicle_flags;
+	const int32_t lateness = v->lateness_counter;
+	DeleteOrderWarnings(v);
+	if (old != nullptr) {
+		extern void UpdateDeparturesWindowVehicleFilter(const OrderList *order_list, bool remove);
+		UpdateDeparturesWindowVehicleFilter(old, false);
+		if (old->IsShared()) {
+			v->RemoveFromShared();
+		} else {
+			old->RemoveVehicle(v);
+		}
+	}
+	v->orders = orders;
+	if (!executing) v->primary_order = orders->index;
+	orders->Initialize(v);
+	v->vehicle_flags = flags;
+	v->lateness_counter = lateness;
+	FreeOrphanedExecuteScheduleHome(old);
+	ClearOrderDestinationRefcountMap();
+	InvalidateVehicleOrder(v, VIWD_MODIFY_ORDERS);
 }
 
 /**
@@ -4525,6 +4704,8 @@ static void FreeOrphanedExecuteScheduleHome(OrderList *home)
  *                            If false, _you_ have to make sure the order indices are valid after
  *                            your messing with them!
  */
+
+
 void DeleteVehicleOrders(Vehicle *v, bool keep_orderlist, bool reset_order_indices)
 {
 	DeleteOrderWarnings(v);
@@ -4557,10 +4738,21 @@ void DeleteVehicleOrders(Vehicle *v, bool keep_orderlist, bool reset_order_indic
 	} else {
 		CloseWindowById(GetWindowClassForVehicleType(v->type), VehicleListIdentifier(VehicleListType::VehicleSharedOrders, v->type, v->owner, v->index).ToWindowNumber());
 		if (v->orders != nullptr) {
-			/* Remove the orders */
-			if (!keep_orderlist) UpdateDeparturesWindowVehicleFilter(v->orders, true);
-			v->orders->FreeChain(keep_orderlist);
-			if (!keep_orderlist) v->orders = nullptr;
+			if (!keep_orderlist && OrderListIsSomeonesHome(v->orders)) {
+				/* The list has to survive: another vehicle, away on an execute-schedule detour, calls
+				 * it home and has to resume into it. Emptying or destroying it would strand that
+				 * vehicle. Leave the list alone and only detach this vehicle from its chain -- it must
+				 * not stay in the chain with no orders, or joining the list later would allocate a
+				 * brand new empty list for it. */
+				UpdateDeparturesWindowVehicleFilter(v->orders, false);
+				v->orders->RemoveVehicle(v);
+				v->orders = nullptr;
+			} else {
+				/* Remove the orders */
+				if (!keep_orderlist) UpdateDeparturesWindowVehicleFilter(v->orders, true);
+				v->orders->FreeChain(keep_orderlist);
+				if (!keep_orderlist) v->orders = nullptr;
+			}
 		}
 	}
 
@@ -5255,6 +5447,10 @@ void Vehicle::ReturnFromExecuteSchedule()
 
 	this->current_order.Free();
 	this->SetDestTile(INVALID_TILE);
+	if (!target->IsPlayerCreated()) {
+		FreeOrphanedExecuteScheduleHome(target);
+		ClearOrderDestinationRefcountMap();
+	}
 	InvalidateVehicleOrder(this, VIWD_MODIFY_ORDERS);
 }
 
@@ -5426,6 +5622,7 @@ bool UpdateOrderDest(Vehicle *v, const Order *order, int conditional_depth, bool
 						v->IncrementRealOrderIndex();
 						v->primary_order = home->index;
 						v->primary_order_index = v->cur_real_order_index;
+					} else {
 					}
 
 					/* Remember the home list's dispatch/separation state if it is not
@@ -5444,6 +5641,10 @@ bool UpdateOrderDest(Vehicle *v, const Order *order, int conditional_depth, bool
 					}
 					v->orders = target;
 					target->AssignVehicle(v);
+					if (!home->IsPlayerCreated() && v->primary_order != home->index) {
+						FreeOrphanedExecuteScheduleHome(home);
+						ClearOrderDestinationRefcountMap();
+					}
 					/* Adopt the list's dispatch/separation state (shared state). */
 					v->vehicle_flags.Set(VehicleFlag::ScheduledDispatch, target->IsDispatchEnabled());
 					v->vehicle_flags.Set(VehicleFlag::TimetableSeparation, target->IsSeparationEnabled());

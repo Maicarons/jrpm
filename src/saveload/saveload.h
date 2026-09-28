@@ -15,6 +15,7 @@
 #include "../fios.h"
 #include "../strings_id_type.h"
 #include "../core/type_util.hpp"
+#include "../core/uint128_type.hpp"
 #include "../3rdparty/cpp-ring-buffer/ring_buffer.hpp"
 #include <optional>
 #include <string>
@@ -647,7 +648,8 @@ enum class VarFileType : uint8_t {
 	StringID = 9, ///< StringID offset into strings-array.
 	String = 10, ///< A string.
 	Struct = 11, ///< An arbitrary structure.
-	/* 4 more possible file-primitives */
+	U128 = 13, ///< A 128 bit unsigned integer, used for bit sets which need more than 64 bits.
+	/* 3 more possible file-primitives */
 };
 
 /** The types/structures of data we have in memory. */
@@ -661,6 +663,7 @@ enum class VarMemType : uint8_t {
 	U32 = 6, ///< A 32 bit unsigned int.
 	I64 = 7, ///< A 64 bit signed int.
 	U64 = 8, ///< A 64 bit unsigned int.
+	U128 = 10, ///< A 128 bit unsigned integer.
 	Null = 9, ///< useful to write zeros in savegame.
 	Str = 12, ///< string pointer
 	StrQ = 13, ///< string pointer enclosed in quotes
@@ -717,6 +720,7 @@ struct VarType {
  * @param mem The memory configuration.
  * @return The created \c VarType.
  */
+<<<<<<< HEAD
 constexpr VarType operator|(VarFileType file, VarMemType mem)
 {
 	return {file, mem};
@@ -738,6 +742,7 @@ struct VarTypes {
 	static constexpr VarType STRQ{ VarFileType::String, VarMemType::StrQ }; ///< Store a string with quotes.
 	static constexpr VarType NAME{ VarFileType::StringID, VarMemType::Name }; ///< A string stored in the custom string array.
 	static constexpr VarType LABEL{ VarFileType::U32, VarMemType::Label }; ///< Store a \c Label as-is.
+	static constexpr VarType U128{ VarFileType::U128, VarMemType::U128 }; ///< Store a 128 bits unsigned int.
 };
 
 /** Type of data saved. */
@@ -822,6 +827,7 @@ inline constexpr size_t SlVarSize(VarMemType type)
 		case VarMemType::U32: return sizeof(uint32_t);
 		case VarMemType::I64: return sizeof(int64_t);
 		case VarMemType::U64: return sizeof(uint64_t);
+		case VarMemType::U128: return sizeof(Uint128);
 		case VarMemType::Null: return sizeof(void *);
 		case VarMemType::Str: return sizeof(std::string);
 		case VarMemType::StrQ: return sizeof(std::string);

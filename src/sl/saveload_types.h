@@ -29,10 +29,13 @@ enum class VarFileType : uint8_t {
 	SLE_FILE_STRING   = 10,
 	SLE_FILE_STRUCT   = 11,
 
-	/* End of values storable in save games */
-	SLE_FILE_TABLE_END = 12,
-
 	SLE_FILE_VEHORDERID = 12,
+	SLE_FILE_U128       = 13, ///< 128 bit unsigned integer, used for bit sets which need more than 64 bits.
+
+	/* End of values storable in save games; must be greater than every SLE_FILE_* value above.
+	 * NOTE: this value is part of the savegame format, so it has to match in sl/saveload_types.h
+	 * and saveload/saveload.h. */
+	SLE_FILE_TABLE_END = 14,
 };
 using enum VarFileType;
 
@@ -52,6 +55,7 @@ enum class VarMemType : uint8_t {
 	SLE_VAR_U32,
 	SLE_VAR_I64,
 	SLE_VAR_U64,
+	SLE_VAR_U128,  ///< 128 bit unsigned integer
 	SLE_VAR_NULL,  ///< useful to write zeros in savegame.
 	SLE_VAR_STR,   ///< string pointer
 	SLE_VAR_STRQ,  ///< string pointer enclosed in quotes
@@ -109,6 +113,7 @@ static constexpr VarType SLE_INT32        = SLE_FILE_I32        | SLE_VAR_I32;
 static constexpr VarType SLE_UINT32       = SLE_FILE_U32        | SLE_VAR_U32;
 static constexpr VarType SLE_INT64        = SLE_FILE_I64        | SLE_VAR_I64;
 static constexpr VarType SLE_UINT64       = SLE_FILE_U64        | SLE_VAR_U64;
+static constexpr VarType SLE_UINT128      = SLE_FILE_U128       | SLE_VAR_U128;
 static constexpr VarType SLE_STRINGID     = SLE_FILE_STRINGID   | SLE_VAR_U32;
 static constexpr VarType SLE_STR          = SLE_FILE_STRING     | SLE_VAR_STR;
 static constexpr VarType SLE_STRQ         = SLE_FILE_STRING     | SLE_VAR_STRQ;

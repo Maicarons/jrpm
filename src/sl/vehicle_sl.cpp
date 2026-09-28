@@ -316,12 +316,14 @@ void AfterLoadVehiclesPhase1(bool part_of_load)
 			}
 		}
 
-		/* Player-created order lists usually have no vehicles and are therefore
-		 * never passed to Initialize(); recompute their derived counters, which
-		 * are not saved and would stay zero (or get corrupted by later edits). */
+		/* Order lists that have no vehicles are never passed to Initialize(); recompute their
+		 * derived counters, which are not saved and would otherwise stay zero (or get corrupted
+		 * by later edits). This covers player-created order lists as well as the home list of a
+		 * vehicle that is away on an execute-schedule detour: a zero #num_manual_orders there
+		 * makes #SkipToNextRealOrderIndex fall back to order 0 and lose the resume position. */
 		for (OrderList *ol : OrderList::Iterate()) {
-			if (!ol->IsPlayerCreated() || ol->GetNumVehicles() != 0) continue;
-			ol->InitializePlayerCreated();
+			if (ol->GetNumVehicles() != 0) continue;
+			ol->RecalculateDerivedCounters();
 		}
 	}
 
@@ -1033,6 +1035,12 @@ NamedSaveLoadTable GetVehicleDescription(VehicleType vt)
 		NSL("unitnumber",                 SLE_CONDVAR(Vehicle, unitnumber,                SLE_FILE_U8  | SLE_VAR_U16, SL_MIN_VERSION, SLV_8)),
 		NSL("unitnumber",                 SLE_CONDVAR(Vehicle, unitnumber,                SLE_UINT16,                 SLV_8, SL_MAX_VERSION)),
 		NSL("owner",                          SLE_VAR(Vehicle, owner,                     SLE_UINT8)),
+		NSL("rv_transport_flags",        SLE_CONDVAR_X(Vehicle, rv_transport_flags,       SLE_UINT8,  SL_MIN_VERSION, SL_MAX_VERSION, SlXvFeatureTest(XSLFTO_AND, XSLFI_ROAD_VEH_TRANSPORT))),
+		NSL("transported_by",            SLE_CONDVAR_X(Vehicle, transported_by,           SLE_UINT32, SL_MIN_VERSION, SL_MAX_VERSION, SlXvFeatureTest(XSLFTO_AND, XSLFI_ROAD_VEH_TRANSPORT))),
+		NSL("transported_host_part",     SLE_CONDVAR_X(Vehicle, transported_host_part,    SLE_UINT32, SL_MIN_VERSION, SL_MAX_VERSION, SlXvFeatureTest(XSLFTO_AND, XSLFI_ROAD_VEH_TRANSPORT))),
+		NSL("transported_weight",        SLE_CONDVAR_X(Vehicle, transported_weight,       SLE_UINT16, SL_MIN_VERSION, SL_MAX_VERSION, SlXvFeatureTest(XSLFTO_AND, XSLFI_ROAD_VEH_TRANSPORT))),
+		NSL("transported_from",          SLE_CONDVAR_X(Vehicle, transported_from,         SLE_UINT16, SL_MIN_VERSION, SL_MAX_VERSION, SlXvFeatureTest(XSLFTO_AND, XSLFI_ROAD_VEH_TRANSPORT))),
+		NSL("transport_wait_tick",       SLE_CONDVAR_X(Vehicle, transport_wait_tick,      SLE_UINT32, SL_MIN_VERSION, SL_MAX_VERSION, SlXvFeatureTest(XSLFTO_AND, XSLFI_ROAD_VEH_TRANSPORT))),
 		NSL("tile",                       SLE_CONDVAR(Vehicle, tile,                      SLE_FILE_U16 | SLE_VAR_U32, SL_MIN_VERSION, SLV_6)),
 		NSL("tile",                       SLE_CONDVAR(Vehicle, tile,                      SLE_UINT32,                 SLV_6, SL_MAX_VERSION)),
 		NSL("dest_tile",                  SLE_CONDVAR(Vehicle, dest_tile,                 SLE_FILE_U16 | SLE_VAR_U32, SL_MIN_VERSION, SLV_6)),
@@ -1882,6 +1890,86 @@ static ChunkSaveLoadSpecialOpResult Special_VENC(uint32_t chunk_id, ChunkSaveLoa
 	return CSLSOR_NONE;
 }
 
+/** Persisted transient couple target/claim state of one train primary. */
+struct CoupleClaimSave {
+	VehicleID vehicle;
+	VehicleID couple_target;
+	VehicleID couple_claimant;
+	uint32_t couple_claim_cost;
+	uint8_t couple_body_hold;
+};
+
+static std::vector<CoupleClaimSave> _couple_claims;
+
+void SlResetCoupleClaims()
+{
+	_couple_claims.clear();
+}
+
+void Save_CPLM()
+{
+	assert(_sl_xv_feature_versions[XSLFI_COUPLE_CLAIM_STATE] != 0);
+
+	SlAutolength([]() {
+		std::vector<CoupleClaimSave> claims;
+		for (Train *t : Train::Iterate()) {
+			if (t->couple_target == VehicleID::Invalid() && t->couple_claimant == VehicleID::Invalid() && !t->couple_body_hold) continue;
+			claims.push_back({t->index, t->couple_target, t->couple_claimant, t->couple_claim_cost, static_cast<uint8_t>(t->couple_body_hold ? 1 : 0)});
+		}
+
+		SlWriteUint32((uint32_t)claims.size());
+		for (const CoupleClaimSave &cs : claims) {
+			SlWriteUint32(cs.vehicle.base());
+			SlWriteUint16(cs.couple_target.base());
+			SlWriteUint16(cs.couple_claimant.base());
+			SlWriteUint32(cs.couple_claim_cost);
+			SlWriteByte(cs.couple_body_hold);
+		}
+	});
+}
+
+void Load_CPLM()
+{
+	_couple_claims.clear();
+	if (SlGetFieldLength() == 0) return;
+
+	uint32_t count = SlReadUint32();
+	_couple_claims.resize(count);
+	for (CoupleClaimSave &cs : _couple_claims) {
+		cs.vehicle = static_cast<VehicleID>(SlReadUint32());
+		cs.couple_target = static_cast<VehicleID>(SlReadUint16());
+		cs.couple_claimant = static_cast<VehicleID>(SlReadUint16());
+		cs.couple_claim_cost = SlReadUint32();
+		cs.couple_body_hold = SlReadByte() != 0;
+	}
+}
+
+void SlApplyCoupleClaims()
+{
+	for (const CoupleClaimSave &cs : _couple_claims) {
+		Train *t = Train::GetIfValid(cs.vehicle);
+		if (t == nullptr) continue;
+		t->couple_target = cs.couple_target;
+		t->couple_claimant = cs.couple_claimant;
+		t->couple_claim_cost = cs.couple_claim_cost;
+		t->couple_body_hold = cs.couple_body_hold != 0;
+	}
+	_couple_claims.clear();
+}
+
+static ChunkSaveLoadSpecialOpResult Special_CPLM(uint32_t chunk_id, ChunkSaveLoadSpecialOp op)
+{
+	switch (op) {
+		case CSLSO_SHOULD_SAVE_CHUNK:
+			if (_sl_xv_feature_versions[XSLFI_COUPLE_CLAIM_STATE] == 0) return CSLSOR_DONT_SAVE_CHUNK;
+			break;
+
+		default:
+			break;
+	}
+	return CSLSOR_NONE;
+}
+
 void Load_VLKA()
 {
 	std::vector<SaveLoad> lookahead_desc = SlFilterNamedSaveLoadTable(GetVehicleLookAheadDescription());
@@ -1934,6 +2022,7 @@ static const ChunkHandler veh_chunk_handlers[] = {
 	{ 'VEOX', nullptr,   Load_VEOX, nullptr,   nullptr, ChunkType::ReadOnly },
 	{ 'VESR', Save_VESR, Load_VESR, nullptr,   nullptr, ChunkType::SparseTable },
 	{ 'VENC', Save_VENC, Load_VENC, nullptr,   nullptr, ChunkType::Riff,         Special_VENC },
+	{ 'CPLM', Save_CPLM, Load_CPLM, nullptr,   nullptr, ChunkType::Riff,         Special_CPLM },
 	{ 'VLKA', nullptr,   Load_VLKA, nullptr,   nullptr, ChunkType::ReadOnly },
 	{ 'VUBS', nullptr,   Load_VUBS, nullptr,   nullptr, ChunkType::ReadOnly },
 };

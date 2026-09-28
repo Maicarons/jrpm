@@ -215,6 +215,10 @@ enum SlXvFeatureIndex {
 	XSLFI_TRAIN_PRIMARY,                          ///< Trains have a separate primary (consist info carrier) vehicle
 	XSLFI_VEHICLE_PRIMARY_ORDER,                  ///< Vehicles remember their primary order list while executing another one
 
+	XSLFI_ROAD_VEH_TRANSPORT,                     ///< Road vehicles transported by other vehicles (RoRo)
+	XSLFI_CARGO_TYPES_128,                        ///< Cargo types extended from 64 to 128 slots, cargo ids above 64 in savegames need remapping
+	XSLFI_COUPLE_CLAIM_STATE,                     ///< Transient couple target/claim state of trains is persisted
+
 	XSLFI_SIZE,                                   ///< Total count of features, including null feature
 };
 
@@ -329,6 +333,12 @@ void SlXvSetCurrentState();
 void SlXvSetStaticCurrentVersions();
 
 bool SlXvCheckSpecialSavegameVersions();
+
+/**
+ * Get the number of per-cargo entries which are stored in the savegame currently being loaded.
+ * @return The number of per-cargo entries.
+ */
+uint GetSavedCargoCount();
 
 bool SlXvIsChunkDiscardable(uint32_t id);
 
