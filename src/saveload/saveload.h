@@ -720,7 +720,6 @@ struct VarType {
  * @param mem The memory configuration.
  * @return The created \c VarType.
  */
-<<<<<<< HEAD
 constexpr VarType operator|(VarFileType file, VarMemType mem)
 {
 	return {file, mem};
