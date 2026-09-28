@@ -45,3 +45,19 @@ title: Train Decoupling (decouple)
 
 - This feature involves deep changes to train physical order and signal reservation logic. **It is recommended to perform focused regression testing after real machine compilation**: decouple, couple, reverse, crash recovery, autoreplace, etc.;
 - Decouple-related strings and GUI have been merged (`STR_DECOUPLE*`, etc.).
+## 2026-09-28 upstream merge update (px-patch 2609.x)
+
+This round merges 113 follow-up commits from pulsexlb, covering decouple/couple changes:
+
+| Change | Description |
+|---|---|
+| Coupled claim state persisted | Transient couple target/claim state is written to the savegame (CPLM chunk + XSLFI_COUPLE_CLAIM_STATE); coupling no longer desyncs after load |
+| Coupling direction relaxed | Trains may keep homing onto their coupling partner even when other vehicles stand in the target's block, as long as they are not in the coupling direction |
+| Station turn-around safety | Trains make sure the block is clear before turning around at a station |
+| Post-decouple fixes | Fixed propulsion errors after decoupling, unit numbers not shown when primary != first, autorefit at station ineffective, etc. |
+| Tracerestrict label fixes | Fixed wrong label return when using wait-for-couple schedules after decoupling, and labels not returned after coupling |
+| Platform command copy | Station commands with load/unload and schedules are copied verbatim when decoupling |
+| Pre-couple condition check | Fixed a crash when the pre-couple condition changed between checks |
+| Home schedule protection | Fixed the train's home schedule being deleted and wrong state for trains executing player schedules after save |
+| No-engine train panel | Train information panel supports consists without powered engines |
+| Order window drag & drop | (jgrpp 0.73.3) orders can be drag-reordered; changing stop location / RV travel direction now requires a double click |

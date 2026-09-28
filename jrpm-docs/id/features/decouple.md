@@ -45,3 +45,16 @@ title: Kopling Lokomotif (decouple)
 
 - Fitur ini melibatkan perubahan mendalam pada urutan fisik kereta/logika reservasi sinyal, **disarankan untuk regresi utama setelah kompilasi di mesin nyata**: skenario decouple, couple, mundur, perbaikan tabrakan, penggantian otomatis (autoreplace), dll.;
 - String terkait decouple dan GUI telah digabungkan (`STR_DECOUPLE*` dll.).
+
+## Pembaruan gabungan upstream 2026-09-28 (px-patch 2609.x)
+
+113 commit baru dari pulsexlb digabungkan, mencakup perubahan decouple/couple:
+
+- Status klaim couple disimpan ke savegame (chunk CPLM + XSLFI_COUPLE_CLAIM_STATE);
+- Kereta tetap bisa melanjutkan docking meski ada kendaraan lain di blok tujuan yang berada di luar arah coupling;
+- Putar balik di stasiun memastikan blok kosong dulu;
+- Perbaikan: kesalahan propulsi setelah decouple, nomor unit saat primary != first, refit otomatis di stasiun, dll.;
+- Perbaikan pengembalian label (tracerestrict) setelah decouple dengan jadwal tunggu-couple dan setelah couple;
+- Perintah peron dengan bongkar-muat dan jadwal disalin utuh saat decouple;
+- Perbaikan crash saat kondisi pra-couple berubah; jadwal utama tidak lagi terhapus salah;
+- Panel informasi kereta tanpa lokomotif; (jgrpp 0.73.3) seret-letakkan order dan klik ganda.

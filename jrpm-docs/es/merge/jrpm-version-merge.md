@@ -69,3 +69,15 @@ Prioridad de verificacion:
 - **Sin compilacion verificada**: El codigo fusionado+modificado no se ha compilado en esta maquina (sin cadena de herramientas), la primera compilacion real puede tener cambios de interfaz pasados por alto (especialmente las tres grandes modificaciones de aircraft/airport/train);
 - Version de archivo: px-patch puede haber aumentado SLV (M9 menciona savegame version gate), los archivos de jrpm y los archivos de jgrpp 0.73.x pueden no ser legibles mutuamente (como es convencion de jgrpp, compatible hacia abajo con archivos trunk);
 - El merge incorpora todo el historial de pulsexlb, si necesita rastrear la pertenencia de funciones, use `git log --oneline pulsexlb/px-patch`.
+
+---
+
+## Registro de fusión: 2026-09-28 (jgrpp-0.73.3 + px-patch 2609.x)
+
+> Commits de fusión: jgrpp 94 commits (hasta `jgrpp-0.73.3`) + px-patch 113 commits (hasta después de `pxp-2609.10`).
+
+**Nuevo:** de pulsexlb, transporte de vehículos de carretera (RoRo, ver Funciones), 128 tipos de carga (CargoTypes en Uint128, vía XSLFI_CARGO_TYPES_128), lote de correcciones de desacople/acoplamiento y mejoras de horarios; de jgrpp, arrastrar y soltar órdenes/doble clic, barcos de doble proa (XSLFI_DOUBLE_ENDED_SHIPS) y numerosas correcciones generales.
+
+**Manejo clave de conflictos:** la capa de guardado de pulsexlb usa el antiguo sistema de macros SLE_ mientras jrpm/jgrpp 0.73.3 usa VarFileType/VarMemType + VarTypes; todos los conflictos de saveload/ y sl/ se reescribieron en el sistema moderno añadiendo soporte U128 (VarFileType::U128=13, VarMemType::U128, SLE_UINT128); las versiones 367/368 reservadas por jrpm se mantienen y las nuevas de upstream pasan a 369/370; la compatibilidad con partidas de upstream sigue por el sub-bloque XSLFI_UPSTREAM_VERSION; CT_VEHICLES como cadena, comparación de grfid con GrfID, y los bloques de consola autogroup + RORO_DEBUG_COMMANDS conservados.
+
+**Estado:** compilación MinGW ninja correcta, artefacto `build/openttd-jrpm.exe`; prueba rápida de partida nueva superada.

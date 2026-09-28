@@ -45,3 +45,16 @@ Le « decouplage de locomotives » permet aux trains de **decoupler et d'atteler
 
 - Cette fonctionnalite implique des modifications profondes de l'ordre physique des trains et de la logique de reservation des signaux, **il est recommande de tester en priorite apres compilation reelle** : decouplage, attelage, marche arriere, reparation de collision, remplacement automatique (autoreplace), etc. ;
 - Les chaines et GUI associes au decouplage ont ete integres (`STR_DECOUPLE*` etc.).
+
+## Mise à jour de fusion amont 2026-09-28 (px-patch 2609.x)
+
+113 nouveaux commits de pulsexlb ont été fusionnés, concernant le découplage/accouplement :
+
+- L'état de revendication d'accouplement est sauvegardé (bloc CPLM + XSLFI_COUPLE_CLAIM_STATE) ;
+- Un train peut poursuivre son accostage même si d'autres véhicules occupent le bloc cible hors de la direction d'accouplement ;
+- Le demi-tour en gare s'assure que le bloc est libre ;
+- Corrections : propulsion après découplage, numéro d'unité avec primary != first, reconversion automatique en gare, etc. ;
+- Corrections de restitution des étiquettes (tracerestrict) après découplage/accouplement ;
+- Les commandes de quai avec chargement/déchargement et horaire sont copiées intégralement lors du découplage ;
+- Correction du crash quand la condition pré-accouplement change ; l'horaire principal n'est plus supprimé par erreur ;
+- Panneau d'information pour trains sans moteur ; (jgrpp 0.73.3) glisser-déposer des ordres et double-clic.

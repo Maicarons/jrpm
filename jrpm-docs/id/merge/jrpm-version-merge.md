@@ -69,3 +69,15 @@ Prioritas verifikasi:
 - **Belum diverifikasi kompilasi**: Kode yang digabung+diubah belum dikompilasi di mesin ini (tanpa toolchain), kompilasi pertama di mesin nyata mungkin ada perubahan antarmuka yang terlewat (terutama tiga sistem besar aircraft/airport/train);
 - Versi arsip: px-patch mungkin menaikkan SLV (M9 menyebutkan savegame version gate), arsip jrpm dan arsip jgrpp 0.73.x mungkin tidak dapat dibaca bersama (sama dengan konvensi jgrpp, kompatibel ke bawah dengan arsip trunk);
 - Merge membawa seluruh sejarah pulsexlb, jika perlu melacak kepemilikan fitur gunakan `git log --oneline pulsexlb/px-patch`.
+
+---
+
+## Log penggabungan: 2026-09-28 (jgrpp-0.73.3 + px-patch 2609.x)
+
+> Commit penggabungan: jgrpp 94 commit (sampai `jgrpp-0.73.3`) + px-patch 113 commit (sampai setelah `pxp-2609.10`).
+
+**Baru:** dari pulsexlb — transportasi kendaraan jalan (RoRo, lihat Fitur), 128 jenis kargo (CargoTypes berbasis Uint128, via XSLFI_CARGO_TYPES_128), batch perbaikan decouple/couple dan peningkatan jadwal; dari jgrpp — seret-letakkan order/klik ganda, kapal ujung ganda (XSLFI_DOUBLE_ENDED_SHIPS), serta banyak perbaikan umum.
+
+**Penanganan konflik utama:** lapisan save pulsexlb berbasis sistem makro SLE_ lama sementara jrpm/jgrpp 0.73.3 memakai VarFileType/VarMemType + VarTypes; semua konflik saveload/ dan sl/ ditulis ulang dengan sistem modern dan dukungan U128 ditambahkan (VarFileType::U128=13, VarMemType::U128, SLE_UINT128); versi 367/368 milik jrpm tetap, versi baru upstream bergeser ke 369/370; kompatibilitas savegame upstream tetap lewat sub-chunk XSLFI_UPSTREAM_VERSION; CT_VEHICLES sebagai string, perbandingan grfid via GrfID, blok konsol autogroup + RORO_DEBUG_COMMANDS dipertahankan.
+
+**Status:** build MinGW ninja lulus, artefak `build/openttd-jrpm.exe`; uji coba game baru lulus.

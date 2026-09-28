@@ -20,3 +20,5 @@ openttd.new
 /_refs/
 *.bak
 *.grf.corrupt_bak
+.mimosa/
+.zcode/

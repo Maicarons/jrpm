@@ -45,3 +45,16 @@ El "desenganche de locomotoras" permite que los trenes **desenganches y enganche
 
 - Esta caracteristica implica cambios profundos en el orden fisico del tren/logica de reserva de senales, **se recomienda encarecidamente realizar pruebas de regresion en una compilacion real**: escenarios de desenganche, enganche, reversa, reparacion de colisiones, reemplazo automatico (autoreplace), etc.;
 - Las cadenas de texto relacionadas con el desenganche y la GUI se han incorporado (`STR_DECOUPLE*`, etc.).
+
+## Actualización de fusión upstream 2026-09-28 (px-patch 2609.x)
+
+Se fusionaron 113 commits nuevos de pulsexlb con cambios de desacople/acoplamiento:
+
+- El estado de acoplamiento pendiente (couple claim) se guarda en la partida (bloque CPLM + XSLFI_COUPLE_CLAIM_STATE);
+- Un tren puede seguir hacia el acoplamiento aunque haya otros vagones en el bloque objetivo fuera de la dirección de acoplamiento;
+- Al invertir la marcha en estación se comprueba que el bloque esté libre;
+- Corregidos errores de propulsión tras desacoplar, número de unidad con primary != first, autorreconversión en estación, etc.;
+- Corregida la devolución errónea de etiquetas tras desacoplar con horarios de espera de acoplamiento y la no devolución tras acoplar;
+- Los comandos de plataforma con carga/descarga y horario se copian íntegros al desacoplar;
+- Corregido el fallo cuando la condición previa al acoplamiento cambia entre comprobaciones; el horario principal ya no se borra por error;
+- Panel de información para trenes sin motor; (jgrpp 0.73.3) arrastrar y soltar órdenes y doble clic.

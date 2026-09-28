@@ -122,6 +122,7 @@ const zhCN = makeLocaleConfig(
         { text: '功能难度调研（四/五批与 CM 命令）', link: '/features/batch4-5-difficulty-research' },
         { text: '机车换挂（decouple）', link: '/features/decouple' },
         { text: '模块化机场（multitile-airport）', link: '/features/multitile-airport' },
+        { text: '载具运输（RoRo）', link: '/features/06-roro-transport' },
       ],
     },
     {
@@ -195,6 +196,7 @@ const en = makeLocaleConfig(
         { text: 'Difficulty Research (Batch 4/5 & CM Cmds)', link: '/en/features/batch4-5-difficulty-research' },
         { text: 'Decouple (Locomotive Detachment)', link: '/en/features/decouple' },
         { text: 'Multitile Airport', link: '/en/features/multitile-airport' },
+        { text: 'Road Vehicle Transport (RoRo)', link: '/en/features/06-roro-transport' },
       ],
     },
     {
@@ -268,6 +270,7 @@ const hi = makeLocaleConfig(
         { text: 'कठिनाई अनुसंधान', link: '/hi/features/batch4-5-difficulty-research' },
         { text: 'डिकपल (लोकोमोटिव डिटैचमेंट)', link: '/hi/features/decouple' },
         { text: 'मल्टीटाइल एयरपोर्ट', link: '/hi/features/multitile-airport' },
+        { text: 'सड़क वाहन परिवहन (RoRo)', link: '/hi/features/06-roro-transport' },
       ],
     },
     {
@@ -341,6 +344,7 @@ const es = makeLocaleConfig(
         { text: 'Investigación de Dificultad', link: '/es/features/batch4-5-difficulty-research' },
         { text: 'Desacople (Locomotoras)', link: '/es/features/decouple' },
         { text: 'Aeropuerto Multitile', link: '/es/features/multitile-airport' },
+        { text: 'Transporte de vehículos de carretera (RoRo)', link: '/es/features/06-roro-transport' },
       ],
     },
     {
@@ -414,6 +418,7 @@ const fr = makeLocaleConfig(
         { text: 'Recherche de Difficulté', link: '/fr/features/batch4-5-difficulty-research' },
         { text: 'Découplage (Locomotives)', link: '/fr/features/decouple' },
         { text: 'Aéroport Multitile', link: '/fr/features/multitile-airport' },
+        { text: 'Transport de véhicules routiers (RoRo)', link: '/fr/features/06-roro-transport' },
       ],
     },
     {
@@ -487,6 +492,7 @@ const pt = makeLocaleConfig(
         { text: 'Pesquisa de Dificuldade', link: '/pt/features/batch4-5-difficulty-research' },
         { text: 'Desacoplamento (Locomotivas)', link: '/pt/features/decouple' },
         { text: 'Aeroporto Multitile', link: '/pt/features/multitile-airport' },
+        { text: 'Transporte de veículos rodoviários (RoRo)', link: '/pt/features/06-roro-transport' },
       ],
     },
     {
@@ -560,6 +566,7 @@ const ar = makeLocaleConfig(
         { text: 'بحث الصعوبة', link: '/ar/features/batch4-5-difficulty-research' },
         { text: 'فصل القاطرات', link: '/ar/features/decouple' },
         { text: 'مطار متعدد الخانات', link: '/ar/features/multitile-airport' },
+        { text: 'نقل المركبات البرية (RoRo)', link: '/ar/features/06-roro-transport' },
       ],
     },
     {
@@ -633,6 +640,7 @@ const bn = makeLocaleConfig(
         { text: 'কঠিনতা গবেষণা', link: '/bn/features/batch4-5-difficulty-research' },
         { text: 'ডিকপল (লোকোমোটিভ বিচ্ছিন্নকরণ)', link: '/bn/features/decouple' },
         { text: 'মাল্টিটাইল এয়ারপোর্ট', link: '/bn/features/multitile-airport' },
+        { text: 'সড়ক যান পরিবহন (RoRo)', link: '/bn/features/06-roro-transport' },
       ],
     },
     {
@@ -706,6 +714,7 @@ const ru = makeLocaleConfig(
         { text: 'Исследование сложности', link: '/ru/features/batch4-5-difficulty-research' },
         { text: 'Расцепка (локомотивы)', link: '/ru/features/decouple' },
         { text: 'Мультитайловый аэропорт', link: '/ru/features/multitile-airport' },
+        { text: 'Перевозка автомобилей (RoRo)', link: '/ru/features/06-roro-transport' },
       ],
     },
     {
@@ -779,6 +788,7 @@ const id = makeLocaleConfig(
         { text: 'Riset Kesulitan', link: '/id/features/batch4-5-difficulty-research' },
         { text: 'Decouple (Lepas Lokomotif)', link: '/id/features/decouple' },
         { text: 'Bandara Multitile', link: '/id/features/multitile-airport' },
+        { text: 'Transportasi Kendaraan Jalan (RoRo)', link: '/id/features/06-roro-transport' },
       ],
     },
     {
@@ -852,6 +862,7 @@ const ko = makeLocaleConfig(
         { text: '난이도 연구', link: '/ko/features/batch4-5-difficulty-research' },
         { text: '디커플 (기관차 분리)', link: '/ko/features/decouple' },
         { text: '멀티타일 공항', link: '/ko/features/multitile-airport' },
+        { text: '차량 운송 (RoRo)', link: '/ko/features/06-roro-transport' },
       ],
     },
     {

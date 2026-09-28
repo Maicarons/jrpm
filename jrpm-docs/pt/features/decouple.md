@@ -45,3 +45,16 @@ O "desacoplamento de locomotivas" permite que trens **desenganchem e engatem** v
 
 - Este recurso envolve alteracoes profundas na ordem fisica dos trens/logica de reserva de sinal, **recomenda-se testar exaustivamente apos compilacao real**: desengate, engate, reversao, reparo de colisao, substituicao automatica (autoreplace), etc.;
 - Strings e GUI relacionadas ao desengate ja foram incorporadas (`STR_DECOUPLE*`, etc.).
+
+## Atualização de fusão upstream 2026-09-28 (px-patch 2609.x)
+
+113 novos commits da pulsexlb foram fundidos, com mudanças de desacoplamento/acoplamento:
+
+- O estado de reivindicação de acoplamento é salvo no jogo (bloco CPLM + XSLFI_COUPLE_CLAIM_STATE);
+- Um trem pode continuar acoplando mesmo com outros veículos no bloco alvo fora da direção de acoplamento;
+- Ao inverter a marcha em estação, garante-se que o bloco esteja livre;
+- Corrigidos erros de propulsão após desacoplar, número da unidade com primary != first, reconversão automática em estação etc.;
+- Corrigida a devolução incorreta de etiquetas após desacoplar com horários de espera de acoplamento e a não devolução após acoplar;
+- Comandos de plataforma com carga/descarga e horário são copiados integralmente ao desacoplar;
+- Corrigido o travamento quando a condição pré-acoplamento muda; o horário principal não é mais apagado por engano;
+- Painel de informações para trens sem motor; (jgrpp 0.73.3) arrastar e soltar ordens e duplo clique.

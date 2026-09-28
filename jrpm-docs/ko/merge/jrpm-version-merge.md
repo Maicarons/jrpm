@@ -69,3 +69,15 @@ cmake --build build -j
 - **컴파일 검증 안 됨**: 병합+개조 코드가 본 기기에서 컴파일되지 않음 (도구 체인 없음), 실제 기계 첫 번째 컴파일에서 누락된 인터페이스 변경이 있을 수 있음 (특히 aircraft/airport/train 3계열 대규모 변경);
 - 저장 버전: px-patch가 SLV를 올릴 수 있음 (M9에서 savegame version gate 언급), jrpm 저장과 jgrpp 0.73.x 저장이 상호 읽기 불가능할 수 있음 (jgrpp 관례와 동일, trunk 저장과 하위 호환);
 - merge로 pulsexlb 전체 역사가 포함됨, 기능 귀속 추적이 필요하면 `git log --oneline pulsexlb/px-patch` 사용.
+
+---
+
+## 병합 로그: 2026-09-28 (jgrpp-0.73.3 + px-patch 2609.x)
+
+> 병합 커밋: jgrpp 94개 (`jgrpp-0.73.3`까지) + px-patch 113개 (`pxp-2609.10` 이후까지).
+
+**신규:** pulsexlb에서 — 차량 운송 (RoRo, 기능 문서 참조), 128 화물 종류 (Uint128 기반 CargoTypes, XSLFI_CARGO_TYPES_128 게이트), 분리/연결 수정 배치와 일정 개선; jgrpp에서 — 주문 드래그 앤 드롭/더블클릭, 양방향 선박 (XSLFI_DOUBLE_ENDED_SHIPS), 그리고 다수의 일반 수정.
+
+**주요 충돌 처리:** pulsexlb의 세이브 계층은 구형 SLE_ 매크로 시스템 기반이고 jrpm/jgrpp 0.73.3은 현대적 VarFileType/VarMemType + VarTypes를 사용 — saveload/ 및 sl/의 모든 충돌을 현대 시스템으로 재작성하고 U128 지원을 추가했습니다 (VarFileType::U128=13, VarMemType::U128, SLE_UINT128); jrpm이 예약한 367/368은 유지되고 업스트림의 신규 버전은 369/370으로 이동; 업스트림 세이브 호환은 XSLFI_UPSTREAM_VERSION 서브 청크로 처리; CT_VEHICLES 문자열 생성, grfid Label 비교, autogroup + RORO_DEBUG_COMMANDS 콘솔 블록 모두 보존.
+
+**상태:** MinGW ninja 빌드 통과, 산출물 `build/openttd-jrpm.exe`; 신규 게임 스모크 테스트 통과.

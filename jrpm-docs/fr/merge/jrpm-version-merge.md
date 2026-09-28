@@ -69,3 +69,15 @@ Priorites de verification :
 - **Non compile verifie** : Le code fusionne+modifie n'a pas ete compile sur cette machine (pas de chaine d'outils), la premiere compilation reelle pourrait avoir des changements d'interface manques (surtout les trois grandes modifications aircraft/airport/train) ;
 - Version d'archive : px-patch a peut-etre augmente SLV (M9 mentionne savegame version gate), les archives jrpm et les archives jgrpp 0.73.x pourraient ne pas etre interlisibles (comme convention jgrpp, retrocompatible avec les archives trunk) ;
 - Le merge apporte tout l'historique pulseXLB, pour retracer la propriete des fonctionnalites utiliser `git log --oneline pulsexlb/px-patch`.
+
+---
+
+## Journal de fusion : 2026-09-28 (jgrpp-0.73.3 + px-patch 2609.x)
+
+> Commits de fusion : jgrpp 94 commits (jusqu'à `jgrpp-0.73.3`) + px-patch 113 commits (jusqu'après `pxp-2609.10`).
+
+**Nouveau :** côté pulsexlb, transport de véhicules routiers (RoRo, voir Fonctions), 128 types de fret (CargoTypes en Uint128, via XSLFI_CARGO_TYPES_128), lot de correctifs découplage/accouplement et améliorations d'horaires ; côté jgrpp, glisser-déposer des ordres/double-clic, navires à double extrémité (XSLFI_DOUBLE_ENDED_SHIPS) et de nombreux correctifs généraux.
+
+**Gestion clé des conflits :** la couche de sauvegarde de pulsexlb repose sur l'ancien système de macros SLE_ alors que jrpm/jgrpp 0.73.3 utilise VarFileType/VarMemType + VarTypes ; tous les conflits saveload/ et sl/ ont été réécrits dans le système moderne avec ajout du support U128 (VarFileType::U128=13, VarMemType::U128, SLE_UINT128) ; les versions 367/368 réservées par jrpm sont conservées et les nouvelles versions amont passent à 369/370 ; la compatibilité avec les sauvegardes amont passe par le sous-bloc XSLFI_UPSTREAM_VERSION ; CT_VEHICLES en chaîne, comparaison grfid via GrfID, blocs console autogroup + RORO_DEBUG_COMMANDS conservés.
+
+**État :** compilation MinGW ninja réussie, artefact `build/openttd-jrpm.exe` ; test rapide en nouvelle partie réussi.
