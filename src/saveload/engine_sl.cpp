@@ -12,6 +12,10 @@
 #include "saveload.h"
 #include "compat/engine_sl_compat.h"
 
+/* jrpm: keep SL_UPSTREAM_VERSION (sl/saveload_common.h) tracking the last upstream
+ * savegame version; it is expressed in upstream numbering, not jrpm's shifted one. */
+static_assert(SL_UPSTREAM_VERSION == to_underlying(upstream_sl::SaveLoadVersion::DoubleEndedShips), "SL_UPSTREAM_VERSION must track the last upstream savegame version");
+
 #include "../engine_base.h"
 #include "../engine_override.h"
 #include "../string_func.h"

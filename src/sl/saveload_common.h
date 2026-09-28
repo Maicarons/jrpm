@@ -462,7 +462,14 @@ enum SaveLoadVersion : uint16_t {
 
 static constexpr SaveLoadVersion SAVEGAME_VERSION = SLV_CUSTOM_SUBSIDY_DURATION;                    ///< Current savegame version of OpenTTD.
 static constexpr SaveLoadVersion MAX_LOAD_SAVEGAME_VERSION = (SaveLoadVersion)(SL_MAX_VERSION - 1); ///< Max loadable savegame version of OpenTTD.
-static constexpr SaveLoadVersion SL_UPSTREAM_VERSION = MAX_LOAD_SAVEGAME_VERSION;                   ///< Savegame version to save/load in XSLFI_UPSTREAM_VERSION sub-chunk
+/* jrpm: jrpm's own savegame versions (SLV_MULTITILE_AIRPORTS/SLV_ORDER_DECOUPLE) shift the
+ * numbering above 366 by +2 relative to the upstream numbering that the upstream savegame
+ * layer (namespace upstream_sl) gates its fields against. Upstream chunks must therefore be
+ * saved (and recorded in the XSLFI_UPSTREAM_VERSION sub-chunk) with the last upstream version
+ * expressed in upstream numbering -- 0.73.3: DoubleEndedShips = 368 -- and not with
+ * MAX_LOAD_SAVEGAME_VERSION, which is 370 in jrpm numbering and would make every
+ * upstream-layer field version gate exclude itself. */
+static constexpr SaveLoadVersion SL_UPSTREAM_VERSION = (SaveLoadVersion)368;                        ///< Savegame version to save/load in XSLFI_UPSTREAM_VERSION sub-chunk
 
 uint8_t SlReadByte();
 void SlReadString(std::string &str, size_t length);

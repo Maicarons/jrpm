@@ -1089,7 +1089,7 @@ void WriteValue(void *ptr, VarMemType conv, int64_t val)
  */
 Uint128 ReadValue128(const void *ptr, VarType conv)
 {
-	switch (GetVarMemType(conv)) {
+	switch (conv.mem) {
 		case SLE_VAR_U128: return *(const Uint128 *)ptr;
 		case SLE_VAR_U64:  return Uint128{*(const uint64_t *)ptr};
 		default: NOT_REACHED();
@@ -1105,7 +1105,7 @@ Uint128 ReadValue128(const void *ptr, VarType conv)
  */
 void WriteValue128(void *ptr, VarType conv, Uint128 val)
 {
-	switch (GetVarMemType(conv)) {
+	switch (conv.mem) {
 		case SLE_VAR_U128: *(Uint128 *)ptr = val; break;
 		case SLE_VAR_U64:  *(uint64_t *)ptr = val.lo; break;
 		default: NOT_REACHED();
@@ -1137,7 +1137,7 @@ void SlSaveValue(int64_t x, VarType conv)
  */
 void SlSaveValue128(Uint128 x, VarType conv)
 {
-	switch (GetVarFileType(conv)) {
+	switch (conv.file) {
 		case SLE_FILE_U128:
 			SlWriteUint64(x.lo);
 			SlWriteUint64(x.hi);
@@ -1190,7 +1190,7 @@ int64_t SlLoadValue(VarType conv)
 Uint128 SlLoadValue128(VarType conv)
 {
 	Uint128 x;
-	switch (GetVarFileType(conv)) {
+	switch (conv.file) {
 		case SLE_FILE_U128:
 			x.lo = SlReadUint64();
 			x.hi = SlReadUint64();
@@ -1219,17 +1219,17 @@ Uint128 SlLoadValue128(VarType conv)
 template <SaveLoadAction action>
 static void SlSaveLoadConvGeneric(void *ptr, VarType conv)
 {
-	if (GetVarMemType(conv) == SLE_VAR_U128) {
+	if (conv.mem == SLE_VAR_U128) {
 		switch (action) {
-			case SLA_SAVE:
+			case SaveLoadAction::Save:
 				SlSaveValue128(ReadValue128(ptr, conv), conv);
 				break;
-			case SLA_LOAD_CHECK:
-			case SLA_LOAD:
+			case SaveLoadAction::LoadCheck:
+			case SaveLoadAction::Load:
 				WriteValue128(ptr, conv, SlLoadValue128(conv));
 				break;
-			case SLA_PTRS: break;
-			case SLA_NULL: break;
+			case SaveLoadAction::Ptrs: break;
+			case SaveLoadAction::Null: break;
 			default: NOT_REACHED();
 		}
 		return;
@@ -3110,7 +3110,10 @@ static void SlSaveChunk(const ChunkHandler &ch)
 		if (result == CSLSOR_DONT_SAVE_CHUNK) return;
 		if (result == CSLSOR_UPSTREAM_SAVE_CHUNK) {
 			SaveLoadVersion old_ver = _sl_version;
-			_sl_version = MAX_LOAD_SAVEGAME_VERSION;
+			/* jrpm: use SL_UPSTREAM_VERSION (upstream numbering), not MAX_LOAD_SAVEGAME_VERSION
+			 * (jrpm numbering, shifted by jrpm's own versions); the upstream layer's field gates
+			 * would otherwise exclude every field. */
+			_sl_version = SL_UPSTREAM_VERSION;
 			auto guard = scope_guard([&]() {
 				_sl_version = old_ver;
 			});
