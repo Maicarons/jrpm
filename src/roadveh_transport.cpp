@@ -100,17 +100,79 @@ uint32_t RVTransportGetPartCapacityTonnes(const Vehicle *part)
 	return static_cast<uint32_t>(part->cargo_cap) * cs->weight / 16;
 }
 
-/** Tonnes already used on this carrier part by carried road vehicles. */
-uint32_t RVTransportGetPartUsedTonnes(const Vehicle *part)
+/** Tonnes of road vehicles this carrier part holds. */
+uint32_t RVTransportGetPartCarriedTonnes(const Vehicle *part)
 {
 	if (part == nullptr) return 0;
-	uint32_t used = 0;
+	uint32_t carried = 0;
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & RVTF_TRANSPORTED) == 0) continue;
 		if (v->transported_host_part != part->index) continue;
-		used += v->transported_weight;
+		carried += v->transported_weight;
+	}
+	return carried;
+}
+
+/** Tonnes already used on this carrier part: the road vehicles on it plus the cargo it carries. */
+uint32_t RVTransportGetPartUsedTonnes(const Vehicle *part)
+{
+	if (part == nullptr) return 0;
+	uint32_t used = RVTransportGetPartCarriedTonnes(part);
+	if (IsValidCargoType(part->cargo_type)) {
+		used += static_cast<uint32_t>(CargoSpec::Get(part->cargo_type)->WeightOfNUnits(part->cargo.StoredCount()));
 	}
 	return used;
+}
+
+/** Cargo units to display for this carrier part (see RVTransportGetPartCargoAmount()). */
+uint16_t RVTransportGetPartCargoAmount(const Vehicle *part)
+{
+	if (part == nullptr) return 0;
+
+	const uint32_t stored = part->cargo.StoredCount();
+	const uint32_t carried = RVTransportGetPartCarriedTonnes(part);
+	if (carried == 0 || !IsValidCargoType(part->cargo_type)) return static_cast<uint16_t>(stored);
+
+	const CargoSpec *cs = CargoSpec::Get(part->cargo_type);
+	if (cs->weight == 0) return static_cast<uint16_t>(stored);
+
+	/* One unit weighs CargoSpec::weight / 16 tonnes, the inverse of RVTransportGetPartCapacityTonnes():
+	 * a part's road vehicle capacity and the amount it reports are expressed in the same tonnes. */
+	const uint32_t amount = stored + carried * 16 / cs->weight;
+	return static_cast<uint16_t>(std::min<uint32_t>(amount, part->cargo_cap));
+}
+
+/** Collect the road vehicles this carrier part holds (front vehicles only, in vehicle id order). */
+void RVTransportGetPartCarriedVehicles(const Vehicle *part, std::vector<const Vehicle *> &out)
+{
+	out.clear();
+	if (part == nullptr) return;
+	for (const Vehicle *v : Vehicle::Iterate()) {
+		if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) continue;
+		if (v->transported_host_part != part->index) continue;
+		if (!v->IsFrontEngine()) continue;
+		out.push_back(v);
+	}
+}
+
+/** Carrier this road vehicle is on, from the part it occupies (see the header). */
+Vehicle *RVTransportGetCarrier(const Vehicle *rv)
+{
+	if (rv == nullptr || (rv->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) return nullptr;
+	const Vehicle *part = Vehicle::GetIfValid(rv->transported_host_part);
+	return (part != nullptr) ? part->First() : nullptr;
+}
+
+/**
+ * Is this road vehicle on this carrier? Both sides are reduced to the front of their chain, so a
+ * caller may pass the chain head or any vehicle of the carrier (the details window can be opened on
+ * a wagon as well) and gets the same answer.
+ */
+static bool RVTransportIsOnCarrier(const Vehicle *carrier, const Vehicle *rv)
+{
+	if (carrier == nullptr) return false;
+	const Vehicle *rv_carrier = RVTransportGetCarrier(rv);
+	return rv_carrier != nullptr && rv_carrier == carrier->First();
 }
 
 /** Number of road vehicles currently carried by this carrier. */
@@ -120,8 +182,8 @@ uint32_t RVTransportCountOnCarrier(const Vehicle *carrier)
 	uint32_t count = 0;
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & RVTF_TRANSPORTED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
 		if (!v->IsFrontEngine()) continue;      // an articulated vehicle counts once
+		if (!RVTransportIsOnCarrier(carrier, v)) continue;
 		count++;
 	}
 	return count;
@@ -133,8 +195,8 @@ Vehicle *RVTransportFindFirstOnCarrier(const Vehicle *carrier)
 	if (carrier == nullptr) return nullptr;
 	for (Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & RVTF_TRANSPORTED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
 		if (!v->IsFrontEngine()) continue;
+		if (!RVTransportIsOnCarrier(carrier, v)) continue;
 		return v;
 	}
 	return nullptr;
@@ -147,8 +209,8 @@ void RVTransportGetCarriedVehicles(const Vehicle *carrier, std::vector<const Veh
 	if (carrier == nullptr) return;
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
 		if (!v->IsFrontEngine()) continue;
+		if (!RVTransportIsOnCarrier(carrier, v)) continue;
 		out.push_back(v);
 	}
 }
@@ -160,8 +222,8 @@ uint32_t RVTransportGetCarriedWeightTonnes(const Vehicle *carrier)
 	uint32_t weight = 0;
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
 		if (!v->IsFrontEngine()) continue;
+		if (!RVTransportIsOnCarrier(carrier, v)) continue;
 		weight += v->transported_weight;
 	}
 	return weight;
@@ -970,8 +1032,8 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 	bool any = false;
 	for (Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & RVTF_TRANSPORTED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
 		if (!v->IsFrontEngine()) continue;          // the parts are handled together with the front
+		if (!RVTransportIsOnCarrier(carrier, v)) continue;
 
 		/* Only unload a road vehicle which wants to be dropped here: the station of its own "be
 		 * unloaded here" order. A road vehicle which declares no destination at all is dropped at the
@@ -1128,8 +1190,8 @@ uint32_t RVTransportCountWantingUnloadHere(const Vehicle *carrier, const Station
 	uint32_t count = 0;
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
 		if (!v->IsFrontEngine()) continue;
+		if (!RVTransportIsOnCarrier(carrier, v)) continue;
 		const StationID declared = RVTransportGetDeclaredDestination(v);
 		if (declared != StationID::Invalid() && declared != st->index) continue; // wants another station
 		count++;
@@ -1326,8 +1388,12 @@ void RVTransportValidateAfterLoad()
 			continue;
 		}
 
-		const Vehicle *carrier = Vehicle::GetIfValid(v->transported_by);
-		if (carrier != nullptr && carrier->type != VehicleType::Road && carrier->First() == carrier) {
+		/* The part the vehicle occupies decides whether it is really carried: it has to exist, and a
+		 * road vehicle is never a carrier. The stored transported_by is deliberately not consulted:
+		 * it names a vehicle of the consist the road vehicle was loaded onto, which splitting,
+		 * joining or rearranging the consist may have moved into another part since. */
+		const Vehicle *part = Vehicle::GetIfValid(v->transported_host_part);
+		if (part != nullptr && part->type != VehicleType::Road) {
 			/* Carried as expected. A savegame written before the road vehicle's order was advanced when
 			 * it was loaded still has the "wait to be transported" order as its current order: catch
 			 * up. The station stop of the vehicle is finished here as well - a savegame can also have
@@ -1338,7 +1404,7 @@ void RVTransportValidateAfterLoad()
 			continue; // carried as expected
 		}
 
-		Debug(misc, 0, "RoRo: road vehicle #{} was carried by missing vehicle #{}", v->index.base(), v->transported_by.base());
+		Debug(misc, 0, "RoRo: road vehicle #{} was carried by missing part #{}", v->index.base(), v->transported_host_part.base());
 		v->transported_by = VehicleID::Invalid();
 		v->transported_host_part = VehicleID::Invalid();
 		if (RVTransportCanPutDownHere(RoadVehicle::From(v), v->tile)) {
@@ -1423,14 +1489,16 @@ const Vehicle *RVTransportGetFollowVehicle(const Vehicle *v)
 	if (v == nullptr) return nullptr;
 	if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) return v;
 
-	const Vehicle *carrier = Vehicle::GetIfValid(v->transported_by);
+	const Vehicle *carrier = RVTransportGetCarrier(v);
 	if (carrier == nullptr) return v;
 	return carrier->GetMovingFront();
 }
 
 /**
- * Destroy the road vehicles carried by this carrier: they are lost together with it, exactly like
- * the wagons of a crashed train, instead of being left behind on the map.
+ * Destroy the road vehicles held by this vehicle: they are lost together with it, exactly like the
+ * wagons of a crashed train, instead of being left behind on the map. Covers both a whole carrier
+ * which is going away (they are on one of its parts) and a single part which is removed on its own
+ * (a wagon sold in a depot), which loses the road vehicles it holds.
  */
 void RVTransportDestroyCarriedVehicles(Vehicle *carrier)
 {
@@ -1441,8 +1509,8 @@ void RVTransportDestroyCarriedVehicles(Vehicle *carrier)
 	std::vector<VehicleID> fronts;
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
 		if (!v->IsFrontEngine()) continue;
+		if (v->transported_host_part != carrier->index && !RVTransportIsOnCarrier(carrier, v)) continue;
 		fronts.push_back(v->index);
 	}
 

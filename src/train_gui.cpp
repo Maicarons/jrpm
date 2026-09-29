@@ -221,6 +221,9 @@ static void TrainDetailsCargoTab(const CargoSummaryItem *item, int left, int rig
 		str = GetString(STR_QUANTITY_N_A);
 	} else if (item->amount == 0) {
 		str = GetString(STR_VEHICLE_DETAILS_CARGO_EMPTY);
+	} else if (item->source == StationID::Invalid()) {
+		/* RoRo: the amount is the road vehicles on this wagon, which come from no station of this train. */
+		str = GetString(STR_JUST_CARGO, item->cargo, item->amount);
 	} else if (FreightWagonMult(item->cargo) > 1) {
 		str = GetString(STR_VEHICLE_DETAILS_CARGO_FROM_MULT, item->cargo, item->amount, item->source, _settings_game.vehicle.freight_trains);
 	} else {
@@ -361,7 +364,7 @@ static void GetCargoSummaryOfArticulatedVehicle(const Train *v, CargoSummary &su
 		}
 
 		item->capacity += v->cargo_cap;
-		item->amount += v->cargo.StoredCount();
+		item->amount += RVTransportGetPartCargoAmount(v);
 		if (item->source == StationID::Invalid()) item->source = v->cargo.GetFirstStation();
 	} while ((v = v->Next()) != nullptr && v->IsArticulatedPart());
 }
@@ -418,16 +421,13 @@ int GetTrainDetailsWndVScroll(VehicleID veh_id, TrainDetailsWindowTabs det_tab)
 
 			uint length = GetLengthOfArticulatedVehicle(v);
 			if (length > (uint)ScaleSpriteTrad(TRAIN_DETAILS_MAX_INDENT)) num++;
+
+			/* RoRo: the road vehicles this wagon carries are listed below its own lines. */
+			std::vector<const Vehicle *> carried;
+			RVTransportGetPartCarriedVehicles(v, carried);
+			num += static_cast<int>(carried.size());
 		}
 		if (det_tab == 1) num += 2 * Train::Get(veh_id)->tcache.cached_num_engines;
-
-		/* RoRo: the "vehicles" tab also lists the road vehicles this train carries (a header line and
-		 * one line per road vehicle). */
-		if (det_tab == TDW_TAB_INFO) {
-			std::vector<const Vehicle *> carried;
-			RVTransportGetCarriedVehicles(Vehicle::Get(veh_id), carried);
-			if (!carried.empty()) num += carried.size() + 1;
-		}
 	}
 
 	return num;
@@ -471,6 +471,48 @@ const Vehicle *GetTrainDetailsCarriedVehicleRow(VehicleID veh_id, int row)
 }
 
 /**
+ * A road vehicle row of the last drawn train details tab: the wagon it is on and its position in
+ * that wagon's list. The per-vehicle tabs list every wagon's road vehicles below the wagon itself,
+ * so which road vehicle is drawn on a line cannot be derived from the vehicle list alone.
+ */
+struct TrainCarriedRowLayout {
+	VehicleID part = VehicleID::Invalid(); ///< wagon (part) the road vehicle is on
+	uint8_t index = 0;                     ///< position of the road vehicle in that wagon's list
+};
+
+/** Road vehicle rows of the last drawn train details tab, by scroll line. */
+static std::vector<TrainCarriedRowLayout> _train_carried_rows;
+
+/** Remember which road vehicle is drawn on which line of the tab being drawn. */
+static void SetTrainCarriedRowLayout(int line, VehicleID part, uint8_t index)
+{
+	if (line < 0) return;
+	if (static_cast<int>(_train_carried_rows.size()) <= line) _train_carried_rows.resize(line + 1);
+	_train_carried_rows[line] = {part, index};
+}
+
+/**
+ * Road vehicle drawn on this line of the last drawn train details tab, for the click handler of the
+ * details window (see VehicleDetailsWindow::OnClick()). The entry is re-resolved on the wagon it was
+ * recorded for, so a line which no longer lists that road vehicle (the train changed since the draw)
+ * yields nothing instead of the wrong vehicle.
+ * @param line The scroll line, counted the same way as GetTrainDetailsWndVScroll() counts them.
+ * @return The carried road vehicle, or nullptr when there is none on that line.
+ */
+const Vehicle *GetTrainDetailsCarriedRowAtLine(int line)
+{
+	if (line < 0 || line >= static_cast<int>(_train_carried_rows.size())) return nullptr;
+	const TrainCarriedRowLayout &row = _train_carried_rows[line];
+	const Vehicle *part = Vehicle::GetIfValid(row.part);
+	if (part == nullptr) return nullptr;
+
+	std::vector<const Vehicle *> carried;
+	RVTransportGetPartCarriedVehicles(part, carried);
+	if (row.index >= carried.size()) return nullptr;
+	return carried[row.index];
+}
+
+/**
  * Draw the details for the given vehicle at the given position
  *
  * @param v     current vehicle
@@ -485,6 +527,11 @@ void DrawTrainDetails(const Train *v, const Rect &r, int vscroll_pos, uint16_t v
 	int line_height = r.Height();
 	int sprite_y_offset = line_height / 2;
 	int text_y_offset = (line_height - GetCharacterHeight(FontSize::Normal)) / 2;
+
+	/* The lines drawn below are counted from the first one the scrollbar shows, so the line a row
+	 * ends up on is this offset minus the running position; the click handler needs it. */
+	const int first_line = vscroll_pos;
+	_train_carried_rows.clear();
 
 	/* draw the first 3 details tabs */
 	if (det_tab != TDW_TAB_TOTALS && det_tab != TDW_TAB_PERF && det_tab != TDW_TAB_CARRIED) {
@@ -579,25 +626,21 @@ void DrawTrainDetails(const Train *v, const Rect &r, int vscroll_pos, uint16_t v
 				}
 				vscroll_pos--;
 			}
-		}
 
-		/* RoRo: list the road vehicles this train carries after its own vehicles. */
-		if (det_tab == TDW_TAB_INFO) {
+			/* RoRo: the road vehicles this wagon carries are listed below its own lines. They move with
+			 * the wagon when a train is split into parts or joined again, so this is what shows which
+			 * vehicle really sits on which wagon. */
 			std::vector<const Vehicle *> carried;
-			RVTransportGetCarriedVehicles(front, carried);
-			if (!carried.empty()) {
+			RVTransportGetPartCarriedVehicles(v, carried);
+			for (size_t i = 0; i < carried.size(); i++) {
+				const int line = first_line - vscroll_pos;
 				if (vscroll_pos <= 0 && vscroll_pos > -vscroll_cap) {
-					DrawString(r.left, r.right, r.top - line_height * vscroll_pos + text_y_offset, STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLES, TextColour::LightBlue);
+					const int py = r.top - line_height * vscroll_pos + text_y_offset;
+					GfxFillRect(r.WithY(py - WidgetDimensions::scaled.matrix.top - 1, py - WidgetDimensions::scaled.matrix.top), GetColourGradient(Colours::Grey, Shade::Light));
+					DrawString(dr.left + WidgetDimensions::scaled.framerect.left, dr.right, py, TrainDetailsCarriedVehicleLine(carried[i]));
 				}
+				SetTrainCarriedRowLayout(line, v->index, static_cast<uint8_t>(i));
 				vscroll_pos--;
-				for (const Vehicle *rv : carried) {
-					if (vscroll_pos <= 0 && vscroll_pos > -vscroll_cap) {
-						int py = r.top - line_height * vscroll_pos + text_y_offset;
-						GfxFillRect(r.WithY(py - WidgetDimensions::scaled.matrix.top - 1, py - WidgetDimensions::scaled.matrix.top), GetColourGradient(Colours::Grey, Shade::Light));
-						DrawString(r.left + WidgetDimensions::scaled.framerect.left, r.right, py, GetString(STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLE, rv->index));
-					}
-					vscroll_pos--;
-				}
 			}
 		}
 	} else if (det_tab == TDW_TAB_CARRIED) {
@@ -627,7 +670,10 @@ void DrawTrainDetails(const Train *v, const Rect &r, int vscroll_pos, uint16_t v
 		for (const Train *u = v->First(); u != nullptr; u = u->Next()) {
 			const auto weight_without_cargo = u->GetWeightWithoutCargo();
 			empty_weight  += weight_without_cargo;
-			loaded_weight += weight_without_cargo + u->GetCargoWeight(u->cargo_cap);
+			/* "Fully loaded" is the wagon's cargo capacity, or the road vehicles on it when those are
+			 * heavier: a part never holds more tonnes than its capacity, so the larger of the two is
+			 * what it weighs at most. */
+			loaded_weight += weight_without_cargo + std::max<uint32_t>(u->GetCargoWeight(u->cargo_cap), RVTransportGetPartCarriedTonnes(u));
 		}
 
 		if (--vscroll_pos < 0 && vscroll_pos >= -vscroll_cap) {
@@ -664,7 +710,7 @@ void DrawTrainDetails(const Train *v, const Rect &r, int vscroll_pos, uint16_t v
 		Money feeder_share = 0;
 
 		for (const Train *u = v->First(); u != nullptr; u = u->Next()) {
-			act_cargo[u->cargo_type] += u->cargo.StoredCount();
+			act_cargo[u->cargo_type] += RVTransportGetPartCargoAmount(u);
 			max_cargo[u->cargo_type] += u->cargo_cap;
 			feeder_share             += u->cargo.GetFeederShare();
 		}

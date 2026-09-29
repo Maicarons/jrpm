@@ -6634,7 +6634,7 @@ static bool CoupleOrderLoadOk(const Order &order, const Train *t)
 	uint cargo = 0;
 	uint capacity = 0;
 	for (const Train *u = t->First(); u != nullptr; u = u->Next()) {
-		cargo += u->cargo.StoredCount();
+		cargo += RVTransportGetPartCargoAmount(u);
 		capacity += u->cargo_cap;
 	}
 
