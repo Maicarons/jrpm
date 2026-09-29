@@ -4700,18 +4700,22 @@ static PBSTileInfo ExtendTrainReservation(const Train *v, const PBSTileInfo &ori
 			 * a wrong path not leading to our next destination. */
 			if (HasReservedTracks(ft.new_tile, TrackdirBitsToTrackBits(TrackdirReachesTrackdirs(ft.old_td)))) {
 				if (!IsCouplePartnerTile(v, ft.new_tile)) {
-					if (v->current_order.IsType(OT_GOTO_COUPLE)) {
-						/* The couple partner is not claimed yet (the target
-						 * search only runs after the extend), so the holder
-						 * may well be the waiting partner standing on its
-						 * platform. Don't fail here: hand the choice over to
-						 * the couple pathfinder, which claims the target and
-						 * lets the reservation machinery decide with the
-						 * partner exemptions active. */
-						if (new_tracks != nullptr) *new_tracks = TrackdirBitsToTrackBits(ft.new_td_bits);
-						if (enterdir != nullptr) *enterdir = ft.exitdir;
-						return PBSTileInfo(ft.new_tile, ft.old_td, false);
-					}
+					/* Stop here, like every other order does, and wait.
+					 *
+					 * A goto-couple train used to be handed the choice instead
+					 * of stopping, on the assumption that the holder of this
+					 * reservation would turn out to be the partner once the
+					 * target search ran. That assumption is what let the
+					 * reservation extend past the boundary: the release
+					 * (#FreeTrainTrackReservation) walks the very same chain,
+					 * so it then cleared track this consist had never
+					 * reserved, and the train standing on that track lost the
+					 * path it was braking for.
+					 *
+					 * Stopping costs nothing and is the ordinary behaviour: the
+					 * reservation belongs to the other train, so we wait for it
+					 * to clear and try again on a later tick, rather than taking
+					 * a path that is not ours. */
 					break;
 				}
 			}
