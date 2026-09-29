@@ -1560,6 +1560,27 @@ bool IsCouplePartnerVehicleTile(const Train *v, TileIndex tile)
 }
 
 /**
+ * Check whether a vehicle that is neither \a v's own consist nor its claimed
+ * couple partner stands on \a tile. For a goto-couple train this is exactly the
+ * "something else is in the way" test: the partner and ourselves may share the
+ * track, anything else may not.
+ */
+bool HasForeignConsistOnTile(const Train *v, TileIndex tile)
+{
+	const Train *mover = v->Primary();
+	const Train *partner = nullptr;
+	if (v->current_order.IsType(OT_GOTO_COUPLE)) {
+		const Train *tgt = Train::GetIfValid(mover->couple_target);
+		if (tgt != nullptr) partner = tgt->Primary();
+	}
+	for (const Train *u : VehiclesOnTile<VehicleType::Train>(tile)) {
+		const Train *up = u->Primary();
+		if (up != mover && up != partner) return true;
+	}
+	return false;
+}
+
+/**
  * Check whether the continuous station platform strip containing \a tile
  * also holds a vehicle of \a partner. Two parallel platforms of the same
  * station are separate strips: walking along the track axis from \a tile
@@ -1856,9 +1877,10 @@ bool IsWaitingPositionFree(const Train *v, TileIndex tile, Trackdir trackdir, bo
 	if (TrackOverlapsTracks(reserved, track)) {
 		/* A train going to couple may stop on a tile of its partner's
 		 * platform: the partner's own reservation covers the strip, also
-		 * the empty tiles. Allowed as long as the way to the partner is free. */
-		if (v->current_order.IsType(OT_GOTO_COUPLE) && IsCouplePartnerTile(v, tile)) {
-			if (IsCoupleApproachPathClear(v)) return true;
+		 * the empty tiles. A foreign consist standing on the tile still
+		 * blocks; the rest of the route is checked per tile when reserving. */
+		if (v->current_order.IsType(OT_GOTO_COUPLE) && IsCouplePartnerTile(v, tile) && !HasForeignConsistOnTile(v, tile)) {
+			return true;
 		}
 		return false;
 	}
@@ -1915,11 +1937,11 @@ bool IsWaitingPositionFree(const Train *v, TileIndex tile, Trackdir trackdir, bo
 
 	if (HasReservedTracks(ft.new_tile, TrackdirBitsToTrackBits(ft.new_td_bits))) {
 		/* A tile of the claimed couple partner's platform is the contact
-		 * point: stopping there is allowed as long as the way to the
-		 * partner is free. This includes tiles the partner reserved without
+		 * point: stopping there is allowed as long as no foreign consist
+		 * stands on it. This includes tiles the partner reserved without
 		 * standing on them (the empty parts of its platform). */
-		if (v->current_order.IsType(OT_GOTO_COUPLE) && IsCouplePartnerTile(v, ft.new_tile)) {
-			return IsCoupleApproachPathClear(v);
+		if (v->current_order.IsType(OT_GOTO_COUPLE) && IsCouplePartnerTile(v, ft.new_tile) && !HasForeignConsistOnTile(v, ft.new_tile)) {
+			return true;
 		}
 		return false;
 	}

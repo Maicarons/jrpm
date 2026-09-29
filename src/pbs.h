@@ -198,6 +198,7 @@ bool IsWaitingPositionFree(const Train *v, TileIndex tile, Trackdir trackdir, bo
 bool IsWaitingPositionFreeTraceRestrictExecute(const TraceRestrictProgram *prog, const Train *v, TileIndex tile, Trackdir trackdir);
 
 bool IsCouplePartnerVehicleTile(const Train *v, TileIndex tile);
+bool HasForeignConsistOnTile(const Train *v, TileIndex tile);
 bool IsCouplePartnerTile(const Train *v, TileIndex tile);
 bool IsCoupleApproachPathClear(const Train *v);
 

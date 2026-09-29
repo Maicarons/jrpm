@@ -4689,6 +4689,23 @@ static PBSTileInfo ExtendTrainReservation(const Train *v, const PBSTileInfo &ori
 			}
 		}
 
+		/* A goto-couple train may only travel towards its partner while no
+		 * foreign consist stands on the tiles it passes, including the tiles
+		 * the track follower jumps over (station platforms). */
+		if (v->current_order.IsType(OT_GOTO_COUPLE)) {
+			TileIndexDiff step = TileOffsByDiagDir(ft.exitdir);
+			bool foreign = false;
+			for (int i = 1; i <= ft.tiles_skipped + 1; i++) {
+				TileIndex t = ft.new_tile - step * (ft.tiles_skipped + 1 - i);
+				if (!IsValidTile(t)) continue;
+				if (HasForeignConsistOnTile(v, t)) {
+					foreign = true;
+					break;
+				}
+			}
+			if (foreign) break;
+		}
+
 		/* Station, depot or waypoint are a possible target. */
 		bool target_seen = ft.is_station || (IsTileType(ft.new_tile, TileType::Railway) && !IsPlainRail(ft.new_tile));
 		if (target_seen || KillFirstBit(ft.new_td_bits) != TRACKDIR_BIT_NONE) {

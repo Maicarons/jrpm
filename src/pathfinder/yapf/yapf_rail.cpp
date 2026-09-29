@@ -181,20 +181,26 @@ private:
 		TileIndex     start = tile;
 		TileIndexDiff diff = TileOffsByDiagDir(dir);
 		const Train *v = Yapf().GetVehicle();
+		const bool couple = v->current_order.IsType(OT_GOTO_COUPLE);
 
-		/* The couple semantics: nothing may stand between us and the partner
-		 * before anything is reserved towards it. A train parked on the far
-		 * side of the partner is not in the way and does not hold the couple
-		 * up, so only the track we actually travel is looked at. */
-		if (v->current_order.IsType(OT_GOTO_COUPLE) && !IsCoupleApproachPathClear(v)) return false;
-
+		/* Tiles of the claimed couple partner's own platform are shared: the
+		 * partner's arrival reservation covers the whole strip, also the empty
+		 * tiles in front of and behind its body. Any other reservation on the
+		 * platform (another train standing in the same block) still blocks.
+		 *
+		 * A foreign consist standing on the part of the platform between us and
+		 * the partner also blocks. Tiles on the far side of the partner are not
+		 * travelled, so they are exempt: the walk goes from the far end towards
+		 * the origin, so only tiles from the partner onwards are checked. */
+		bool seen_partner = false;
 		do {
-			/* Tiles of the claimed couple partner's own platform are shared:
-			 * the partner's arrival reservation covers the whole strip, also
-			 * the empty tiles in front of and behind its body. Any other
-			 * reservation on the platform (another train standing in the same
-			 * block) still blocks. */
-			if (HasStationReservation(tile) && !IsCouplePartnerTile(v, tile)) return false;
+			if (couple && IsCouplePartnerVehicleTile(v, tile)) seen_partner = true;
+			if (couple && seen_partner && HasForeignConsistOnTile(v, tile)) {
+				return false;
+			}
+			if (HasStationReservation(tile) && !IsCouplePartnerTile(v, tile)) {
+				return false;
+			}
 			SetRailStationReservation(tile, true);
 			MarkTileDirtyByTile(tile, VMDF_NOT_MAP_MODE);
 			tile = TileAdd(tile, diff);
@@ -215,6 +221,12 @@ private:
 	 */
 	bool ReserveSingleTrack(TileIndex tile, Trackdir td)
 	{
+		const Train *v = Yapf().GetVehicle();
+		if (v->current_order.IsType(OT_GOTO_COUPLE) && HasForeignConsistOnTile(v, tile)) {
+			this->res_fail_tile = tile;
+			this->res_fail_td = td;
+			return false;
+		}
 		if (IsRailStationTile(tile)) {
 			if (!ReserveRailStationPlatform(tile, TrackdirToExitdir(ReverseTrackdir(td)))) {
 				/* Platform could not be reserved, undo. */
