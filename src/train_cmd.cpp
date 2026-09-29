@@ -264,6 +264,36 @@ void CheckBreakdownFlags(Train *v)
 	}
 }
 
+/**
+ * Recompute the breakdown bookkeeping of a resulting consist part.
+ *
+ * #VehicleRailFlag::ConsistBreakdown is set wherever a breakdown starts
+ * (Vehicle::HandleBreakdown) and gates the whole breakdown handling in
+ * TrainLocoHandler, and the stop/speed/power flags are only ever recomputed by
+ * #CheckBreakdownFlags, which is reached only from Vehicle::HandleBreakdown.
+ * Consist surgery (see #SplitOrders) moves vehicles -- and the primary that
+ * carries all of this -- between the two parts, so both have to be recomputed
+ * for each part afterwards. Without it the part that keeps a broken engine never
+ * processes the breakdown (gate unset, so the counter and the breakdown delay
+ * are never advanced and BreakdownBraking is never cleared), while the part that
+ * lost it keeps a stale BreakdownSpeed and is displayed as broken down.
+ *
+ * @param part The primary vehicle of the resulting part.
+ */
+static void RefreshConsistBreakdownState(Train *part)
+{
+	bool broken = false;
+	for (Train *w = part->First(); w != nullptr; w = w->GetNextVehicle()) {
+		if (w->breakdown_ctr != 0 && (w->IsEngine() || w->IsMultiheaded())) {
+			broken = true;
+			break;
+		}
+	}
+	part->flags.Set(VehicleRailFlag::ConsistBreakdown, broken);
+	/* CheckBreakdownFlags() expects a front engine and rewrites the flags from the chain. */
+	if (part->IsFrontEngine()) CheckBreakdownFlags(part);
+}
+
 uint16_t GetTrainVehicleMaxSpeed(const Train *u, const RailVehicleInfo &rvi_u, const Train *front)
 {
 	const uint16_t base_speed = GetVehicleProperty(u, PROP_TRAIN_SPEED, rvi_u.max_speed);
@@ -7265,6 +7295,12 @@ static void Couple(Train *v, Train *u)
 	/* The train is now one consist again: it is no longer a decoupled part. */
 	v->Primary()->decouple_part = 0;
 
+	/* The merge moved vehicles -- and the primary that carries the breakdown
+	 * bookkeeping -- between the two consists, so recompute it for the merged
+	 * consist; see #RefreshConsistBreakdownState. The absorbed consist's own copy
+	 * of the flag went out of use with its front engine above. */
+	RefreshConsistBreakdownState(v->Primary());
+
 	/* [FIX-couple] Post-couple flag cleanup. Direction is NOT touched here: it
 	 * is maintained by the standard movement pipeline (AdvanceWagonsAfterCouple
 	 * -> TrainController recomputes per-vehicle direction from the track every
@@ -7523,6 +7559,12 @@ static void TrainEnterStation(Train *consist, StationID station)
 		SplitOrders(consist, u, load_trains, wait_orders);
 		if (consist->current_order.IsType(OT_WAIT_COUPLE)) FreeTrainTrackReservation(consist);
 		if (u != nullptr && u->current_order.IsType(OT_WAIT_COUPLE)) FreeTrainTrackReservation(u);
+		/* The split moved vehicles -- and the primary that carries the breakdown
+		 * bookkeeping -- between the two parts, so both have to be recomputed for
+		 * each part; see #RefreshConsistBreakdownState. A failed split (u == consist)
+		 * leaves one intact consist, for which the recomputation is a no-op. */
+		RefreshConsistBreakdownState(consist);
+		if (u != nullptr) RefreshConsistBreakdownState(u);
 		/* ProcessOrders inside SplitOrders runs GetOrderStationLocation, which
 		 * clears last_station_visited when the (new) destination equals it.
 		 * Both parts are still standing at this station and BeginLoading below
