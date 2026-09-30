@@ -117,6 +117,16 @@ static const CargoSpec _rv_transport_cargo = {
 	MK_SPRITE(VEHICLES), nullptr, nullptr, 0
 };
 
+/**
+ * Dedicated "Vehicles (Train)" cargo for train transport, the train counterpart of
+ * _rv_transport_cargo above: installed into its own CargoType slot by SetupCargoForClimate().
+ */
+static const CargoSpec _rail_transport_cargo = {
+	CT_RAILVEHICLES, 28, PixelColour{87}, PixelColour{87}, 16, 0x100, CargoClasses({CargoClass::Oversized}), 5688, {0, 30}, true, TownAcceptanceEffect::None, TownProductionEffect::None, TOWN_PRODUCTION_DIVISOR, CargoCallbackMasks{},
+	MK_STR_CARGO_PLURAL(RAILVEHICLES), MK_STR_CARGO_SINGULAR(RAILVEHICLE), STR_TONS, MK_STR_QUANTITY(RAILVEHICLES), MK_STR_ABBREV(RAILVEHICLES),
+	MK_SPRITE(RAILVEHICLES), nullptr, nullptr, 0
+};
+
 
 /** Table of cargo types available in each climate, by default */
 static const std::variant<CargoLabel, int> _default_climate_cargo[NUM_LANDSCAPE][NUM_ORIGINAL_CARGO] = {

@@ -9700,6 +9700,10 @@ bool Train::Tick()
 	 * no-swap couple/decouple -- may sit mid-chain instead of at the head. */
 	if (this != this->First()) return true;
 
+	/* RoRo: end the "waiting to be transported" state when the vehicle was told to do something
+	 * else in the meantime (the player skipped the order, sent it to a depot, ...). */
+	RVTransportTickWaiting(this);
+
 	/* Crashed consists are physical wreckage. Drive their animation and
 	 * tail-first removal from the physical chain head, independently of where
 	 * the former consist-information carrier sits in the chain. */

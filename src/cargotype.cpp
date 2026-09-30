@@ -121,6 +121,15 @@ void SetupCargoForClimate(LandscapeType l)
 		_climate_independent_cargo_labels[cs.bitnum] = cs.label;
 	}
 
+	/* Train transport: install the dedicated "Vehicles (Train)" cargo next to it, same rules. */
+	{
+		CargoSpec &cs = CargoSpec::array[to_underlying(RAIL_TRANSPORT_CARGO_SLOT)];
+		cs = _rail_transport_cargo;
+		_cargo_mask.Set(cs.Index());
+		_default_cargo_labels.push_back(cs.label);
+		_climate_independent_cargo_labels[cs.bitnum] = cs.label;
+	}
+
 	BuildCargoLabelMap();
 }
 

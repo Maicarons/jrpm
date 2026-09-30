@@ -11,6 +11,7 @@
 #define ROADVEH_TRANSPORT_H
 
 #include "core/enum_type.hpp"
+#include "cargo_type.h"
 #include "station_type.h"
 #include "vehicle_type.h"
 
@@ -137,6 +138,9 @@ Vehicle *RVTransportGetCarrier(const Vehicle *rv);
 
 /** Can this carrier part carry road vehicles at all (cargo class oversized)? */
 bool RVTransportPartCanCarry(const Vehicle *part);
+
+/** Is this the dedicated cargo of vehicle transport ("Vehicles (Road)" or "Vehicles (Train)")? */
+bool RVTransportIsSpecialCargo(CargoType ct);
 
 /**
  * Set/clear the "waiting to be transported" state of a road vehicle.

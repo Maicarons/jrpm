@@ -3638,8 +3638,8 @@ void Vehicle::BeginLoading()
 	this->cur_speed = 0;
 	this->MarkDirty();
 
-	/* RoRo: a road vehicle whose order says "wait to be transported" stops here and waits. */
-	if (this->type == VehicleType::Road && (this->current_order.GetRVTransportFlags() & ORVTF_OWN_WAIT) != 0) {
+	/* RoRo: a vehicle whose order says "wait to be transported" stops here and waits. */
+	if ((this->type == VehicleType::Road || this->type == VehicleType::Train) && (this->current_order.GetRVTransportFlags() & ORVTF_OWN_WAIT) != 0) {
 		RVTransportSetWaiting(this, true);
 	}
 }

@@ -2657,16 +2657,26 @@ private:
 	}
 
 	/**
-	 * Whether the road vehicle's own transport options ("wait to be transported" / "be unloaded
-	 * here") apply to the order being edited. They only make sense on a road vehicle, but a
-	 * standalone/shared order list is not bound to a vehicle and may be run by any of them, so
-	 * such a list offers the options as well; the flags simply do nothing for the vehicle types
-	 * which never act on them.
+	 * Whether the vehicle's own transport options ("wait to be transported" / "be unloaded here")
+	 * apply to the order being edited. They only make sense on a vehicle which can itself be carried
+	 * by a carrier (a road vehicle or a train), but a standalone/shared order list is not bound to a
+	 * vehicle and may be run by any of them, so such a list offers the options as well; the flags
+	 * simply do nothing for the vehicle types which never act on them.
 	 * @return true when the options have to be offered.
 	 */
-	bool RoadTransportTogglesApply() const
+	bool OwnTransportTogglesApply() const
 	{
-		return !this->HasVehicle() || this->vehicle->type == VehicleType::Road;
+		if (!this->HasVehicle()) return true;
+		return this->vehicle->type == VehicleType::Road || this->vehicle->type == VehicleType::Train;
+	}
+
+	/**
+	 * Is this a road vehicle (as opposed to a carrier or a train)? A carried vehicle's own toggles
+	 * live in the manage-order menu, so its station order buttons keep the normal-cargo labels.
+	 */
+	bool IsRoadVehicle() const
+	{
+		return this->HasVehicle() && this->vehicle->type == VehicleType::Road;
 	}
 
 	/**
@@ -3749,13 +3759,13 @@ public:
 			this->SetWidgetDisabledState(WID_O_UNLOAD,    (order->GetNonStopType() & ONSF_NO_STOP_AT_DESTINATION_STATION) != 0); // unload
 			this->EnableWidget(WID_O_MGMT_BTN);
 
-			/* RoRo: road vehicle carriers show their own load/unload option on the buttons; for a
-			 * road vehicle itself the toggles live in the manage-order menu now. */
-			{
-				/* this->vehicle is nullptr while a standalone/shared order list is edited; such a
-				 * list is not a carrier, so it gets the normal cargo button labels. */
-				const bool is_rv = this->RoadTransportTogglesApply();
-				const bool is_vehicle_only = !is_rv && this->IsVehicleOnlyCarrier();
+				/* RoRo: vehicle carriers show their own load/unload option on the buttons; for a
+				 * road vehicle itself the toggles live in the manage-order menu now. A train may be
+				 * both a carrier and itself carried, so it keeps the carrier button labels. */
+				{
+					/* this->vehicle is nullptr while a standalone/shared order list is edited; such a
+					 * list is not a carrier, so it gets the normal cargo button labels. */
+					const bool is_vehicle_only = !this->IsRoadVehicle() && this->IsVehicleOnlyCarrier();
 				if (is_vehicle_only) {
 					/* Fixed labels, like the cargo buttons always show "full load any cargo" /
 					 * "unload all": the pressed state and the dropdown show which of the two
@@ -4701,8 +4711,8 @@ public:
 					}
 				}
 
-				if (this->RoadTransportTogglesApply() && order->IsType(OT_GOTO_STATION)) {
-					/* RoRo: a road vehicle's own transport toggles live in this menu. They are also
+				if (this->OwnTransportTogglesApply() && order->IsType(OT_GOTO_STATION)) {
+					/* RoRo: a vehicle's own transport toggles live in this menu. They are also
 					 * offered for a standalone list, which is not bound to a vehicle type. */
 					const uint8_t rvf = order->GetRVTransportFlags();
 					list.push_back(MakeDropDownListDividerItem());
