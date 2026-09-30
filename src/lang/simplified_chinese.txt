@@ -4707,6 +4707,8 @@ STR_VEHICLE_DETAILS_TRAIN_TOTAL_CARGO_TOOLTIP                   :{BLACK}显示�
 
 STR_VEHICLE_DETAILS_TRAIN_ARTICULATED_RV_CAPACITY               :{BLACK}容量：{LTBLUE}{STRING}
 
+STR_VEHICLE_DETAILS_HOLD_CAPACITY                               :（{STRING}）
+
 # Vehicle refit
 STR_REFIT_CAPTION                                               :{WHITE}{VEHICLE}（改装）
 STR_REFIT_TITLE                                                 :{GOLD}选择运输的货物类型：

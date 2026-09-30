@@ -639,6 +639,12 @@ public:
 		return this->GetWeight();
 	}
 
+	/** RoRo: weight of this single vehicle when fully loaded with its current cargo, for the carriage-by-carriage loading of carriers. */
+	inline uint16_t GetSelfMaxWeight() const
+	{
+		return this->GetMaxWeight();
+	}
+
 	inline void UpdateTrainSpeedAdaptationLimit(uint16_t speed)
 	{
 		if (speed != this->signal_speed_restriction) this->UpdateTrainSpeedAdaptationLimitInternal(speed);

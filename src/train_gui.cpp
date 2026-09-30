@@ -249,7 +249,28 @@ static void TrainDetailsInfoTab(const Train *v, int left, int right, int y, uint
 		return show_speed ? GetVehicleProperty(v, PROP_TRAIN_SPEED, rvi->max_speed) : 0;
 	};
 
+	/* Weight of the whole articulated vehicle: the weight of every part of the group. */
+	auto get_group_weight = [&]() -> uint32_t {
+		uint32_t weight = 0;
+		for (const Train *u = v; u != nullptr; u = u->Next()) {
+			if (u != v && !u->IsArticulatedPart()) break; // the next vehicle group starts here
+			weight += u->GetSelfWeight();
+		}
+		return weight;
+	};
+	auto get_group_max_weight = [&]() -> uint32_t {
+		uint32_t weight = 0;
+		for (const Train *u = v; u != nullptr; u = u->Next()) {
+			if (u != v && !u->IsArticulatedPart()) break;
+			weight += u->GetSelfMaxWeight();
+		}
+		return weight;
+	};
+
 	format_buffer buffer;
+	auto append = [&]<typename... T>(StringID str, T&&... params) {
+		AppendStringInPlace(buffer, str, std::forward<T>(params)...);
+	};
 	auto draw = [&]<typename... T>(StringID str, T&&... params) {
 		AppendStringInPlace(buffer, str, std::forward<T>(params)...);
 		DrawString(left, right, y, buffer);
@@ -259,20 +280,22 @@ static void TrainDetailsInfoTab(const Train *v, int left, int right, int y, uint
 		auto name_param = PackEngineNameDParam(v->engine_type, EngineNameContext::VehicleDetails);
 		uint16_t speed = get_speed();
 		if (speed > 0) {
-			draw(STR_VEHICLE_DETAILS_TRAIN_WAGON_VALUE_AND_SPEED, name_param, v->value, speed);
+			append(STR_VEHICLE_DETAILS_TRAIN_WAGON_VALUE_AND_SPEED, name_param, v->value, speed);
 		} else {
-			draw(STR_VEHICLE_DETAILS_TRAIN_WAGON_VALUE, name_param, v->value);
+			append(STR_VEHICLE_DETAILS_TRAIN_WAGON_VALUE, name_param, v->value);
 		}
+		draw(STR_VEHICLE_DETAILS_TRAIN_SELF_WEIGHT, get_group_weight(), get_group_max_weight());
 	} else {
 		switch (line_number) {
 			case 0: {
 				auto name_param = PackEngineNameDParam(v->engine_type, EngineNameContext::VehicleDetails);
 				uint16_t speed = get_speed();
 				if (speed > 0) {
-					draw(STR_VEHICLE_DETAILS_TRAIN_ENGINE_BUILT_AND_VALUE_AND_SPEED, name_param, v->build_year, v->value, speed);
+					append(STR_VEHICLE_DETAILS_TRAIN_ENGINE_BUILT_AND_VALUE_AND_SPEED, name_param, v->build_year, v->value, speed);
 				} else {
-					draw(STR_VEHICLE_DETAILS_TRAIN_ENGINE_BUILT_AND_VALUE, name_param, v->build_year, v->value);
+					append(STR_VEHICLE_DETAILS_TRAIN_ENGINE_BUILT_AND_VALUE, name_param, v->build_year, v->value);
 				}
+				draw(STR_VEHICLE_DETAILS_TRAIN_SELF_WEIGHT, get_group_weight(), get_group_max_weight());
 				break;
 			}
 
@@ -427,7 +450,8 @@ int GetTrainDetailsWndVScroll(VehicleID veh_id, TrainDetailsWindowTabs det_tab)
 			RVTransportGetPartCarriedVehicles(v, carried);
 			num += static_cast<int>(carried.size());
 		}
-		if (det_tab == 1) num += 2 * Train::Get(veh_id)->tcache.cached_num_engines;
+		/* Info tab: engines show two more lines (reliability, status) beside their first line. */
+		if (det_tab == TDW_TAB_INFO) num += 2 * Train::Get(veh_id)->tcache.cached_num_engines;
 	}
 
 	return num;
