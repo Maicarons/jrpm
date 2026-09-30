@@ -43,6 +43,7 @@
 #include "tunnelbridge_map.h"
 #include "vehicle_base.h"
 
+#include <cstdarg>
 #include <set>
 
 #include "safeguards.h"
@@ -925,6 +926,32 @@ bool FindFreeRoadStopTile(const Station *st, Vehicle *rv, TileIndex &out_tile, D
 /* ---- Train detach: the ship counterpart of the road stop machinery above. ---- */
 
 /**
+ * Debug logging for the unload path (temporarily unguarded; remove once the feature is stable).
+ *
+ * A carrier which cannot unload retries every tick while it is loading, so the trace is throttled:
+ * one full trace at most every 32 ticks, with every log call inside the same tick going through.
+ */
+static void RVTUnloadLog(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void RVTUnloadLog(const char *fmt, ...)
+{
+	static uint32_t last_trace = 0;
+	if (_tick_counter != last_trace) {
+		if (_tick_counter - last_trace < 32) return;
+		last_trace = _tick_counter;
+	}
+
+	fprintf(stderr, "[rvtransport] ");
+	{
+		va_list ap;
+		va_start(ap, fmt);
+		vfprintf(stderr, fmt, ap);
+		va_end(ap);
+	}
+	fputc('\n', stderr);
+}
+
+
+/**
  * A platform of this station's rail station where a train could be put back on the rails, plus the
  * direction the train would face (and leave in) when it is put on the platform end.
  */
@@ -1019,6 +1046,10 @@ static void CollectFreeRailPlatformTiles(const Station *st, const Train *tr, std
 	const uint tiles_needed = CeilDiv(tr->gcache.cached_total_length, TILE_SIZE);
 	std::set<TileIndex> seen;
 
+	RVTUnloadLog("collect: station #%u train #%u length %u units (%u tiles), %d railtypes, station area %dx%d",
+			st->index.base(), tr->index.base(), tr->gcache.cached_total_length, tiles_needed,
+			CountBits(tr->railtypes.base()), st->train_station.w, st->train_station.h);
+
 	for (TileIndex t : st->train_station) {
 		if (!st->TileBelongsToRailStation(t)) continue;
 		if (!seen.insert(t).second) continue;
@@ -1034,7 +1065,12 @@ static void CollectFreeRailPlatformTiles(const Station *st, const Train *tr, std
 		TileIndex end = start;
 		while (IsValidTile(end + delta) && IsCompatibleTrainStationTile(end + delta, end)) end += delta;
 		const uint platform_len = static_cast<uint>(std::abs(static_cast<int>(end.base()) - static_cast<int>(start.base())) / std::abs(delta)) + 1;
-		if (platform_len < tiles_needed) continue;
+		RVTUnloadLog("collect: platform 0x%X..0x%X len %u, railtype %d (train railtypes %X)",
+				start.base(), end.base(), platform_len, to_underlying(GetRailType(t)), (uint)tr->railtypes.base());
+		if (platform_len < tiles_needed) {
+			RVTUnloadLog("collect: platform too short (need %u tiles)", tiles_needed);
+			continue;
+		}
 
 		/* One candidate per platform end, described by the end the train leaves by. */
 		for (DiagDirection dd = DiagDirection::Begin; dd < DiagDirection::End; dd++) {
@@ -1044,29 +1080,57 @@ static void CollectFreeRailPlatformTiles(const Station *st, const Train *tr, std
 			const bool towards_end = (axis == Axis::X) ? (off.x > 0) : (off.y > 0);
 			const TileIndex exit_end = towards_end ? end : start;
 
-			/* The tiles the train would occupy, walking backwards from the exit end. */
+			/* The tiles the train would occupy, walking backwards from the exit end - backwards
+			 * means against the exit direction, which for the far end of the platform is the axis
+			 * direction and for the near end against it. */
+			const TileIndexDiff back_step = -TileOffsByDiagDir(dd);
 			bool free = true;
 			TileIndex pt = exit_end;
 			for (uint i = 0; i < tiles_needed && free; i++) {
-				if (!st->TileBelongsToRailStation(pt) || !RVTransportRailTypeCompatible(tr, GetRailType(pt))) { free = false; break; }
-				if (GetReservedTrackbits(pt) != TRACK_BIT_NONE) free = false; // part of another train's reserved path
-				if (GetFirstVehicleOnTile(pt, VehicleType::Train) != nullptr) free = false;
-				if (free && i + 1 < tiles_needed) {
-					if (!IsValidTile(pt - delta) || !IsCompatibleTrainStationTile(pt - delta, pt)) free = false;
+				if (!st->TileBelongsToRailStation(pt) || !RVTransportRailTypeCompatible(tr, GetRailType(pt))) {
+					RVTUnloadLog("collect: tile 0x%X rejected (station tile=%d, tile railtype %d compatible=%d)",
+							pt.base(), st->TileBelongsToRailStation(pt), to_underlying(GetRailType(pt)),
+							RVTransportRailTypeCompatible(tr, GetRailType(pt)));
+					free = false;
+					break;
 				}
-				pt -= delta;
+				if (GetReservedTrackbits(pt) != TRACK_BIT_NONE) {
+					RVTUnloadLog("collect: tile 0x%X rejected (reserved, bits %X)", pt.base(), (uint)GetReservedTrackbits(pt));
+					free = false;
+					break;
+				}
+				if (GetFirstVehicleOnTile(pt, VehicleType::Train) != nullptr) {
+					RVTUnloadLog("collect: tile 0x%X rejected (vehicle on tile)", pt.base());
+					free = false;
+					break;
+				}
+				if (free && i + 1 < tiles_needed) {
+					if (!IsValidTile(pt + back_step) || !IsCompatibleTrainStationTile(pt + back_step, pt)) {
+						RVTUnloadLog("collect: tile 0x%X rejected (platform does not continue)", pt.base());
+						free = false;
+						break;
+					}
+				}
+				pt += back_step;
 			}
 			if (!free) continue;
 
 			/* The train has to be able to leave the platform: usable rail beyond the end it faces,
 			 * and that tile must have a track which actually connects to the platform. */
 			const TileIndex exit_tile = TileAddByDiagDir(exit_end, dd);
-			if (!RVTransportIsRailTileFor(tr, exit_tile)) continue;
+			if (!RVTransportIsRailTileFor(tr, exit_tile)) {
+				RVTUnloadLog("collect: exit tile 0x%X beyond end 0x%X is not usable rail for the train", exit_tile.base(), exit_end.base());
+				continue;
+			}
 			TrackBits exit_bits = TRACK_BIT_NONE;
 			if (IsPlainRailTile(exit_tile)) exit_bits = GetTrackBits(exit_tile);
 			else if (IsRailStationTile(exit_tile)) exit_bits = GetRailStationTrackBits(exit_tile);
-			if ((exit_bits & DiagdirReachesTracks(ReverseDiagDir(dd))) == TRACK_BIT_NONE) continue;
+			if ((exit_bits & DiagdirReachesTracks(ReverseDiagDir(dd))) == TRACK_BIT_NONE) {
+				RVTUnloadLog("collect: exit tile 0x%X has no track connecting to the platform", exit_tile.base());
+				continue;
+			}
 
+			RVTUnloadLog("collect: candidate at end 0x%X dir %d", exit_end.base(), to_underlying(dd));
 			candidates.push_back({exit_end, dd, platform_len});
 		}
 	}
@@ -1091,7 +1155,10 @@ static bool FindFreeRailPlatformTile(const Station *st, const Train *tr, TileInd
 {
 	std::vector<RVTransportRailCandidate> candidates;
 	CollectFreeRailPlatformTiles(st, tr, candidates);
-	if (candidates.empty()) return false;
+	if (candidates.empty()) {
+		RVTUnloadLog("select: no candidates at all for station #%u", st->index.base());
+		return false;
+	}
 
 	const RVTransportNextLeg leg = RVTransportGetNextLeg(tr, st->index);
 
@@ -1107,6 +1174,8 @@ static bool FindFreeRailPlatformTile(const Station *st, const Train *tr, TileInd
 			if (start_td == INVALID_TRACKDIR) continue;
 
 			const bool reachable = RVTransportRailReachable(tr, exit_end, start_td, leg.station, RVTRANSPORT_RAIL_PROBE_MAX_NODES);
+			RVTUnloadLog("select: candidate 0x%X dir %d, next station #%d, reachable=%d",
+					exit_end.base(), to_underlying(candidates[i].dir), leg.station.base(), reachable);
 			if (!reachable) continue;
 
 			/* Direct distance from the platform end to the next station, as the tie-break. */
@@ -1127,6 +1196,7 @@ static bool FindFreeRailPlatformTile(const Station *st, const Train *tr, TileInd
 	out_tile = candidates[best].exit_end;
 	out_dir = candidates[best].dir;
 	out_platform_tiles = candidates[best].platform_tiles;
+	RVTUnloadLog("select: chose candidate #%u of %u", (uint)best, (uint)candidates.size());
 	return true;
 }
 
@@ -1480,6 +1550,11 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 
 	if (carrier == nullptr || st == nullptr) return false;
 
+	RVTUnloadLog("detach: carrier #%u at station #%u, order flags %02X (unload=%d unload_all=%d), force=%d",
+			carrier->index.base(), st->index.base(), carrier->current_order.GetRVTransportFlags(),
+			(carrier->current_order.GetRVTransportFlags() & ORVTF_UNLOAD) != 0,
+			(carrier->current_order.GetRVTransportFlags() & ORVTF_UNLOAD_ALL) != 0, force);
+
 	bool any = false;
 	for (Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & RVTF_TRANSPORTED) == 0) continue;
@@ -1490,9 +1565,14 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 		 * unloaded here" order. A road vehicle which declares no destination at all is dropped at the
 		 * carrier's unload order, as it would otherwise never leave the carrier - and a carrier whose
 		 * order says "unload all road vehicles" drops everything, whatever the vehicles declare. */
+		RVTUnloadLog("detach: vehicle #%u (type %d) considers leaving here", v->index.base(), to_underlying(v->type));
 		if (!force && (carrier->current_order.GetRVTransportFlags() & ORVTF_UNLOAD_ALL) == 0) {
 			const StationID declared = RVTransportGetDeclaredDestination(v);
-			if (declared != StationID::Invalid() && declared != st->index) continue;
+			if (declared != StationID::Invalid() && declared != st->index) {
+				RVTUnloadLog("detach: vehicle #%u wants station #%d, not here #%u - skip",
+						v->index.base(), declared.base(), st->index.base());
+				continue;
+			}
 		}
 
 		/* Trains are put back on the rails of this station's platforms; road vehicles use the
@@ -1502,7 +1582,13 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 			DiagDirection dir = DiagDirection::Begin;
 			uint platform_tiles = 0;
 			Train *consist = Train::From(v->First());
-			if (!FindFreeRailPlatformTile(st, consist, exit_end, dir, platform_tiles)) continue; // no room: stay on the carrier, retry later
+			if (!FindFreeRailPlatformTile(st, consist, exit_end, dir, platform_tiles)) {
+				RVTUnloadLog("detach: train #%u found no usable platform (length %u units)",
+						consist->index.base(), consist->gcache.cached_total_length);
+				continue; // no room: stay on the carrier, retry later
+			}
+			RVTUnloadLog("detach: train #%u picked platform end 0x%X dir %d (%u tiles)",
+					consist->index.base(), exit_end.base(), to_underlying(dir), platform_tiles);
 
 			/* Remember how the train was carried, in case the platform refuses it below. */
 			const VehicleID host_part = v->transported_host_part;
@@ -1510,6 +1596,7 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 			const StationID transported_from = v->transported_from;
 
 			if (!RVTransportPlaceTrainOnPlatform(consist, exit_end, dir, platform_tiles)) {
+				RVTUnloadLog("detach: train #%u placement failed - staying on the carrier", consist->index.base());
 				/* The way out of the platform is blocked: put the train back on the carrier rather
 				 * than parking it somewhere it cannot move from, and retry later. */
 				for (Vehicle *u = v->First(); u != nullptr; u = u->Next()) {
@@ -1543,6 +1630,8 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 			any = true;
 			continue;
 		}
+
+		RVTUnloadLog("detach: vehicle #%u is not a train - using road stops", v->index.base());
 
 		TileIndex tile = INVALID_TILE;
 		DiagDirection dd = DiagDirection::NE;
@@ -1633,6 +1722,7 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 		RVTransportRefreshCarrier(carrier, Vehicle::GetIfValid(host_part));
 		any = true;
 	}
+	RVTUnloadLog("detach: done, unloaded=%d", any);
 	return any;
 }
 
