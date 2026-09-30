@@ -7011,6 +7011,11 @@ static void MoveTrainToPosition(Train *v, int x, int y)
 	}
 }
 
+void TrainMoveToPosition(Train *v, int x, int y)
+{
+	MoveTrainToPosition(v, x, y);
+}
+
 /**
  * Re-space a consist half that was just mirrored in place by
  * ReverseTrainNoSwapVehicles().

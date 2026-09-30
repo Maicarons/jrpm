@@ -112,6 +112,7 @@ void DeleteVisibleTrain(Train *v);
 void CheckBreakdownFlags(Train *v);
 void GetTrainSpriteSize(EngineID engine, uint &width, uint &height, int &xoffs, int &yoffs, EngineImageType image_type);
 bool TrainFitStation(const Train *v);
+void TrainMoveToPosition(Train *v, int x, int y);
 bool IsCoupleArrangementValid(Train *v_phys, Train *u_phys);
 
 /** First rule which rejects a train as a coupling candidate. */
