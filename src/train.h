@@ -633,6 +633,12 @@ private:
 	void UpdateTrainSpeedAdaptationLimitInternal(uint16_t speed);
 
 public:
+	/** RoRo: weight of this single vehicle including its cargo, for the carriage-by-carriage loading of carriers. */
+	inline uint16_t GetSelfWeight() const
+	{
+		return this->GetWeight();
+	}
+
 	inline void UpdateTrainSpeedAdaptationLimit(uint16_t speed)
 	{
 		if (speed != this->signal_speed_restriction) this->UpdateTrainSpeedAdaptationLimitInternal(speed);

@@ -443,7 +443,11 @@ static std::string TrainDetailsCarriedVehicleLine(const Vehicle *rv)
 {
 	format_buffer buffer;
 	AppendStringInPlace(buffer, STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLE, rv->index);
-	AppendStringInPlace(buffer, STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLE_EXTRA, rv->transported_weight);
+	/* A carried train records its weight carriage by carriage on the holds it spans, so the
+	 * displayed weight is the sum over the whole consist. */
+	uint32_t weight = 0;
+	for (const Vehicle *u = rv->First(); u != nullptr; u = u->Next()) weight += u->transported_weight;
+	AppendStringInPlace(buffer, STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLE_EXTRA, weight);
 	AppendStringInPlace(buffer, STR_JUST_CARGO, rv->cargo_type, rv->cargo.StoredCount());
 
 	const StationID dest = RVTransportGetDeclaredDestination(rv);

@@ -250,15 +250,17 @@ void RVTransportGetCarriedVehicles(const Vehicle *carrier, std::vector<const Veh
 	}
 }
 
-/** Weight in tonnes of the road vehicles this carrier holds. */
+/** Weight in tonnes of the vehicles this carrier holds. */
 uint32_t RVTransportGetCarriedWeightTonnes(const Vehicle *carrier)
 {
 	if (carrier == nullptr) return 0;
 	uint32_t weight = 0;
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) continue;
-		if (!RVTransportIsStateHolder(v)) continue;
 		if (!RVTransportIsOnCarrier(carrier, v)) continue;
+		/* Every member carries the weight it occupies on its host part: a road vehicle the whole
+		 * weight on its front, a train the weight of its carriage on each carriage's first
+		 * vehicle (the rest of the chain records none), so summing every member gives the total. */
 		weight += v->transported_weight;
 	}
 	return weight;
@@ -605,6 +607,8 @@ static void RVTransportAdvanceCarriedVehicleOrder(Vehicle *rv)
  * and is remembered by the carrier (single tick commit, no intermediate state).
  * @param force skip the cargo class / capacity checks (used by the debug self test).
  */
+static void RVTUnloadLog(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+
 bool RVTransportAttach(Vehicle *carrier, Vehicle *part, Vehicle *rv, bool force)
 {
 	extern void UpdateVehicleTileHash(Vehicle *v, bool remove);
@@ -621,10 +625,72 @@ bool RVTransportAttach(Vehicle *carrier, Vehicle *part, Vehicle *rv, bool force)
 	 * default: a carrier only takes the vehicles of its own company. */
 	if (!force && rv->owner != carrier->owner && !_settings_game.economy.infrastructure_sharing_rv) return false;
 
-	/* A carried train is a whole consist: cached_weight covers every part. */
+	/* A carried road vehicle is a whole vehicle: cached_weight covers every part. */
 	uint32_t weight = RVTransportGetVehicleWeightTonnes(rv);
 	if (weight == 0) weight = 1;
-	if (!force) {
+
+	/* A train is loaded carriage by carriage: every carriage only has to fit in one carrier part
+	 * ("hold") on its own, the consist as a whole may span several holds. The carriages keep their
+	 * order and are filled into the parts from `part` onwards. Each carriage remembers the part it
+	 * went on and its weight, which its first vehicle records below so that the per-part weight
+	 * accounting (RVTransportGetPartCarriedTonnes) sees exactly what is on each hold. */
+	std::vector<Vehicle *> carriage_hosts;                 // host part per chain vehicle (train only)
+	std::vector<uint32_t> carriage_weights;                // weight each member records (train only)
+	if (rv->type == VehicleType::Train && !force) {
+		/* Weight of each carriage: an articulated unit counts once, on its first part. */
+		std::vector<std::pair<Vehicle *, uint32_t>> carriages;
+		for (Vehicle *u = rv->First(); u != nullptr; u = u->Next()) {
+			const uint32_t w = Train::From(u)->GetSelfWeight();
+			if (u->IsArticulatedPart() && !carriages.empty()) {
+				carriages.back().second += w;
+				continue;
+			}
+			carriages.emplace_back(u, w);
+		}
+
+		carriage_hosts.clear();
+		carriage_weights.clear();
+		Vehicle *part_it = part;
+		size_t ci = 0;
+		Vehicle *current_host = part;
+		for (Vehicle *u = rv->First(); u != nullptr; u = u->Next()) {
+			uint32_t member_weight = 0;
+			if (ci < carriages.size() && carriages[ci].first == u) {
+				member_weight = carriages[ci].second;
+				/* Fill the parts onwards, in order, with whole carriages: find the first hold with
+				 * room for this carriage on its own. */
+				while (part_it != nullptr && (!RVTransportPartCanCarry(part_it)
+						|| RVTransportGetPartUsedTonnes(part_it) + carriages[ci].second > RVTransportGetPartCapacityTonnes(part_it))) {
+					RVTUnloadLog("attach: carriage %u (%u t) rejected part #%u (cargo %d, cap %u t, used %u t)",
+							(unsigned)ci, carriages[ci].second, part_it->index.base(), to_underlying(part_it->cargo_type),
+							RVTransportGetPartCapacityTonnes(part_it), RVTransportGetPartUsedTonnes(part_it));
+					part_it = part_it->Next();
+				}
+				if (part_it == nullptr) {
+					/* Some carriage found no hold with room for it: nothing is loaded. */
+					RVTUnloadLog("attach: carriage %u (%u t) found no hold left on carrier #%u - not loaded",
+							(unsigned)ci, carriages[ci].second, carrier->index.base());
+					return false;
+				}
+				current_host = part_it;
+				ci++;
+			}
+			carriage_hosts.push_back(current_host);
+			carriage_weights.push_back(member_weight);
+		}
+		{
+			uint32_t total = 0;
+			unsigned holds = 0;
+			const Vehicle *prev = nullptr;
+			for (size_t i = 0; i < carriage_hosts.size(); i++) {
+				total += carriage_weights[i];
+				if (carriage_hosts[i] != prev) holds++;
+				prev = carriage_hosts[i];
+			}
+			RVTUnloadLog("train #%u load: %u carriages, %u t spread over %u hold(s), starts at part #%u",
+					rv->index.base(), (unsigned)carriages.size(), total, holds, part->index.base());
+		}
+	} else if (!force) {
 		const uint32_t capacity = RVTransportGetPartCapacityTonnes(part);
 		const uint32_t used = RVTransportGetPartUsedTonnes(part);
 		if (used + weight > capacity) return false;      // refused: no room on this part
@@ -682,25 +748,39 @@ bool RVTransportAttach(Vehicle *carrier, Vehicle *part, Vehicle *rv, bool force)
 	/* Hide the whole vehicle: every part of an articulated vehicle is drawn and hashed on its
 	 * own, and in a bend the parts are not even on the same tile. */
 	rv->rv_transport_flags &= ~RVTF_WAITING;
-	for (Vehicle *u = rv->First(); u != nullptr; u = u->Next()) {
-		u->rv_transport_flags |= RVTF_TRANSPORTED;
-		u->transported_by = carrier->index;
-		u->transported_host_part = part->index;
-		/* The station it is loaded at: the vehicle transport fee is charged on the direct distance
-		 * from there to the station it is put down at again. A waiting vehicle is always at the
-		 * station it waits at. */
-		u->transported_from = rv->last_station_visited;
-		/* Only the front records the weight of the whole (articulated) vehicle. */
-		u->transported_weight = (u == rv) ? static_cast<uint16_t>(std::min<uint32_t>(weight, UINT16_MAX)) : 0;
+	{
+		/* Weight each chain member records on its host part: a train non-force load puts the
+		 * weight of every carriage on its first vehicle (the hold accounting sums these per
+		 * part); everything else keeps the whole weight on the state holder. */
+		size_t i = 0;
+		for (Vehicle *u = rv->First(); u != nullptr; u = u->Next(), i++) {
+			const bool distributed = !carriage_hosts.empty();
+			const Vehicle *host = distributed ? carriage_hosts[i] : part;
+			u->rv_transport_flags |= RVTF_TRANSPORTED;
+			u->transported_by = carrier->index;
+			u->transported_host_part = host->index;
+			/* The station it is loaded at: the vehicle transport fee is charged on the direct distance
+			 * from there to the station it is put down at again. A waiting vehicle is always at the
+			 * station it waits at. */
+			u->transported_from = rv->last_station_visited;
+			/* Weight on the host part: a distributed train puts every carriage's weight on its first
+			 * vehicle; everything else keeps the whole weight on the state holder. */
+			u->transported_weight = 0;
+			if (distributed && carriage_weights[i] != 0) {
+				u->transported_weight = static_cast<uint16_t>(std::min<uint32_t>(carriage_weights[i], UINT16_MAX));
+			} else if (u == rv) {
+				u->transported_weight = static_cast<uint16_t>(std::min<uint32_t>(weight, UINT16_MAX));
+			}
 
-		u->vehstatus.Set(VehState::Stopped);
-		u->vehstatus.Set(VehState::Hidden);
-		u->cur_speed = 0;
-		if (u->type == VehicleType::Road) RoadVehicle::From(u)->state = DiagDirToDiagTrackdir(DirToDiagDir(u->direction));
-		UpdateVehicleTileHash(u, true);   // off the road network (like virtual vehicles)
-		InvalidateVehicleTickCaches();
-		u->UpdateIsDrawn();
-		u->Vehicle::UpdateViewport(true); // appears/disappears: mark the area dirty
+			u->vehstatus.Set(VehState::Stopped);
+			u->vehstatus.Set(VehState::Hidden);
+			u->cur_speed = 0;
+			if (u->type == VehicleType::Road) RoadVehicle::From(u)->state = DiagDirToDiagTrackdir(DirToDiagDir(u->direction));
+			UpdateVehicleTileHash(u, true);   // off the road network (like virtual vehicles)
+			InvalidateVehicleTickCaches();
+			u->UpdateIsDrawn();
+			u->Vehicle::UpdateViewport(true); // appears/disappears: mark the area dirty
+		}
 	}
 
 	/* Drive-through stop: the vehicle is off the road network now, so the cached occupancy of the
@@ -731,6 +811,8 @@ bool RVTransportAttach(Vehicle *carrier, Vehicle *part, Vehicle *rv, bool force)
 bool RVTransportAttachAuto(Vehicle *carrier, Vehicle *rv, bool force)
 {
 	if (carrier == nullptr) return false;
+	RVTUnloadLog("attach: carrier #%u (type %d) tries to load vehicle #%u (type %d, force %d)",
+			carrier->index.base(), to_underlying(carrier->type), rv->index.base(), to_underlying(rv->type), force);
 
 	/* The "load road vehicles" order of this carrier may cap how many it carries at once (0 = no cap);
 	 * this is the one place through which every load goes, so the cap is checked here. */
@@ -1590,20 +1672,28 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 			RVTUnloadLog("detach: train #%u picked platform end 0x%X dir %d (%u tiles)",
 					consist->index.base(), exit_end.base(), to_underlying(dir), platform_tiles);
 
-			/* Remember how the train was carried, in case the platform refuses it below. */
+			/* Remember how the train was carried, in case the platform refuses it below: a
+			 * distributed train records a host part and weight per member, so snapshot every
+			 * member rather than only the state holder's. */
+			std::vector<VehicleID> snap_hosts;
+			std::vector<uint16_t> snap_weights;
+			for (Vehicle *u = v->First(); u != nullptr; u = u->Next()) {
+				snap_hosts.push_back(u->transported_host_part);
+				snap_weights.push_back(u->transported_weight);
+			}
 			const VehicleID host_part = v->transported_host_part;
-			const uint16_t carried_weight = v->transported_weight;
 			const StationID transported_from = v->transported_from;
 
 			if (!RVTransportPlaceTrainOnPlatform(consist, exit_end, dir, platform_tiles)) {
 				RVTUnloadLog("detach: train #%u placement failed - staying on the carrier", consist->index.base());
 				/* The way out of the platform is blocked: put the train back on the carrier rather
 				 * than parking it somewhere it cannot move from, and retry later. */
-				for (Vehicle *u = v->First(); u != nullptr; u = u->Next()) {
+				size_t i = 0;
+				for (Vehicle *u = v->First(); u != nullptr; u = u->Next(), i++) {
 					u->rv_transport_flags |= RVTF_TRANSPORTED;
 					u->transported_by = carrier->index;
-					u->transported_host_part = host_part;
-					u->transported_weight = (u == v) ? carried_weight : 0;
+					u->transported_host_part = snap_hosts[i];
+					u->transported_weight = snap_weights[i];
 					u->transported_from = transported_from;
 					u->vehstatus.Set(VehState::Stopped);
 					u->vehstatus.Set(VehState::Hidden);
@@ -1908,10 +1998,19 @@ Vehicle *RVTransportFindWaitingAtStation(const Station *st, const Vehicle *carri
 		if ((v->rv_transport_flags & RVTF_WAITING) == 0) continue;
 		if (v->type != VehicleType::Road && v->type != VehicleType::Train) continue;
 		if (!RVTransportIsStateHolder(v)) continue;
-		if (v->last_station_visited != st->index) continue;
-		if (carrier != nullptr && !RVTransportOrderAllowsCandidate(carrier, v)) continue; // does not match: skip it
+		if (v->last_station_visited != st->index) {
+			RVTUnloadLog("load: waiting vehicle #%u (type %d) is at station #%u, not here #%u - skip",
+					v->index.base(), to_underlying(v->type), v->last_station_visited.base(), st->index.base());
+			continue;
+		}
+		if (carrier != nullptr && !RVTransportOrderAllowsCandidate(carrier, v)) {
+			RVTUnloadLog("load: waiting vehicle #%u rejected by the carrier's order criteria - skip", v->index.base());
+			continue; // does not match: skip it
+		}
+		RVTUnloadLog("load: picked waiting vehicle #%u (type %d) at station #%u", v->index.base(), to_underlying(v->type), st->index.base());
 		return v;
 	}
+	RVTUnloadLog("load: no waiting vehicle found at station #%u (carrier #%u)", st->index.base(), carrier != nullptr ? carrier->index.base() : 0);
 	return nullptr;
 }
 
