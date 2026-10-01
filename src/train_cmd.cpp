@@ -6043,15 +6043,22 @@ bool TrainFitStation(const Train *v)
  */
 static bool CanDecouple(Train *v)
 {
-	if (!TrainFitStation(v)) {
+	/* Both checks must anchor at the physical chain head: the consist carrier
+	 * may sit mid-chain or at the tail, and both TrainFitStation and
+	 * CountVehiclesInChain otherwise only see the part trailing the primary. */
+	Train *head = v->First();
+	if (!TrainFitStation(head)) {
 		Debug(desync, 1, "CanDecouple: veh={} fail fitstation tile=({},{}) last=({},{})", v->index, TileX(v->tile), TileY(v->tile), TileX(v->Last()->tile), TileY(v->Last()->tile));
 		return false;
 	}
-	if (CountVehiclesInChain(v) < 2) {
-		Debug(desync, 1, "CanDecouple: veh={} fail count={}", v->index, CountVehiclesInChain(v));
+	if (CountVehiclesInChain(head) < 2) {
+		Debug(desync, 1, "CanDecouple: veh={} fail count={}", v->index, CountVehiclesInChain(head));
 		return false;
 	}
-	if (v->GetNextUnit() == nullptr) {
+	/* The cut is counted from the physical chain head, not from the consist
+	 * carrier; a primary sitting mid-chain or at the tail still has units
+	 * ahead of it, so anchor this check at the head too. */
+	if (v->First()->GetNextUnit() == nullptr) {
 		Debug(desync, 1, "CanDecouple: veh={} fail no next unit", v->index);
 		return false;
 	}
