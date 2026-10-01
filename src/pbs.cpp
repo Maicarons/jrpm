@@ -1635,6 +1635,7 @@ bool IsCouplePartnerTile(const Train *v, TileIndex tile)
 struct CoupleApproachEntry {
 	TileIndex tile;  ///< Tile the step is taken from.
 	Trackdir td;     ///< Trackdir to follow from \a tile.
+	uint dist;       ///< Manhattan distance from \a tile to the partner, keeping the search on the direct route.
 };
 
 /** Tile budget for the couple approach walk. */
@@ -1658,9 +1659,8 @@ static constexpr uint COUPLE_APPROACH_BUDGET = 256;
  * @return true iff a way to the partner is free of other consists.
  */
 
-bool IsCoupleApproachPathClear(const Train *v)
+bool IsCoupleApproachPathClearTo(const Train *v, const Train *tgt)
 {
-	const Train *tgt = Train::GetIfValid(v->Primary()->couple_target);
 	if (tgt == nullptr) return false;
 	const Train *partner = tgt->Primary();
 	const Train *mover = v->Primary();
@@ -1673,10 +1673,13 @@ bool IsCoupleApproachPathClear(const Train *v)
 		}
 		return false;
 	};
-	auto foreign_on = [&](TileIndex t) {
+	auto foreign_on = [&](TileIndex t, TrackBits mover_track) {
 		for (const Train *u : VehiclesOnTile<VehicleType::Train>(t)) {
 			const Train *up = u->Primary();
-			if (up != partner && up != mover) return true;
+			if (up == partner || up == mover) continue;
+			/* Only a foreign consist occupying the track bit we travel blocks;
+			 * one on a different track sharing the same tile does not. */
+			if ((u->track & mover_track) != TRACK_BIT_NONE) return true;
 		}
 		return false;
 	};
@@ -1687,7 +1690,7 @@ bool IsCoupleApproachPathClear(const Train *v)
 	}
 
 	/* Anything else sharing one of our tiles is already in the way. */
-	if (foreign_on(moving_front->tile) || foreign_on(moving_back->tile)) {
+	if (foreign_on(moving_front->tile, moving_front->track) || foreign_on(moving_back->tile, moving_back->track)) {
 		return false;
 	}
 
@@ -1702,20 +1705,20 @@ bool IsCoupleApproachPathClear(const Train *v)
 	}
 
 	btree::btree_set<TileIndex> visited;
-	std::deque<CoupleApproachEntry> todo;
+	std::vector<CoupleApproachEntry> todo;
 	visited.insert(moving_front->tile);
 	visited.insert(moving_back->tile);
 	if (front_td != INVALID_TRACKDIR) {
-		todo.push_back({moving_front->tile, front_td});
+		todo.push_back({moving_front->tile, front_td, DistanceManhattan(moving_front->tile, tgt->tile)});
 	}
 	if (back_td != INVALID_TRACKDIR) {
-		todo.push_back({moving_back->tile, back_td});
+		todo.push_back({moving_back->tile, back_td, DistanceManhattan(moving_back->tile, tgt->tile)});
 	}
 
 	CFollowTrackRail ft(v, v->GetIndirectCompatibleRailTypes());
 	while (!todo.empty()) {
-		CoupleApproachEntry e = todo.front();
-		todo.pop_front();
+		CoupleApproachEntry e = todo.back();
+		todo.pop_back();
 
 		if (!ft.Follow(e.tile, e.td)) continue;
 		if (!IsValidTile(ft.new_tile) || IsRailDepotTile(ft.new_tile)) continue;
@@ -1734,23 +1737,32 @@ bool IsCoupleApproachPathClear(const Train *v)
 		for (uint i = 1; i <= ft.tiles_skipped + 1; i++) {
 			TileIndex t = ft.new_tile - step * (ft.tiles_skipped + 1 - i);
 			if (!IsValidTile(t) || t == e.tile) continue;
-			if (foreign_on(t)) { blocked = true; break; }
+			/* A consist occupying the track we follow cuts this branch off; a
+			 * consist on a different track sharing a skipped tile does not. Another
+			 * route to the partner may still be free. */
+			if (foreign_on(t, TrackToTrackBits(TrackdirToTrack(e.td)))) {
+				blocked = true;
+				break;
+			}
 			if (partner_on(t)) { reached = true; break; }
 		}
 		if (reached) return true;
-
-		/* Another consist cuts this way off, but a different route may still lead to the
-		 * partner; only a consist that cuts every route blocks the couple. */
 		if (blocked) continue;
 
+		uint dist = DistanceManhattan(ft.new_tile, tgt->tile);
 		TrackdirBits tdb = ft.new_td_bits & DiagdirReachesTrackdirs(ft.exitdir);
 		for (Trackdir ntd : SetTrackdirBitIterator(tdb)) {
-			todo.push_back({ft.new_tile, ntd});
+			todo.push_back({ft.new_tile, ntd, dist});
 		}
 	}
 
 	/* The partner was never reached, so every way to it is cut off. */
 	return false;
+}
+
+bool IsCoupleApproachPathClear(const Train *v)
+{
+	return IsCoupleApproachPathClearTo(v, Train::GetIfValid(v->Primary()->couple_target));
 }
 
 bool IsSafeWaitingPosition(const Train *v, TileIndex tile, Trackdir trackdir, bool include_line_end, bool forbid_90deg)
@@ -1879,12 +1891,12 @@ bool IsWaitingPositionFree(const Train *v, TileIndex tile, Trackdir trackdir, bo
 
 	/* Tile reserved? Can never be a free waiting position. */
 	if (TrackOverlapsTracks(reserved, track)) {
-		/* A train going to couple may stop on a tile of its partner's
-		 * platform: the partner's own reservation covers the strip, also
-		 * the empty tiles. A foreign consist standing on the tile still
-		 * blocks; the rest of the route is checked per tile when reserving. */
-		if (v->current_order.IsType(OT_GOTO_COUPLE) && IsCouplePartnerTile(v, tile) && !HasForeignConsistOnTile(v, tile)) {
-			return true;
+		/* A train going to couple may share its partner's platform reservation,
+		 * but only while the way from us to the partner is free of other
+		 * consists: a train on the far side of the partner does not block, a
+		 * train between us and the partner does. */
+		if (v->current_order.IsType(OT_GOTO_COUPLE) && IsCouplePartnerTile(v, tile)) {
+			if (IsCoupleApproachPathClear(v)) return true;
 		}
 		return false;
 	}
@@ -1940,12 +1952,11 @@ bool IsWaitingPositionFree(const Train *v, TileIndex tile, Trackdir trackdir, bo
 	if (Rail90DegTurnDisallowedTilesFromTrackdir(ft.old_tile, ft.new_tile, ft.old_td, forbid_90deg)) ft.new_td_bits &= ~TrackdirCrossesTrackdirs(trackdir);
 
 	if (HasReservedTracks(ft.new_tile, TrackdirBitsToTrackBits(ft.new_td_bits))) {
-		/* A tile of the claimed couple partner's platform is the contact
-		 * point: stopping there is allowed as long as no foreign consist
-		 * stands on it. This includes tiles the partner reserved without
-		 * standing on them (the empty parts of its platform). */
-		if (v->current_order.IsType(OT_GOTO_COUPLE) && IsCouplePartnerTile(v, ft.new_tile) && !HasForeignConsistOnTile(v, ft.new_tile)) {
-			return true;
+		/* A tile of the claimed couple partner's platform is the contact point:
+		 * stopping there is allowed, but only while the way from us to the
+		 * partner is free of other consists. */
+		if (v->current_order.IsType(OT_GOTO_COUPLE) && IsCouplePartnerTile(v, ft.new_tile)) {
+			return IsCoupleApproachPathClear(v);
 		}
 		return false;
 	}

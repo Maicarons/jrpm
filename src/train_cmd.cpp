@@ -4672,6 +4672,41 @@ static Track DoTrainPathfind(const Train *v, TileIndex tile, DiagDirection enter
 }
 
 /**
+ * Throttle the couple target search. It runs a full path search plus an
+ * approach walk, which is far too expensive to repeat every tick while the
+ * train cannot find a reachable partner. A search is retried only after a
+ * short interval.
+ */
+static bool CoupleSearchAllowed(const Train *v)
+{
+	constexpr uint64_t COUPLE_SEARCH_INTERVAL = 30;
+	static btree::btree_map<VehicleID, uint64_t> last_search;
+
+	const uint64_t now = _tick_counter;
+
+	/* Drop entries for trains that no longer exist. */
+	if (last_search.size() > 128) {
+		for (auto i = last_search.begin(); i != last_search.end();) {
+			if (Train::GetIfValid(i->first) == nullptr) {
+				i = last_search.erase(i);
+			} else {
+				++i;
+			}
+		}
+	}
+
+	const VehicleID id = v->Primary()->index;
+	auto it = last_search.find(id);
+	if (it == last_search.end()) {
+		last_search.emplace(id, now);
+		return true;
+	}
+	if (now < it->second + COUPLE_SEARCH_INTERVAL) return false;
+	it->second = now;
+	return true;
+}
+
+/**
  * Find the track to take when going to couple with another train.
  * @param v The train.
  * @param do_track_reservation Whether to reserve the path.
@@ -4682,6 +4717,11 @@ static Track DoTrainPathfind(const Train *v, TileIndex tile, DiagDirection enter
  */
 static Track DoTrainCouplePathfind(const Train *v, bool do_track_reservation, Train **couple_target, uint32_t *couple_cost)
 {
+	if (!CoupleSearchAllowed(v)) {
+		if (couple_target != nullptr) *couple_target = nullptr;
+		if (couple_cost != nullptr) *couple_cost = 0;
+		return INVALID_TRACK;
+	}
 	Track ret = YapfTrainCoupleTrack(v, !do_track_reservation, couple_target, couple_cost);
 	return ret;
 }
@@ -4728,6 +4768,8 @@ static PBSTileInfo ExtendTrainReservation(const Train *v, const PBSTileInfo &ori
 			for (int i = 1; i <= ft.tiles_skipped + 1; i++) {
 				TileIndex t = ft.new_tile - step * (ft.tiles_skipped + 1 - i);
 				if (!IsValidTile(t)) continue;
+				/* The contact happens at the partner; tiles past it are not travelled. */
+				if (IsCouplePartnerVehicleTile(v, t)) break;
 				if (HasForeignConsistOnTile(v, t)) {
 					foreign = true;
 					break;
@@ -5500,6 +5542,14 @@ static ChooseTrainTrackResult ChooseTrainTrack(Train *consist, const TileIndex t
 	 * any other order, one block at a time. */
 	if (consist->current_order.IsType(OT_GOTO_COUPLE)) {
 		Train *couple_target = GetClaimedCoupleTarget(consist);
+		/* The claimed partner may have become unreachable without it having to
+		 * move: another waiting train appeared in between. Drop the claim so a
+		 * different waiting train (e.g. the one now blocking us) is selected
+		 * instead of waiting for a couple that can never happen. */
+		if (couple_target != nullptr && !IsCoupleApproachPathClear(consist)) {
+			consist->couple_target = VehicleID::Invalid();
+			couple_target = nullptr;
+		}
 		if (couple_target == nullptr) {
 			uint32_t couple_cost = 0;
 			DoTrainCouplePathfind(consist, false, &couple_target, &couple_cost);
@@ -6880,7 +6930,11 @@ Train *ResolveCoupleTargetStation(const Train *moving, TileIndex tile, Trackdir 
 		for (Train *t : VehiclesOnTile<VehicleType::Train>(st_tile)) {
 			if (t->vehstatus.Test(VehState::Crashed)) continue;
 			Train *target = ValidateCoupleCandidate(moving, t->First(), st_tile, respect_claim, claim_cost);
-			if (target != nullptr) return target;
+			if (target != nullptr) {
+				/* A candidate whose approach is blocked by another consist is not
+				 * reachable; keep looking for a waiting train we can reach. */
+				if (IsCoupleApproachPathClearTo(moving, target)) return target;
+			}
 		}
 	}
 	return nullptr;
