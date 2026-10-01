@@ -2636,6 +2636,10 @@ private:
 		VehicleOrderID sel = this->OrderGetSel();
 		const Order *src = this->OrderAt(sel);
 		if (src == nullptr) return;
+		/* Decouple orders and their station orders form an inseparable pair;
+		 * duplicating either one would create a decouple without its station
+		 * (or vice versa), so refuse via every entry point (menu, hotkey). */
+		if (src->IsType(OT_DECOUPLE) || (src->IsType(OT_GOTO_STATION) && src->GetDecouple() == ODF_DECOUPLE)) return;
 
 		Order copy(*src);
 		copy.SetTravelTimetabled(false);
@@ -4667,7 +4671,11 @@ public:
 				if (order == nullptr) break;
 
 				DropDownList list;
-				list.push_back(MakeDropDownListStringItem(STR_ORDER_DUPLICATE_ORDER, 0, false));
+				/* A decouple order is bound to the station order before it and
+				 * cannot exist on its own; duplicating either member of the pair
+				 * would create a broken list, so offer no duplicate entry. */
+				const bool bound_decouple = order->IsType(OT_DECOUPLE) || (order->IsType(OT_GOTO_STATION) && order->GetDecouple() == ODF_DECOUPLE);
+				if (!bound_decouple) list.push_back(MakeDropDownListStringItem(STR_ORDER_DUPLICATE_ORDER, 0, false));
 				if (order->IsType(OT_CONDITIONAL)) list.push_back(MakeDropDownListStringItem(STR_ORDER_CHANGE_JUMP_TARGET, 1, false));
 				if (order->IsType(OT_GOTO_COUPLE)) {
 					list.push_back(MakeDropDownListDividerItem());
@@ -4740,6 +4748,7 @@ public:
 					list.push_back(MakeDropDownListStringItem(STR_ORDER_IMPORT_ORDER_LIST_INSERT_REVERSED, 0x401, false));
 				}
 
+				if (list.empty()) break; /* Decouple orders offer no per-order actions. */
 				ShowDropDownList(this, std::move(list), -1, widget, 0, DropDownOptions{}, DDSF_SHARED);
 				break;
 			}
