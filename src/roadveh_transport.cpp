@@ -48,6 +48,9 @@
 
 #include "safeguards.h"
 
+/** Throttled debug logger for the road-vehicle transport feature (defined near the end of the file). */
+static void RVTUnloadLog(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+
 /**
  * Is this vehicle the unit which holds the vehicle transport state of its consist?
  *
@@ -335,6 +338,35 @@ static void RVTransportSetChainStopped(Vehicle *v, bool stopped)
 	}
 }
 
+/**
+ * Clear the reservations of the platform tiles around a train's head which no vehicle stands on.
+ * The engine frees the look-ahead ahead of a train only up to the first tile, and platform tiles
+ * are never freed when a vehicle leaves them, so a train stopped mid-platform keeps reservations
+ * over the rest of the platform unless they are cleared here.
+ */
+static void RVTransportClearNearbyPlatformReservations(Train *tr)
+{
+	const TileIndex head_tile = tr->First()->tile;
+	if (!IsRailStationTile(head_tile)) return;
+	const TileIndexDiff delta = TileOffsByAxis(GetRailStationAxis(head_tile));
+	for (int pass = 0; pass < 2; pass++) {
+		const TileIndexDiff step = (pass == 0) ? delta : -delta;
+		TileIndex pt = head_tile;
+		while (IsValidTile(pt + step) && IsCompatibleTrainStationTile(pt + step, pt)) {
+			pt += step;
+			TrackBits reserved = GetReservedTrackbits(pt);
+			if (reserved == TRACK_BIT_NONE) continue;
+			if (GetFirstVehicleOnTile(pt, VehicleType::Train) != nullptr) continue; // a train stands there
+			for (Track t = TRACK_BEGIN; t < TRACK_END; t++) {
+				if ((reserved & TrackToTrackBits(t)) == TRACK_BIT_NONE) continue;
+				RVTUnloadLog("waiting: train #%u clearing platform reservation tile 0x%X track %d",
+						tr->index.base(), pt.base(), to_underlying(t));
+				UnreserveRailTrack(pt, t);
+			}
+		}
+	}
+}
+
 /** Set or clear the "waiting to be transported" state; a waiting vehicle is stopped. */
 void RVTransportSetWaiting(Vehicle *rv, bool waiting)
 {
@@ -348,6 +380,12 @@ void RVTransportSetWaiting(Vehicle *rv, bool waiting)
 		rv->transport_wait_tick = static_cast<uint32_t>(_tick_counter);
 		rv->rv_transport_flags &= ~RVTF_UNLOAD_WARNED;   // a new trip, so the warning may be shown again
 		if (rv->type == VehicleType::Train) {
+			Train *tr = Train::From(rv);
+			/* Drop the remaining path reservation: a waiting train never departs by itself, so its
+			 * look-ahead would block the rest of the platform forever. The train keeps blocking the
+			 * tiles it stands on by being there, like any stopped train. */
+			if (tr->IsPrimaryVehicle()) FreeTrainTrackReservation(tr);
+			RVTransportClearNearbyPlatformReservations(tr);
 			RVTransportSetChainStopped(rv, true);
 		} else {
 			rv->vehstatus.Set(VehState::Stopped);
@@ -607,8 +645,6 @@ static void RVTransportAdvanceCarriedVehicleOrder(Vehicle *rv)
  * and is remembered by the carrier (single tick commit, no intermediate state).
  * @param force skip the cargo class / capacity checks (used by the debug self test).
  */
-static void RVTUnloadLog(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-
 bool RVTransportAttach(Vehicle *carrier, Vehicle *part, Vehicle *rv, bool force)
 {
 	extern void UpdateVehicleTileHash(Vehicle *v, bool remove);
@@ -1177,9 +1213,32 @@ static void CollectFreeRailPlatformTiles(const Station *st, const Train *tr, std
 					break;
 				}
 				if (GetReservedTrackbits(pt) != TRACK_BIT_NONE) {
-					RVTUnloadLog("collect: tile 0x%X rejected (reserved, bits %X)", pt.base(), (uint)GetReservedTrackbits(pt));
-					free = false;
-					break;
+					/* A reservation nobody owns is an orphan: its chain was broken (e.g. another
+					 * train was loaded onto a carrier from this platform earlier), so no engine will
+					 * ever free it. Clear it and use the tile; a reservation owned by a train still
+					 * blocks the platform as before. */
+					bool orphan = true;
+					Train *res_owner = nullptr;
+					for (Track t = TRACK_BEGIN; t < TRACK_END; t++) {
+						if ((GetReservedTrackbits(pt) & TrackToTrackBits(t)) == TRACK_BIT_NONE) continue;
+						res_owner = GetTrainForReservation(pt, t);
+						if (res_owner != nullptr) {
+							orphan = false;
+							break;
+						}
+					}
+					if (orphan) {
+						for (Track t = TRACK_BEGIN; t < TRACK_END; t++) {
+							if ((GetReservedTrackbits(pt) & TrackToTrackBits(t)) == TRACK_BIT_NONE) continue;
+							RVTUnloadLog("collect: tile 0x%X cleared orphan reservation (track %d)", pt.base(), to_underlying(t));
+							UnreserveRailTrack(pt, t);
+						}
+					} else {
+						RVTUnloadLog("collect: tile 0x%X rejected (reserved, bits %X, attributed to train %d)",
+								pt.base(), (uint)GetReservedTrackbits(pt), res_owner != nullptr ? (int)res_owner->index.base() : -1);
+						free = false;
+						break;
+					}
 				}
 				if (GetFirstVehicleOnTile(pt, VehicleType::Train) != nullptr) {
 					RVTUnloadLog("collect: tile 0x%X rejected (vehicle on tile)", pt.base());
@@ -1285,8 +1344,9 @@ static bool FindFreeRailPlatformTile(const Station *st, const Train *tr, TileInd
 /**
  * Put a carried train back on the rails, centred on the platform it is dropped on.
  *
- * The whole platform is reserved for the train (the reservation is cleared again by the engine when
- * the train leaves), and the track beyond the exit end is held for it as well when that track has
+ * The platform tiles between the leading vehicle and the exit end are reserved for the train (the
+ * reservation is cleared again by the engine when the train leaves), and the track beyond the exit
+ * end is held for it as well when that track has
  * exactly one continuation - on a junction the engine's own pathfinder picks a branch when the
  * train departs. The consist is laid out with the exact centre-to-centre spacing the engine itself
  * uses (see Train::CalcNextVehicleOffset()), so the vehicles stand bumper to bumper like a train
@@ -1328,6 +1388,7 @@ static bool RVTransportPlaceTrainOnPlatform(Train *tr, TileIndex exit_end, DiagD
 	 * backwards flag changes to the chain tail. */
 	int s = static_cast<int>(gap) + (tr->gcache.cached_veh_length + 1) / 2; // centre of the leading vehicle
 	std::vector<TileIndex> span; // the tiles the consist stands on
+	TileIndex leading_tile = INVALID_TILE; // the tile the leading vehicle (front or tail) stands on
 	for (Vehicle *u = (tail_leads ? tr->Last() : tr); u != nullptr; u = (tail_leads ? u->Previous() : u->Next())) {
 		Train *tu = Train::From(u);
 		const int x = edge_x - unit.x * s;
@@ -1361,10 +1422,10 @@ static bool RVTransportPlaceTrainOnPlatform(Train *tr, TileIndex exit_end, DiagD
 		UpdateVehicleTileHash(u, false);  // back on the rail network
 		InvalidateVehicleTickCaches();
 
-		/* Remember the tile this vehicle stands on: exactly those tiles are reserved for the train
-		 * below. Reserving the empty platform tiles behind its rear as well would leave them
-		 * reserved forever: the engine only frees reservations ahead of a train, never behind it. */
+		/* Remember the tiles the consist stands on (span is kept for debugging), and the tile of the
+		 * leading vehicle: only the platform tiles between it and the exit end are reserved below. */
 		if (std::find(span.begin(), span.end(), tu->tile) == span.end()) span.push_back(tu->tile);
+		if (leading_tile == INVALID_TILE) leading_tile = tu->tile;
 
 		Vehicle *u_next = tail_leads ? u->Previous() : u->Next();
 		if (u_next != nullptr) {
@@ -1376,17 +1437,20 @@ static bool RVTransportPlaceTrainOnPlatform(Train *tr, TileIndex exit_end, DiagD
 	 * no-driving-cab speed limit and friends must be re-judged from the new tail-leading state. */
 	tr->ConsistChanged(CCF_COUPLE);
 
-	/* Reserve a contiguous chain from the exit end back to the rear-most tile the train stands on:
-	 * the engine attributes a reservation chain to the train standing at its beginning, and walks
-	 * it forward tile by tile. A gap in the chain would make the tiles behind the gap look like
-	 * another train's reservation, and the train would never leave (it would wait at "red" for its
-	 * own exit). Tiles behind the train's rear are deliberately not reserved: the engine only ever
-	 * frees reservations ahead of a train, so they would linger forever. */
+	/* Reserve a contiguous chain from the exit end back to the leading vehicle's tile, and nothing
+	 * beyond it. The engine manages the reservations AHEAD of a train's leading end: it walks this
+	 * chain forward and frees it when the train departs. The tiles under and behind the body must
+	 * NOT be reserved: platform tiles are never unreserved when a vehicle leaves them
+	 * (ClearPathReservation only updates the platform-occupancy flag there), and the engine never
+	 * frees reservations behind a train, so those reservations would linger forever. The body is
+	 * kept safe by the vehicles standing on the tiles, exactly like a train which arrived normally.
+	 * The chain must be contiguous, or the tiles behind a gap would look like another train's
+	 * reservation and the train would wait at "red" for its own exit. */
 	const TileIndexDiff back_step = -TileOffsByDiagDir(dir);
 	std::vector<TileIndex> reserve_tiles;
 	for (TileIndex pt = exit_end;; pt += back_step) {
+		if (pt == leading_tile) break; // nothing under or behind the leading vehicle: the engine frees ahead of a train only
 		reserve_tiles.push_back(pt);
-		if (std::find(span.begin(), span.end(), pt) != span.end()) break;
 		if (!IsValidTile(pt + back_step) || !IsCompatibleTrainStationTile(pt + back_step, pt) || reserve_tiles.size() > platform_tiles) break;
 	}
 	bool all_reserved = true;
@@ -1636,6 +1700,37 @@ static void RVTransportPayTransportFee(const Vehicle *carrier, const Vehicle *rv
 }
 
 /**
+ * Clear every reservation on this station's rail platforms that no train owns. PBS attribution is
+ * geometric (it follows the reserved chain and looks for a train on it), so a reservation with no
+ * train anywhere on its chain is an orphan: its chain was broken earlier (e.g. a train was loaded
+ * onto a carrier from this platform), and no engine will ever free it. Such reservations would
+ * block placements forever, so they are removed here.
+ */
+static void RVTransportHealOrphanReservations(const Station *st)
+{
+	for (TileIndex t : st->train_station) {
+		if (!st->TileBelongsToRailStation(t)) continue;
+		TrackBits reserved = GetReservedTrackbits(t);
+		if (reserved == TRACK_BIT_NONE) continue;
+		bool orphan = true;
+		for (Track tr = TRACK_BEGIN; tr < TRACK_END; tr++) {
+			if ((reserved & TrackToTrackBits(tr)) == TRACK_BIT_NONE) continue;
+			if (GetTrainForReservation(t, tr) != nullptr) {
+				orphan = false;
+				break;
+			}
+		}
+		if (!orphan) continue;
+		for (Track tr = TRACK_BEGIN; tr < TRACK_END; tr++) {
+			if ((GetReservedTrackbits(t) & TrackToTrackBits(tr)) == TRACK_BIT_NONE) continue;
+			RVTUnloadLog("heal: station #%u tile 0x%X cleared orphan reservation (track %d)",
+					st->index.base(), t.base(), to_underlying(tr));
+			UnreserveRailTrack(t, tr);
+		}
+	}
+}
+
+/**
  * Unload road vehicles carried by this carrier at the given station.
  * @return true if at least one road vehicle reached the road network.
  */
@@ -1649,6 +1744,9 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 			carrier->index.base(), st->index.base(), carrier->current_order.GetRVTransportFlags(),
 			(carrier->current_order.GetRVTransportFlags() & ORVTF_UNLOAD) != 0,
 			(carrier->current_order.GetRVTransportFlags() & ORVTF_UNLOAD_ALL) != 0, force);
+
+	/* Remove phantom reservations before trying to place anything. */
+	RVTransportHealOrphanReservations(st);
 
 	bool any = false;
 	for (Vehicle *v : Vehicle::Iterate()) {

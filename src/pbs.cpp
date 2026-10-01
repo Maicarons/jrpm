@@ -96,6 +96,10 @@ bool IsRailStationPlatformFree(const Train *v, TileIndex start, DiagDirection di
 	do {
 		for (const Vehicle *u : Vehicle::Iterate()) {
 			if (u->type != VehicleType::Train || u->vehstatus.Test(VehState::Crashed)) continue;
+			/* Hidden vehicles are carried by another vehicle and are not on the rail network any
+			 * more, but their tile field still points at where they were loaded: they must not
+			 * keep the platform marked as occupied. */
+			if (u->vehstatus.Test(VehState::Hidden)) continue;
 			const Train *t = Train::From(u);
 			if (t->Primary()->index == v->Primary()->index) continue;
 			if (t->tile == tile) return false;
