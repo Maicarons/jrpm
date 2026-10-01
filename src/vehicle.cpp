@@ -3637,11 +3637,6 @@ void Vehicle::BeginLoading()
 	Station::Get(this->last_station_visited)->MarkTilesDirty(true);
 	this->cur_speed = 0;
 	this->MarkDirty();
-
-	/* RoRo: a vehicle whose order says "wait to be transported" stops here and waits. */
-	if ((this->type == VehicleType::Road || this->type == VehicleType::Train) && (this->current_order.GetRVTransportFlags() & ORVTF_OWN_WAIT) != 0) {
-		RVTransportSetWaiting(this, true);
-	}
 }
 
 /**
@@ -3935,6 +3930,17 @@ void Vehicle::HandleLoading(bool mode)
 			bool cont_wait = ShouldVehicleContinueWaiting(this);
 			if (mode || !this->vehicle_flags.Test(VehicleFlag::LoadingFinished) || (this->current_order_time < wait_time && this->current_order.GetLeaveType() != OLT_LEAVE_EARLY) || cont_wait) {
 				if (!mode && this->type == VehicleType::Train && Train::From(this)->flags.Test(VehicleRailFlag::AdvanceInPlatform)) this->AdvanceLoadingInStation();
+				return;
+			}
+
+			/* RoRo: a vehicle whose order says "wait to be transported" first finishes its normal
+			 * loading and unloading like any other vehicle, and then stops here to wait for a
+			 * carrier instead of departing. The order is not advanced: it stays the executed one
+			 * until the vehicle is picked up by a carrier (which advances it to its "be unloaded
+			 * here" order). */
+			if ((this->type == VehicleType::Road || this->type == VehicleType::Train) &&
+					(this->current_order.GetRVTransportFlags() & ORVTF_OWN_WAIT) != 0) {
+				RVTransportSetWaiting(this, true);
 				return;
 			}
 
