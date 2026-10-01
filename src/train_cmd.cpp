@@ -5769,6 +5769,12 @@ static bool IsPlatformAheadOccupied(const Train *consist)
 		for (const Train *u : VehiclesOnTile<VehicleType::Train>(tile)) {
 			if (u->Primary() == consist->Primary()) continue;
 			if (IsCouplePartnerOf(consist, u)) continue;
+			/* The partner of a just-performed decouple necessarily shares the tile
+			 * around the cut with us; it does not stand in our way. JustDecoupled
+			 * is only kept while the part is still in the station it decoupled
+			 * at, so this exemption cannot hide a consist we later meet on the
+			 * same platform after having left and returned. */
+			if (u->Primary()->flags.Test(VehicleRailFlag::JustDecoupled)) continue;
 			return true;
 		}
 	}
