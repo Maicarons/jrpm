@@ -4504,11 +4504,7 @@ void FreeTrainTrackReservation(Train *consist, TileIndex origin, Trackdir orig_t
 		}
 	}
 
-	/* Follow without the vehicle context so the "no temporary stop in depots"
-	 * restriction does not apply: clearing the reservation must be able to
-	 * walk into a depot tile that was reserved while the train was still
-	 * heading for it (e.g. before an order change or a reversal). */
-	CFollowTrackRail ft(consist->owner, consist->GetIndirectCompatibleRailTypes());
+	CFollowTrackRail ft(consist, consist->GetIndirectCompatibleRailTypes());
 	while (ft.Follow(tile, td)) {
 		tile = ft.new_tile;
 		TrackdirBits bits = ft.new_td_bits & TrackBitsToTrackdirBits(GetReservedTrackbits(tile));
@@ -5013,6 +5009,13 @@ public:
 		if (skip_first) ++this->v->cur_real_order_index;
 
 		int depth = 0;
+		/* Set when this advance skipped over a couple/decouple marker whose
+		 * station the train has not reached yet. A depot order directly behind
+		 * such a marker is beyond the couple stop: it must not become the
+		 * current order here, or the depot gate would open and the look-ahead
+		 * would reserve a path into that depot although the train will turn
+		 * around / couple long before reaching it. */
+		bool skipped_couple_order = false;
 
 		do {
 			/* Wrap around. */
@@ -5023,6 +5026,10 @@ public:
 
 			switch (order->GetType()) {
 				case OT_GOTO_DEPOT:
+					/* A depot order directly behind an unexecuted couple/decouple
+					 * stop is not the train's next target: stop the advance with
+					 * current_order left on the previous (reached) station order. */
+					if (skipped_couple_order) return false;
 					/* Skip service in depot orders when the train doesn't need service. */
 					if ((order->GetDepotOrderType().Test(OrderDepotTypeFlag::Service)) && !this->v->NeedsServicing()) break;
 					[[fallthrough]];
@@ -5040,17 +5047,12 @@ public:
 					}
 					break;
 				}
-				case OT_GOTO_COUPLE:
-				case OT_WAIT_COUPLE:
-				case OT_DECOUPLE:
-					/* Couple/decouple orders are station stops: the look-ahead must
-					 * stop at them instead of reserving past them (e.g. into a depot
-					 * that is only reachable after the coupling happened).
-					 * UpdateOrderDest has no destination for these and returns false,
-					 * which ends the reservation look-ahead here. */
-					this->v->current_order = *order;
-					return UpdateOrderDest(this->v, order, 0, true);
 				default:
+					/* Couple/decouple markers are skipped, but remember that the
+					 * stop they belong to has not been reached in this advance. */
+					if (order->IsType(OT_GOTO_COUPLE) || order->IsType(OT_WAIT_COUPLE) || order->IsType(OT_DECOUPLE)) {
+						skipped_couple_order = true;
+					}
 					break;
 			}
 			/* Don't increment inside the while because otherwise conditional
