@@ -1298,7 +1298,7 @@ static bool FindFreeRailPlatformTile(const Station *st, const Train *tr, TileInd
  * @param platform_tiles length of the platform, in tiles
  * @return true when the train was placed (and the reservations taken)
  */
-static bool RVTransportPlaceTrainOnPlatform(Train *tr, TileIndex exit_end, DiagDirection dir, uint platform_tiles)
+static bool RVTransportPlaceTrainOnPlatform(Train *tr, TileIndex exit_end, DiagDirection dir, uint platform_tiles, bool tail_leads = false)
 {
 	tr = Train::From(tr->First());
 	extern void UpdateVehicleTileHash(Vehicle *v, bool remove);
@@ -1317,11 +1317,18 @@ static bool RVTransportPlaceTrainOnPlatform(Train *tr, TileIndex exit_end, DiagD
 	const int edge_x = TileX(exit_end) * TILE_SIZE + TILE_SIZE / 2 + unit.x * (TILE_SIZE / 2);
 	const int edge_y = TileY(exit_end) * TILE_SIZE + TILE_SIZE / 2 + unit.y * (TILE_SIZE / 2);
 
-	/* Lay the consist out from the front towards the rear. All vehicles face the exit direction and
-	 * none drives backwards, so the rounding of Train::CalcNextVehicleOffset() is the forward one. */
-	int s = static_cast<int>(gap) + (tr->gcache.cached_veh_length + 1) / 2; // centre of the front vehicle
+	/* Lay the consist out from the leading end towards the rear. Normally the leading end is the
+	 * chain front; when only the chain tail can lead the train (a locomotive at the rear), the
+	 * consist is laid out mirrored and flagged as driving backwards, so the tail leads the
+	 * departure instead of the train backing out of the platform. All vehicles face the exit
+	 * direction and none drives forwards, so the rounding of Train::CalcNextVehicleOffset() is the
+	 * forward one.
+	 * Note the consist caches MUST be refreshed after this (ConsistChanged below): the no-driving-cab
+	 * speed limit is part of the consist cache, and it is judged by the leading end, which the
+	 * backwards flag changes to the chain tail. */
+	int s = static_cast<int>(gap) + (tr->gcache.cached_veh_length + 1) / 2; // centre of the leading vehicle
 	std::vector<TileIndex> span; // the tiles the consist stands on
-	for (Vehicle *u = tr; u != nullptr; u = u->Next()) {
+	for (Vehicle *u = (tail_leads ? tr->Last() : tr); u != nullptr; u = (tail_leads ? u->Previous() : u->Next())) {
 		Train *tu = Train::From(u);
 		const int x = edge_x - unit.x * s;
 		const int y = edge_y - unit.y * s;
@@ -1334,7 +1341,8 @@ static bool RVTransportPlaceTrainOnPlatform(Train *tr, TileIndex exit_end, DiagD
 		u->transported_from = StationID::Invalid();
 		u->transport_wait_tick = 0;
 
-		u->direction = DiagDirToDir(dir);
+		u->direction = DiagDirToDir(tail_leads ? ReverseDiagDir(dir) : dir);
+		u->vehicle_flags.Set(VehicleFlag::DrivingBackwards, tail_leads);
 		tu->flags.Reset(VehicleRailFlag::Reversing);
 		tu->flags.Reset(VehicleRailFlag::BeyondPlatformEnd);
 		tu->cur_speed = 0;
@@ -1358,10 +1366,15 @@ static bool RVTransportPlaceTrainOnPlatform(Train *tr, TileIndex exit_end, DiagD
 		 * reserved forever: the engine only frees reservations ahead of a train, never behind it. */
 		if (std::find(span.begin(), span.end(), tu->tile) == span.end()) span.push_back(tu->tile);
 
-		if (u->Next() != nullptr) {
-			s += tu->gcache.cached_veh_length / 2 + (Train::From(u->Next())->gcache.cached_veh_length + 1) / 2;
+		Vehicle *u_next = tail_leads ? u->Previous() : u->Next();
+		if (u_next != nullptr) {
+			s += tu->gcache.cached_veh_length / 2 + (Train::From(u_next)->gcache.cached_veh_length + 1) / 2;
 		}
 	}
+
+	/* Refresh the consist caches: setting the backwards flag above changed the leading end, so the
+	 * no-driving-cab speed limit and friends must be re-judged from the new tail-leading state. */
+	tr->ConsistChanged(CCF_COUPLE);
 
 	/* Reserve a contiguous chain from the exit end back to the rear-most tile the train stands on:
 	 * the engine attributes a reservation chain to the train standing at its beginning, and walks
@@ -1672,6 +1685,13 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 			RVTUnloadLog("detach: train #%u picked platform end 0x%X dir %d (%u tiles)",
 					consist->index.base(), exit_end.base(), to_underlying(dir), platform_tiles);
 
+			/* Don't let the train back out of the platform: when only the chain tail can lead the
+			 * train (a locomotive at the rear), place the consist mirrored and marked as driving
+			 * backwards, so the tail leads the departure towards the next destination. The consist
+			 * caches are refreshed inside the placement, so the no-driving-cab speed limit is not
+			 * applied to the (locomotive-equipped) leading end. */
+			const bool tail_leads = !consist->CanLeadTrain() && consist->Last()->CanLeadTrain();
+
 			/* Remember how the train was carried, in case the platform refuses it below: a
 			 * distributed train records a host part and weight per member, so snapshot every
 			 * member rather than only the state holder's. */
@@ -1684,7 +1704,7 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 			const VehicleID host_part = v->transported_host_part;
 			const StationID transported_from = v->transported_from;
 
-			if (!RVTransportPlaceTrainOnPlatform(consist, exit_end, dir, platform_tiles)) {
+			if (!RVTransportPlaceTrainOnPlatform(consist, exit_end, dir, platform_tiles, tail_leads)) {
 				RVTUnloadLog("detach: train #%u placement failed - staying on the carrier", consist->index.base());
 				/* The way out of the platform is blocked: put the train back on the carrier rather
 				 * than parking it somewhere it cannot move from, and retry later. */
@@ -1695,6 +1715,7 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 					u->transported_host_part = snap_hosts[i];
 					u->transported_weight = snap_weights[i];
 					u->transported_from = transported_from;
+					u->vehicle_flags.Reset(VehicleFlag::DrivingBackwards); // the layout attempt may have set it
 					u->vehstatus.Set(VehState::Stopped);
 					u->vehstatus.Set(VehState::Hidden);
 					u->cur_speed = 0;
