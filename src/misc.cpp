@@ -43,6 +43,7 @@
 #include "string_func.h"
 #include "plans_func.h"
 #include "session_stats.h"
+#include "train.h"
 #include "core/format.hpp"
 #include "3rdparty/monocypher/monocypher.h"
 
@@ -126,6 +127,7 @@ void InitializeGame(uint size_x, uint size_y, bool reset_date, bool reset_settin
 	ClearCommandQueue();
 	ClearSpecialEventsLog();
 	ClearDesyncMsgLog();
+	ResetCoupleSearchCache();
 
 	_pause_mode = {};
 	_pause_countdown = 0;

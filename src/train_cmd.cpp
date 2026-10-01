@@ -4671,6 +4671,19 @@ static Track DoTrainPathfind(const Train *v, TileIndex tile, DiagDirection enter
 	return YapfTrainChooseTrack(v, tile, enterdir, tracks, path_found, do_track_reservation, dest, final_dest);
 }
 
+/** Last tick each train performed a couple target search (see CoupleSearchAllowed). */
+static btree::btree_map<VehicleID, uint64_t> _couple_search_last_tick;
+
+/**
+ * Clear the couple target search throttle cache. Must be called when the
+ * game state is replaced (new game / loading a save), otherwise stale
+ * timestamps from a previous game would throttle searches in the new one.
+ */
+void ResetCoupleSearchCache()
+{
+	_couple_search_last_tick.clear();
+}
+
 /**
  * Throttle the couple target search. It runs a full path search plus an
  * approach walk, which is far too expensive to repeat every tick while the
@@ -4680,15 +4693,14 @@ static Track DoTrainPathfind(const Train *v, TileIndex tile, DiagDirection enter
 static bool CoupleSearchAllowed(const Train *v)
 {
 	constexpr uint64_t COUPLE_SEARCH_INTERVAL = 30;
-	static btree::btree_map<VehicleID, uint64_t> last_search;
 
 	const uint64_t now = _tick_counter;
 
 	/* Drop entries for trains that no longer exist. */
-	if (last_search.size() > 128) {
-		for (auto i = last_search.begin(); i != last_search.end();) {
+	if (_couple_search_last_tick.size() > 128) {
+		for (auto i = _couple_search_last_tick.begin(); i != _couple_search_last_tick.end();) {
 			if (Train::GetIfValid(i->first) == nullptr) {
-				i = last_search.erase(i);
+				i = _couple_search_last_tick.erase(i);
 			} else {
 				++i;
 			}
@@ -4696,12 +4708,15 @@ static bool CoupleSearchAllowed(const Train *v)
 	}
 
 	const VehicleID id = v->Primary()->index;
-	auto it = last_search.find(id);
-	if (it == last_search.end()) {
-		last_search.emplace(id, now);
+	auto it = _couple_search_last_tick.find(id);
+	if (it == _couple_search_last_tick.end()) {
+		_couple_search_last_tick.emplace(id, now);
 		return true;
 	}
-	if (now < it->second + COUPLE_SEARCH_INTERVAL) return false;
+	/* The tick counter is saved/restored with the game, so guard against it
+	 * moving backwards relative to a cached timestamp. */
+	if (it->second > now) it->second = now;
+	else if (now < it->second + COUPLE_SEARCH_INTERVAL) return false;
 	it->second = now;
 	return true;
 }
