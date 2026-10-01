@@ -17,6 +17,7 @@
 
 class Vehicle;
 struct Station;
+struct Engine;
 
 /** Bits stored in Vehicle::rv_transport_flags. */
 static const uint8_t RVTF_WAITING     = 1 << 0; ///< Road vehicle waits at a station to be loaded onto a carrier.
@@ -138,6 +139,20 @@ Vehicle *RVTransportGetCarrier(const Vehicle *rv);
 
 /** Can this carrier part carry road vehicles at all (cargo class oversized)? */
 bool RVTransportPartCanCarry(const Vehicle *part);
+
+/**
+ * May this engine be turned into a carrier part by refitting it to the dedicated vehicle transport
+ * cargoes ("Vehicles (Road)" / "Vehicles (Train)") under the current "carrier parts" setting?
+ * For trains the setting decides which parts of a carrier may take vehicles, and the same rule
+ * decides which wagons may become such a part by refitting, so a wagon whose own cargo does not
+ * qualify (a passenger coach, a mail van, ...) cannot gain the dedicated cargo. Judged by the
+ * engine's default cargo: the dedicated transport cargoes are themselves classified 'Oversized',
+ * so a part already refitted to them keeps qualifying. Ships and aircraft are always allowed:
+ * turning a cargo ship or a passenger plane into a vehicle carrier is the point of the refit.
+ * @param e The engine to look at.
+ * @return Whether refitting the engine to a vehicle transport cargo is currently allowed.
+ */
+bool RVTransportEngineMayBeRefitToVehicles(const Engine *e);
 
 /** Is this the dedicated cargo of vehicle transport ("Vehicles (Road)" or "Vehicles (Train)")? */
 bool RVTransportIsSpecialCargo(CargoType ct);

@@ -892,6 +892,11 @@ struct RefitWindow : public Window {
 				CargoType cargo_type = cs->Index();
 				/* Skip cargo type if it's not listed */
 				if (!cmask.Test(cargo_type)) continue;
+				/* Road vehicle transport: the built-in vehicle transport cargoes may only be chosen
+				 * when the "carrier parts" setting lets this engine become a carrier part; a wagon
+				 * whose own cargo does not qualify cannot gain the dedicated cargo by refitting. */
+				if ((cargo_type == RV_TRANSPORT_CARGO_SLOT || cargo_type == RAIL_TRANSPORT_CARGO_SLOT) &&
+						!RVTransportEngineMayBeRefitToVehicles(e)) continue;
 				/* Road vehicle transport: the built-in cargo is identified by its slot, as a NewGRF may
 				 * define a cargo using the same label. No special refit handling is needed. */
 
@@ -1725,6 +1730,13 @@ uint ShowRefitOptionsList(int left, int right, int y, EngineID engine)
 {
 	/* List of cargo types of this engine */
 	CargoTypes present = GetUnionOfArticulatedRefitMasks(engine, false);
+
+	/* Road vehicle transport: don't advertise the dedicated vehicle transport cargoes when the
+	 * "carrier parts" setting does not let this engine become a carrier part. */
+	if (!RVTransportEngineMayBeRefitToVehicles(Engine::Get(engine))) {
+		present.Reset(RV_TRANSPORT_CARGO_SLOT);
+		present.Reset(RAIL_TRANSPORT_CARGO_SLOT);
+	}
 
 	/* Draw nothing if the engine is not refittable */
 	if (HasAtMostOneBit(present.base())) return y;

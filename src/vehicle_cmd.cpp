@@ -430,6 +430,13 @@ static CommandCost RefitVehicle(Vehicle *v, bool only_this, uint8_t num_vehicles
 		/* If the vehicle is not refittable, or does not allow automatic refitting,
 		 * count its capacity nevertheless if the cargo matches */
 		bool refittable = e->info.refit_mask.Test(new_cargo_type) && (!auto_refit || e->info.misc_flags.Test(EngineMiscFlag::AutoRefit));
+		/* Road vehicle transport: the dedicated vehicle transport cargoes may only be chosen when
+		 * the "carrier parts" setting lets this engine become a carrier part, independent of what
+		 * the (engine-level) refit mask offers. */
+		if ((new_cargo_type == RV_TRANSPORT_CARGO_SLOT || new_cargo_type == RAIL_TRANSPORT_CARGO_SLOT) &&
+				!RVTransportEngineMayBeRefitToVehicles(e)) {
+			refittable = false;
+		}
 		if (!refittable && v->cargo_type != new_cargo_type) {
 			uint amount = e->DetermineCapacity(v, nullptr);
 			if (amount > 0) _returned_vehicle_capacities[v->cargo_type] += amount;

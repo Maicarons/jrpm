@@ -15,6 +15,7 @@
 #include "company_base.h"
 #include "console_func.h"
 #include "economy_base.h"   // CargoPayment must be complete: the station stop of a carried vehicle deletes its payment
+#include "engine_base.h"
 #include "order_func.h"
 #include "strings_func.h"
 #include "town.h"
@@ -99,6 +100,15 @@ bool RVTransportPartCanCarry(const Vehicle *part)
 	if (part->cargo_cap == 0) return false;
 	if (!IsValidCargoType(part->cargo_type)) return false;
 
+	/* An aircraft never carries trains: the dedicated "Vehicles (Train)" cargo is a ship hold's
+	 * property, and no aircraft gets it through its refit mask. This guard also keeps a NewGRF
+	 * which puts the rail cargo (or a cargo with its label) on an aircraft from loading trains. */
+	if (part->type == VehicleType::Aircraft &&
+			(part->cargo_type == RAIL_TRANSPORT_CARGO_SLOT ||
+			 CargoSpec::Get(part->cargo_type)->label == RV_TRANSPORT_RAIL_CARGO_LABEL)) {
+		return false;
+	}
+
 	switch (static_cast<RVTransportCarrierParts>(_settings_game.vehicle.rv_transport_carrier_parts)) {
 		case RVTransportCarrierParts::AnyPart:
 			return true;
@@ -121,6 +131,40 @@ bool RVTransportPartCanCarry(const Vehicle *part)
 			const CargoLabel label = CargoSpec::Get(part->cargo_type)->label;
 			return label == RV_TRANSPORT_VEHICLES_CARGO_LABEL || label == RV_TRANSPORT_RAIL_CARGO_LABEL;
 		}
+	}
+
+	return false;
+}
+
+bool RVTransportEngineMayBeRefitToVehicles(const Engine *e)
+{
+	if (e == nullptr) return false;
+	/* Same master switch as RVTransportPartCanCarry(): with it off nothing becomes a carrier. */
+	if (!_settings_game.vehicle.rv_transport_enabled) return false;
+
+	/* The default-cargo criterion below is a wagon rule: it keeps a coach or a mail van from
+	 * gaining the dedicated cargo. Ships and aircraft have no such distinction - turning a cargo
+	 * ship or a passenger plane into a vehicle carrier is the point of the refit - so they are
+	 * always allowed (the master switch is the only gate). */
+	if (e->type != VehicleType::Train) return true;
+
+	/* Judge by the engine's default cargo: that is what the wagon natively carries, the same
+	 * criterion the loading-time check applies to a part's cargo. A wagon already refitted to the
+	 * dedicated transport cargo qualifies through it as well, since that cargo is 'Oversized'. */
+	const CargoSpec *cs = (IsValidCargoType(e->info.cargo_type)) ? CargoSpec::Get(e->info.cargo_type) : nullptr;
+	if (cs == nullptr || !cs->IsValid()) return false;
+
+	switch (static_cast<RVTransportCarrierParts>(_settings_game.vehicle.rv_transport_carrier_parts)) {
+		case RVTransportCarrierParts::AnyPart:
+			return true;
+
+		case RVTransportCarrierParts::OversizedOnly:
+			return cs->classes.Test(CargoClass::Oversized);
+
+		case RVTransportCarrierParts::BulkOversizedOrVehicles:
+			if (cs->classes.Test(CargoClass::Bulk)) return true;
+			if (cs->classes.Test(CargoClass::Oversized)) return true;
+			return cs->label == RV_TRANSPORT_VEHICLES_CARGO_LABEL || cs->label == RV_TRANSPORT_RAIL_CARGO_LABEL;
 	}
 
 	return false;
