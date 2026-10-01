@@ -4504,7 +4504,11 @@ void FreeTrainTrackReservation(Train *consist, TileIndex origin, Trackdir orig_t
 		}
 	}
 
-	CFollowTrackRail ft(consist, consist->GetIndirectCompatibleRailTypes());
+	/* Follow without the vehicle context so the "no temporary stop in depots"
+	 * restriction does not apply: clearing the reservation must be able to
+	 * walk into a depot tile that was reserved while the train was still
+	 * heading for it (e.g. before an order change or a reversal). */
+	CFollowTrackRail ft(consist->owner, consist->GetIndirectCompatibleRailTypes());
 	while (ft.Follow(tile, td)) {
 		tile = ft.new_tile;
 		TrackdirBits bits = ft.new_td_bits & TrackBitsToTrackdirBits(GetReservedTrackbits(tile));
@@ -5036,6 +5040,16 @@ public:
 					}
 					break;
 				}
+				case OT_GOTO_COUPLE:
+				case OT_WAIT_COUPLE:
+				case OT_DECOUPLE:
+					/* Couple/decouple orders are station stops: the look-ahead must
+					 * stop at them instead of reserving past them (e.g. into a depot
+					 * that is only reachable after the coupling happened).
+					 * UpdateOrderDest has no destination for these and returns false,
+					 * which ends the reservation look-ahead here. */
+					this->v->current_order = *order;
+					return UpdateOrderDest(this->v, order, 0, true);
 				default:
 					break;
 			}
