@@ -25,8 +25,12 @@
 
 /** Side length (in screen pixels at normal zoom) of one rain texture tile. */
 static constexpr int RAIN_TILE = 128;
-/** Number of pre-generated animation frames per layer. */
-static constexpr int RAIN_FRAMES = 6;
+/**
+ * Number of animation frames per (layer, variant). The frames form a seamless
+ * falling loop: each frame is the previous one shifted down the fall direction
+ * by RAIN_TILE / RAIN_FRAMES pixels (times the layer's fall step count).
+ */
+static constexpr int RAIN_FRAMES = 12;
 /** Number of parallax layers; far to near. */
 static constexpr int RAIN_LAYERS = 3;
 /** Number of layout variants per (layer, frame); picked per grid cell to break up tiling regularity. */
@@ -40,21 +44,23 @@ static constexpr int RAIN_ZOOM_COUNT = RAIN_MAX_ZOOM_IN + 1 + RAIN_MAX_ZOOM_OUT;
 
 /** Parameters of one rain layer. */
 struct RainLayerParams {
-	int speed_x;        ///< Horizontal scroll speed, screen pixels per second.
-	int speed_y;        ///< Vertical scroll speed, screen pixels per second (fall direction).
-	int streak_count;   ///< Streaks per texture tile.
-	int len_min;        ///< Shortest streak length in pixels.
-	int len_extra;      ///< Maximum extra length.
-	uint8_t base_alpha; ///< Base opacity of the streaks (before the rain fade is applied).
+	int speed_x;          ///< Horizontal scroll speed, screen pixels per second (wind drift).
+	int speed_y;          ///< Vertical speed; only used as the streak slope, the fall itself is the frame animation.
+	int streak_count;     ///< Streaks per texture tile.
+	int len_min;          ///< Shortest streak length in pixels.
+	int len_extra;        ///< Maximum extra length.
+	uint8_t base_alpha;   ///< Base opacity of the streaks (before the rain fade is applied).
+	int fall_interval;    ///< Milliseconds between animation frames.
+	int fall_steps;       ///< Fall animation steps (of RAIN_TILE / RAIN_FRAMES pixels) per frame.
 };
 
 static constexpr RainLayerParams RAIN_LAYER_PARAMS[RAIN_LAYERS] = {
 	/* Far layer: many thin, short, faint streaks, moving slowly. */
-	{  12,  34, 26,  5,  5, 35 },
+	{  12,  34, 26,  5,  5, 35, 240, 1 },
 	/* Middle layer. */
-	{  17,  50, 16,  9,  8, 55 },
+	{  17,  50, 16,  9,  8, 55, 120, 1 },
 	/* Near layer: fewer, longer and more opaque streaks, moving fast. */
-	{  24,  70,  9, 14, 10, 75 },
+	{  24,  70,  9, 14, 10, 75, 120, 2 },
 };
 
 /** One encoded frame of one layer. */
@@ -151,23 +157,33 @@ static void GenerateRainTile(SpriteLoader::Sprite &sprite, uint layer, uint vari
 		sprite.data[i].m = 0;
 	}
 
-	/* Slope of the streaks, matching the layer's scroll direction. */
+	/* Slope of the streaks, matching the layer's fall direction. */
 	const int slope_x_num = params.speed_x;
 	const int slope_x_den = params.speed_y;
 
+	/* All frames of a (layer, variant) share one streak layout; each frame is
+	 * shifted further along the fall direction, forming a seamless loop. The
+	 * shift follows the streak slope, so the drops move along their own
+	 * orientation instead of sliding sideways. */
+	uint32_t shift_rnd = RainHash(0x5A17, layer * RAIN_VARIANTS + variant, 0);
+	int shift = (frame * params.fall_steps % RAIN_FRAMES) * tile_size / RAIN_FRAMES;
+	int shift_x = shift * params.speed_x / params.speed_y;
+
 	for (int s = 0; s < params.streak_count; s++) {
-		uint32_t rnd = RainHash((layer * RAIN_VARIANTS + variant) * RAIN_FRAMES + frame, s, 0x5A17);
+		uint32_t rnd = RainHash(shift_rnd, s, 0);
 		int x = rnd % tile_size;
 		int y = (rnd >> 8) % tile_size;
 		/* Streak lengths scale with the zoom level the tile is for. */
 		int len = std::max(1, (params.len_min + (int)((rnd >> 16) % params.len_extra)) * tile_size / RAIN_TILE);
-		/* Opacity flickers per streak and per frame. */
-		uint8_t alpha = params.base_alpha * (60 + rnd % 81) / 160;
+		/* Opacity flickers per streak; some streaks are hidden in some frames,
+		 * so individual drops appear and disappear while falling. */
+		if (RainHash(0x717, layer * RAIN_VARIANTS + variant, s * RAIN_FRAMES + frame) % 10 == 0) continue;
+		uint8_t alpha = params.base_alpha * (60 + (rnd >> 4) % 81) / 160;
 		uint8_t shade = 185 + (rnd >> 8) % 40; /* Pale blue-grey variation. */
 
 		for (int i = 0; i < len; i++) {
-			int px = (x + i * slope_x_num / slope_x_den + tile_size) % tile_size;
-			int py = (y + i) % tile_size;
+			int px = (x + i * slope_x_num / slope_x_den + shift_x + tile_size) % tile_size;
+			int py = (y + i + shift) % tile_size;
 			auto &p = sprite.data[py * tile_size + px];
 			if (use_rgba) {
 				p.r = shade * 9 / 10;
@@ -254,41 +270,33 @@ void DrawRainOverlay(ZoomLevel zoom, const DrawPixelInfo *dpi)
 	}
 
 	int tile_size = RainTileSize(delta);
-	/* Scroll speeds are in world scale; on screen they shrink when zoomed out. */
-	int speed_scale = tile_size * 1024 / RAIN_TILE;
 
 	uint64_t now = RainNowMs();
 
 	for (uint layer = 0; layer < RAIN_LAYERS; layer++) {
 		const RainLayerParams &params = RAIN_LAYER_PARAMS[layer];
 
-		/* Smooth scroll offset. */
-		int off_x = (int)(now * params.speed_x * speed_scale / (1000 * 1024)) % tile_size;
-		int off_y = (int)(now * params.speed_y * speed_scale / (1000 * 1024)) % tile_size;
-
-		/* Gust jitter: the whole layer is nudged by a few pixels now and then. */
-		uint64_t gust = now / 400;
-		off_x += (int)(RainHash(0xA11CE + layer, (uint32_t)gust, 0) % 5) - 2;
-		off_y += (int)(RainHash(0xB0B + layer, (uint32_t)gust, 1) % 3) - 1;
-
-		/* The animation frame jumps pseudo-randomly instead of cycling. */
-		uint frame = RainHash(0xF0F + layer, (uint32_t)(now / 120), 2) % RAIN_FRAMES;
+		/* The only motion is the fall animation along the streak slope; the
+		 * pattern itself does not drift or jitter, so nothing appears to move
+		 * sideways. */
+		uint frame = (uint)(now / params.fall_interval) % RAIN_FRAMES;
 		const RainFrame *frame_base = &_rain_cache.frames[(delta + RAIN_MAX_ZOOM_IN) * RAIN_LAYERS * RAIN_VARIANTS * RAIN_FRAMES + layer * RAIN_VARIANTS * RAIN_FRAMES];
 
 		/* Tile positions align to absolute screen coordinates, so the pattern
 		 * is continuous across viewports and stable while panning. */
-		int first_x = dpi->left - ((dpi->left + off_x) % tile_size + tile_size) % tile_size;
-		int first_y = dpi->top - ((dpi->top + off_y) % tile_size + tile_size) % tile_size;
+		int first_x = dpi->left - (dpi->left % tile_size + tile_size) % tile_size;
+		int first_y = dpi->top - (dpi->top % tile_size + tile_size) % tile_size;
 
 		for (int py = first_y; py < dpi->top + dpi->height; py += tile_size) {
 			for (int px = first_x; px < dpi->left + dpi->width; px += tile_size) {
-				/* Pattern-cell coordinates: constant for a cell while it scrolls
-				 * along, so its random variant and jitter do not flicker. */
-				int cx = (px + off_x) / tile_size;
-				int cy = (py + off_y) / tile_size;
-				uint32_t rnd = RainHash(0xCE11 + layer, (uint32_t)(cx * 4096 + cy), (uint32_t)frame);
-				/* Pick a random layout variant and nudge the cell a little, so
-				 * no grid of repeating rain is visible, especially when zoomed out. */
+				/* Pattern-cell coordinates: constant per cell, so its random
+				 * variant and jitter do not flicker. */
+				int cx = px / tile_size;
+				int cy = py / tile_size;
+				uint32_t rnd = RainHash(0xCE11 + layer, (uint32_t)(cx * 4096 + cy), 0);
+				/* Pick a fixed layout variant per cell and nudge the cell a
+				 * little, so no grid of repeating rain is visible, especially
+				 * when zoomed out. */
 				uint variant = rnd % RAIN_VARIANTS;
 				int jx = (int)(rnd >> 8) % (tile_size / 4 + 1) - tile_size / 8;
 				int jy = (int)(rnd >> 16) % (tile_size / 4 + 1) - tile_size / 8;
