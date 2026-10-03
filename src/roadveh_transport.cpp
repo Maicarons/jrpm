@@ -1085,7 +1085,11 @@ static const int RVTRANSPORT_RAIL_PROBE_MAX_NODES = 10000;
 /** Is this rail type usable by the given train (one the train can run on)? */
 static bool RVTransportRailTypeCompatible(const Train *tr, RailType rt)
 {
-	return tr->railtypes.Test(rt);
+	/* The train must not only be *allowed* on this rail type but also able to drive away from
+	 * the platform by itself, so require power, the same criterion the engine uses for moving:
+	 * a merely compatible rail type (e.g. declared compatible by a rail NewGRF) would leave the
+	 * consist stranded on the platform. */
+	return HasPowerOnRail(tr->railtypes, rt);
 }
 
 /** Is this tile a rail tile (plain rail, rail station or rail tunnel/bridge head) the train can use? */
