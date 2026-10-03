@@ -38,6 +38,7 @@
 #include "settings_type.h"
 #include "settings_internal.h"
 #include "misc_cmd.h"
+#include "weather.h"
 
 #include "widgets/cheat_widget.h"
 
@@ -150,6 +151,19 @@ static int32_t ClickChangeDateCheat(int32_t new_value, int32_t change_direction)
 }
 
 /**
+ * Force the (cosmetic) weather.
+ * @param new_value the desired RainForcing value.
+ * @param change_direction unused.
+ * @return The (clamped) new value.
+ */
+static int32_t ClickRainCheat(int32_t new_value, int32_t change_direction)
+{
+	_rain_forcing = static_cast<RainForcing>(Clamp(new_value, 0, 2));
+	MarkWholeScreenDirty();
+	return static_cast<int32_t>(_rain_forcing);
+}
+
+/**
  * Allow (or disallow) a change of the maximum allowed heightlevel.
  * @param new_value new value
  * @param change_direction unused
@@ -220,6 +234,7 @@ static const CheatEntry _cheats_ui[] = {
 	{CNM_ALL,        SLF_ALLOW_CONTROL, STR_CHEAT_INFLATION_INCOME, &_economy.inflation_payment,                 &_cheats.inflation_income.been_used,       nullptr                    },
 	{CNM_ALL,        SLE_BOOL,        STR_CHEAT_STATION_RATING,   &_cheats.station_rating.value,                 &_cheats.station_rating.been_used,         nullptr                    },
 	{CNM_ALL,        SLE_BOOL,        STR_CHEAT_TOWN_RATING,      &_cheats.town_rating.value,                    &_cheats.town_rating.been_used,            nullptr                    },
+	{CNM_LOCAL_ONLY, SLE_UINT8,       STR_CHEAT_RAIN,             &_rain_forcing,                                &_cheats.rain.been_used,                   &ClickRainCheat            },
 };
 
 static bool IsCheatAllowed(CheatNetworkMode mode)
@@ -351,6 +366,11 @@ struct CheatWindow : Window {
 							break;
 						}
 
+						/* Display the selected weather mode */
+						case STR_CHEAT_RAIN:
+							str = GetString(ce->str, STR_CHEAT_RAIN_AUTO + Clamp(val, 0, 2));
+							break;
+
 						default:
 							str = GetString(ce->str, val);
 							break;
@@ -443,6 +463,13 @@ struct CheatWindow : Window {
 						/* Draw coloured flag for change company cheat */
 						case STR_CHEAT_CHANGE_COMPANY:
 							width = std::max(width, GetStringBoundingBox(GetString(ce.str, MAX_COMPANIES)).width + WidgetDimensions::scaled.hsep_wide * 4);
+							break;
+
+						/* Display weather mode names */
+						case STR_CHEAT_RAIN:
+							for (int i = 0; i < 3; i++) {
+								width = std::max(width, GetStringBoundingBox(GetString(ce.str, STR_CHEAT_RAIN_AUTO + i)).width);
+							}
 							break;
 
 						default:

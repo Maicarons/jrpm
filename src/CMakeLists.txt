@@ -680,6 +680,8 @@ add_files(
     water_cmd.h
     water_map.h
     waypoint.cpp
+    weather.cpp
+    weather.h
     waypoint_base.h
     waypoint_cmd.cpp
     waypoint_cmd.h

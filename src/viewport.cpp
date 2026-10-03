@@ -62,6 +62,7 @@
 
 #include "stdafx.h"
 #include "clear_map.h"
+#include "weather.h"
 #include "tree_map.h"
 #include "industry.h"
 #include "smallmap_gui.h"
@@ -4395,6 +4396,10 @@ static void ViewportDoDrawPhase3(Viewport *vp)
 		DrawPixelInfo dp = _vdd->MakeDPIForText();
 		GfxFillRect(BlitterFactory::GetCurrentBlitter(), &dp, dp.left, dp.top, dp.left + dp.width, dp.top + dp.height,
 				_vdd->display_flags.Test(NWidgetDisplayFlag::ShadeDimmed) ? PALETTE_TO_TRANSPARENT : PALETTE_NEWSPAPER, FillRectMode::Recolour);
+	} else if (_rain_shade_level != 0) {
+		/* Rain (or its fade) darkens the whole world, in discrete levels. */
+		DrawPixelInfo dp = _vdd->MakeDPIForText();
+		BlitterFactory::GetCurrentBlitter()->DarkenRect(dp.dst_ptr, dp.width, dp.height, RainShadeNom());
 	}
 
 	_vdd->bridge_to_map_x.clear();

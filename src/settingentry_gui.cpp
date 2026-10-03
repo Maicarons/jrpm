@@ -1237,6 +1237,7 @@ SettingsContainer &GetSettingsTree()
 				trees->Add(new SettingEntry("construction.tree_growth_rate"));
 			}
 
+			environment->Add(new SettingEntry("difficulty.rain"));
 			environment->Add(new SettingEntry("construction.flood_from_edges"));
 			environment->Add(new SettingEntry("construction.map_edge_mode"));
 			environment->Add(new SettingEntry("station.cargo_class_rating_wait_time"));

@@ -1371,6 +1371,8 @@ STR_CONFIG_SETTING_TRAIN_FLIP_REVERSE                           :允许列车在
 
 STR_CONFIG_SETTING_DISASTERS                                    :灾难：{STRING}
 STR_CONFIG_SETTING_DISASTERS_HELPTEXT                           :灾难可能引起堵车或者车祸或者建筑损毁
+STR_CONFIG_SETTING_RAIN                                         :随机下雨：{STRING}
+STR_CONFIG_SETTING_RAIN_HELPTEXT                                :地图上会不定期下雨。下雨时世界会变暗，仅为视觉效果
 
 STR_CONFIG_SETTING_CITY_APPROVAL                                :地方政府态度：{STRING}
 STR_CONFIG_SETTING_CITY_APPROVAL_HELPTEXT                       :设置相关参数以决定各公司造成的噪音及环境破坏时，各城镇对该公司的评价及未来城镇建设的影响
@@ -2337,6 +2339,10 @@ STR_CHEAT_CHANGE_DATE                                           :{LTBLUE}改变�
 STR_CHEAT_CHANGE_DATE_QUERY_CAPT                                :{WHITE}改变当前年份
 STR_CHEAT_SETUP_PROD                                            :{LTBLUE}允许修改产量：{ORANGE}{STRING}
 STR_CHEAT_STATION_RATING                                        :{LTBLUE}车站评价固定为 100%：{ORANGE}{STRING}
+STR_CHEAT_RAIN                                                  :{LTBLUE}天气：{ORANGE}{STRING}
+STR_CHEAT_RAIN_AUTO                                             :自动
+STR_CHEAT_RAIN_RAINING                                          :永远下雨
+STR_CHEAT_RAIN_SUNNY                                            :永远晴天
 
 # Livery window
 STR_LIVERY_CAPTION                                              :{WHITE}{COMPANY} 的色彩方案

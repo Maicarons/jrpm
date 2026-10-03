@@ -32,6 +32,7 @@ struct Cheats {
 	Cheat inflation_cost{};   ///< inflation cost factor
 	Cheat inflation_income{}; ///< inflation income factor
 	Cheat town_rating{};      ///< 100% town local authority rating
+	Cheat rain{};             ///< force the (cosmetic) weather
 };
 
 /** Available cheats. */
@@ -48,6 +49,7 @@ enum CheatNumbers : uint8_t {
 	CHT_INFLATION_INCOME,///< Change inflation income factor
 	CHT_STATION_RATING,  ///< 100% station ratings
 	CHT_TOWN_RATING,     ///< 100% town local authority ratings
+	CHT_RAIN,            ///< Force the (cosmetic) weather
 
 	CHT_NUM_CHEATS,      ///< Number of cheats.
 };
