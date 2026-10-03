@@ -29,6 +29,8 @@ static constexpr int RAIN_TILE = 128;
 static constexpr int RAIN_FRAMES = 6;
 /** Number of parallax layers; far to near. */
 static constexpr int RAIN_LAYERS = 3;
+/** Number of layout variants per (layer, frame); picked per grid cell to break up tiling regularity. */
+static constexpr int RAIN_VARIANTS = 4;
 /** Zoom-out steps (from ZoomLevel::Normal) after which rain is not drawn at all. */
 static constexpr int RAIN_MAX_ZOOM_OUT = 3;
 /** Zoom-in steps that still enlarge the rain; further zoom-in reuses the largest size. */
@@ -61,7 +63,7 @@ struct RainFrame {
 	UniquePtrSpriteAllocator allocator;
 };
 
-/** All encoded frames per zoom delta (indexed [delta][layer][frame]), plus what they were built for. */
+/** All encoded frames per zoom delta (indexed [delta][layer][variant][frame]), plus what they were built for. */
 struct RainOverlayCache {
 	std::vector<RainFrame> frames;
 	std::bitset<RAIN_ZOOM_COUNT> built; ///< Which zoom deltas have their frames generated.
@@ -71,7 +73,7 @@ struct RainOverlayCache {
 	void Invalidate()
 	{
 		this->frames.clear();
-		this->frames.resize(RAIN_ZOOM_COUNT * RAIN_LAYERS * RAIN_FRAMES);
+		this->frames.resize(RAIN_ZOOM_COUNT * RAIN_LAYERS * RAIN_VARIANTS * RAIN_FRAMES);
 		this->built.reset();
 		this->blitter = nullptr;
 		this->shade_level = 0xFF;
@@ -121,7 +123,7 @@ static uint64_t RainNowMs()
  * Generate one texture tile: a pattern of slanted rain streaks that wraps
  * around the tile edges, so it can be tiled seamlessly.
  */
-static void GenerateRainTile(SpriteLoader::Sprite &sprite, uint layer, uint frame, int tile_size, uint8_t alpha_scale)
+static void GenerateRainTile(SpriteLoader::Sprite &sprite, uint layer, uint variant, uint frame, int tile_size, uint8_t alpha_scale)
 {
 	const RainLayerParams &params = RAIN_LAYER_PARAMS[layer];
 
@@ -154,7 +156,7 @@ static void GenerateRainTile(SpriteLoader::Sprite &sprite, uint layer, uint fram
 	const int slope_x_den = params.speed_y;
 
 	for (int s = 0; s < params.streak_count; s++) {
-		uint32_t rnd = RainHash(layer * 31 + frame, s, 0x5A17);
+		uint32_t rnd = RainHash((layer * RAIN_VARIANTS + variant) * RAIN_FRAMES + frame, s, 0x5A17);
 		int x = rnd % tile_size;
 		int y = (rnd >> 8) % tile_size;
 		/* Streak lengths scale with the zoom level the tile is for. */
@@ -187,18 +189,20 @@ static void BuildRainFrames(int delta)
 	int tile_size = RainTileSize(delta);
 	uint8_t alpha_scale = RainShadeProgress();
 
-	const uint base = (delta + RAIN_MAX_ZOOM_IN) * RAIN_LAYERS * RAIN_FRAMES;
+	const uint base = (delta + RAIN_MAX_ZOOM_IN) * RAIN_LAYERS * RAIN_VARIANTS * RAIN_FRAMES;
 	for (uint layer = 0; layer < RAIN_LAYERS; layer++) {
-		for (uint frame = 0; frame < RAIN_FRAMES; frame++) {
-			SpriteLoader::SpriteCollection collection;
-			SpriteLoader::Sprite &sprite = collection.Root();
-			GenerateRainTile(sprite, layer, frame, tile_size, alpha_scale);
+		for (uint variant = 0; variant < RAIN_VARIANTS; variant++) {
+			for (uint frame = 0; frame < RAIN_FRAMES; frame++) {
+				SpriteLoader::SpriteCollection collection;
+				SpriteLoader::Sprite &sprite = collection.Root();
+				GenerateRainTile(sprite, layer, variant, frame, tile_size, alpha_scale);
 
-			RainFrame f;
-			UniquePtrSpriteAllocator allocator;
-			f.sprite = blitter->Encode(SpriteType::Normal, collection, allocator);
-			f.allocator.data = std::move(allocator.data);
-			_rain_cache.frames[base + layer * RAIN_FRAMES + frame] = std::move(f);
+				RainFrame f;
+				UniquePtrSpriteAllocator allocator;
+				f.sprite = blitter->Encode(SpriteType::Normal, collection, allocator);
+				f.allocator.data = std::move(allocator.data);
+				_rain_cache.frames[base + (layer * RAIN_VARIANTS + variant) * RAIN_FRAMES + frame] = std::move(f);
+			}
 		}
 	}
 	_rain_cache.built.set(delta + RAIN_MAX_ZOOM_IN);
@@ -269,7 +273,7 @@ void DrawRainOverlay(ZoomLevel zoom, const DrawPixelInfo *dpi)
 
 		/* The animation frame jumps pseudo-randomly instead of cycling. */
 		uint frame = RainHash(0xF0F + layer, (uint32_t)(now / 120), 2) % RAIN_FRAMES;
-		const Sprite *sprite = _rain_cache.frames[(delta + RAIN_MAX_ZOOM_IN) * RAIN_LAYERS * RAIN_FRAMES + layer * RAIN_FRAMES + frame].sprite;
+		const RainFrame *frame_base = &_rain_cache.frames[(delta + RAIN_MAX_ZOOM_IN) * RAIN_LAYERS * RAIN_VARIANTS * RAIN_FRAMES + layer * RAIN_VARIANTS * RAIN_FRAMES];
 
 		/* Tile positions align to absolute screen coordinates, so the pattern
 		 * is continuous across viewports and stable while panning. */
@@ -278,7 +282,17 @@ void DrawRainOverlay(ZoomLevel zoom, const DrawPixelInfo *dpi)
 
 		for (int py = first_y; py < dpi->top + dpi->height; py += tile_size) {
 			for (int px = first_x; px < dpi->left + dpi->width; px += tile_size) {
-				BlitRainTile(blitter, sprite, dpi, tile_size, px, py);
+				/* Pattern-cell coordinates: constant for a cell while it scrolls
+				 * along, so its random variant and jitter do not flicker. */
+				int cx = (px + off_x) / tile_size;
+				int cy = (py + off_y) / tile_size;
+				uint32_t rnd = RainHash(0xCE11 + layer, (uint32_t)(cx * 4096 + cy), (uint32_t)frame);
+				/* Pick a random layout variant and nudge the cell a little, so
+				 * no grid of repeating rain is visible, especially when zoomed out. */
+				uint variant = rnd % RAIN_VARIANTS;
+				int jx = (int)(rnd >> 8) % (tile_size / 4 + 1) - tile_size / 8;
+				int jy = (int)(rnd >> 16) % (tile_size / 4 + 1) - tile_size / 8;
+				BlitRainTile(blitter, frame_base[variant * RAIN_FRAMES + frame].sprite, dpi, tile_size, px + jx, py + jy);
 			}
 		}
 	}
