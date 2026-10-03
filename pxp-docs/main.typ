@@ -91,6 +91,10 @@
               "en/other-options/invite-code-alive",
               content: include "content-en/options/invite-code-alive.typ",
             ),
+            chapter(
+              "en/other-options/rainy",
+              content: include "content-en/options/rainy.typ",
+            ),
           )
         ),
       ),
@@ -179,6 +183,10 @@
             chapter(
               "zh/other-options/invite-code-alive",
               content: include "content-zh/options/invite-code-alive.typ",
+            ),
+            chapter(
+              "zh/other-options/rainy",
+              content: include "content-zh/options/rainy.typ",
             ),
           )
         ),
