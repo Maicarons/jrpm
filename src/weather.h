@@ -17,6 +17,18 @@ enum class RainForcing : uint8_t {
 	Sunny = 2,  ///< Force clear skies all the time.
 };
 
+/**
+ * State of the (cosmetic) automatic weather simulation.
+ * This is part of the game state and is persisted in savegames.
+ */
+struct WeatherState {
+	bool auto_raining;    ///< Currently in a rainy period.
+	uint32_t seed;        ///< Deterministic RNG state; seeded from the map generation seed.
+	int64_t period_start; ///< Start tick (StateTicks base) of the current weather period.
+};
+
+extern WeatherState _weather_state;
+
 extern RainForcing _rain_forcing;
 
 /**
@@ -42,5 +54,8 @@ uint8_t RainShadeProgress();
 
 void WeatherTick();
 bool IsRainActive();
+
+/** Restart the shading transition timer, e.g. after loading a savegame. */
+void WeatherRestartShadeTransition();
 
 #endif /* WEATHER_H */

@@ -22,12 +22,9 @@ RainForcing _rain_forcing = RainForcing::Auto;
 /** Current world shading level; 0 = clear skies, RAIN_SHADE_LEVELS = fully darkened. */
 uint8_t _rain_shade_level = 0;
 
-/** Automatic rain state. */
-static bool _rain_auto_raining = false;
-/** Start tick of the current automatic weather period. */
-static StateTicks _rain_period_start{};
-/** Deterministic RNG for weather changes; never touches the synced random state. */
-static uint32_t _rain_seed = 0;
+/** Persisted automatic weather state. */
+WeatherState _weather_state{};
+
 /** Start tick of the current shading step, for the gradual transitions. */
 static StateTicks _rain_shade_step_start{};
 
@@ -47,7 +44,7 @@ uint8_t RainShadeNom()
 
 uint32_t RainSeed()
 {
-	return _rain_seed;
+	return _weather_state.seed;
 }
 
 uint8_t RainShadeProgress()
@@ -55,10 +52,15 @@ uint8_t RainShadeProgress()
 	return _rain_shade_level * 255 / RAIN_SHADE_LEVELS;
 }
 
+void WeatherRestartShadeTransition()
+{
+	_rain_shade_step_start = _state_ticks;
+}
+
 static uint32_t RainNextRandom()
 {
-	_rain_seed = _rain_seed * 1103515245u + 12345u;
-	return _rain_seed >> 16;
+	_weather_state.seed = _weather_state.seed * 1103515245u + 12345u;
+	return _weather_state.seed >> 16;
 }
 
 /**
@@ -86,18 +88,18 @@ void WeatherTick()
 	if (_rain_forcing != RainForcing::Auto) return;
 	if (_settings_game.difficulty.rain) {
 		/* Seed once from the map seed, keeping all clients consistent. */
-		if (_rain_seed == 0) _rain_seed = _settings_game.game_creation.generation_seed | 1;
+		if (_weather_state.seed == 0) _weather_state.seed = _settings_game.game_creation.generation_seed | 1;
 
-		if (_state_ticks - _rain_period_start >= RAIN_PERIOD_TICKS) {
-			_rain_period_start = _state_ticks;
+		if (_state_ticks - StateTicks{_weather_state.period_start} >= RAIN_PERIOD_TICKS) {
+			_weather_state.period_start = _state_ticks.base();
 			/* Rain chance per period: 20% when clear, 50% chance to clear when raining. */
-			uint32_t chance = _rain_auto_raining ? 50 : 20;
+			uint32_t chance = _weather_state.auto_raining ? 50 : 20;
 			if ((RainNextRandom() % 100) < chance) {
-				_rain_auto_raining = !_rain_auto_raining;
+				_weather_state.auto_raining = !_weather_state.auto_raining;
 			}
 		}
 	} else {
-		_rain_auto_raining = false;
+		_weather_state.auto_raining = false;
 	}
 }
 
@@ -111,6 +113,6 @@ bool IsRainActive()
 	switch (_rain_forcing) {
 		case RainForcing::Raining: return true;
 		case RainForcing::Sunny: return false;
-		default: return _settings_game.difficulty.rain && _rain_auto_raining;
+		default: return _settings_game.difficulty.rain && _weather_state.auto_raining;
 	}
 }
