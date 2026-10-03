@@ -158,7 +158,8 @@ void InitializeGame(uint size_x, uint size_y, bool reset_date, bool reset_settin
 	_engine_seed = 0;
 	/* Reset the (cosmetic) weather; when loading a savegame the WTHR chunk
 	 * overwrites this with the persisted state right after. The seed is
-	 * re-derived lazily from the live map generation seed on the first tick. */
+	 * re-derived lazily from the live map generation seed on the first tick.
+	 * The rain cheat lives in _cheats and is reset with the other cheats. */
 	_weather_state = {};
 	_rain_shade_level = 0;
 	InitGRFGlobalVars();

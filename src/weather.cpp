@@ -12,12 +12,10 @@
 #include "openttd.h"
 #include "settings_type.h"
 #include "date_func.h"
+#include "cheat_type.h"
 #include "gfx_func.h"
 
 #include "safeguards.h"
-
-/** Weather forced by the sandbox cheat. */
-RainForcing _rain_forcing = RainForcing::Auto;
 
 /** Current world shading level; 0 = clear skies, RAIN_SHADE_LEVELS = fully darkened. */
 uint8_t _rain_shade_level = 0;
@@ -86,7 +84,7 @@ void WeatherTick()
 	 * visible (including while it fades in or out). */
 	if (_rain_shade_level != 0 || (IsRainActive() && _rain_shade_level != RAIN_SHADE_LEVELS)) MarkWholeScreenDirty();
 
-	if (_rain_forcing != RainForcing::Auto) return;
+	if (static_cast<RainForcing>(_cheats.rain_mode) != RainForcing::Auto) return;
 	if (_settings_game.difficulty.rain) {
 		/* Seed once from the map seed, keeping all clients consistent. */
 		if (_weather_state.seed == 0) _weather_state.seed = _settings_game.game_creation.generation_seed | 1;
@@ -111,7 +109,7 @@ void WeatherTick()
 bool IsRainActive()
 {
 	if (_game_mode == GameMode::Menu) return false;
-	switch (_rain_forcing) {
+	switch (static_cast<RainForcing>(_cheats.rain_mode)) {
 		case RainForcing::Raining: return true;
 		case RainForcing::Sunny: return false;
 		default: return _settings_game.difficulty.rain && _weather_state.auto_raining;

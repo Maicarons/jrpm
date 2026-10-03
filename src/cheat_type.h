@@ -33,6 +33,7 @@ struct Cheats {
 	Cheat inflation_income{}; ///< inflation income factor
 	Cheat town_rating{};      ///< 100% town local authority rating
 	Cheat rain{};             ///< force the (cosmetic) weather
+	uint8_t rain_mode = 0;    ///< RainForcing mode of the weather cheat (persisted with the savegame)
 };
 
 /** Available cheats. */

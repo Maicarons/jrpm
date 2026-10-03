@@ -29,8 +29,6 @@ struct WeatherState {
 
 extern WeatherState _weather_state;
 
-extern RainForcing _rain_forcing;
-
 /**
  * Current world shading level, 0 = clear skies (no shading) to RAIN_SHADE_LEVELS
  * (fully darkened). Changed gradually by WeatherTick; read when drawing viewports.

@@ -11,6 +11,7 @@
 
 #include "saveload.h"
 
+#include "../cheat_type.h"
 #include "../date_func.h"
 #include "../weather.h"
 
@@ -20,6 +21,9 @@ static const NamedSaveLoad _weather_desc[] = {
 	NSL("auto_raining", SLEG_VAR(_weather_state.auto_raining, SLE_BOOL)),
 	NSL("seed",         SLEG_VAR(_weather_state.seed, SLE_UINT32)),
 	NSL("period_start", SLEG_VAR(_weather_state.period_start, SLE_INT64)),
+	/* The forced-weather sandbox cheat, persisted like the other cheats. */
+	NSL("rain_mode",    SLEG_VAR(_cheats.rain_mode, SLE_UINT8)),
+	NSL("rain_used",    SLEG_VAR(_cheats.rain.been_used, SLE_BOOL)),
 };
 
 static void Save_WTHR()
