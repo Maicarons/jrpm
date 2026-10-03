@@ -4404,8 +4404,8 @@ static void ViewportDoDrawPhase3(Viewport *vp)
 			BlitterFactory::GetCurrentBlitter()->DarkenRect(dp.dst_ptr, dp.width, dp.height, RainShadeNom());
 		}
 		if (vp->zoom < ZoomLevel::DrawMap) {
-			/* Scrolling rain in front of the world. */
-			DrawRainOverlay(&dp);
+			/* Scrolling rain in front of the world; scales with the zoom level. */
+			DrawRainOverlay(vp->zoom, &dp);
 		}
 	}
 

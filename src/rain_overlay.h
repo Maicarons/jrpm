@@ -11,13 +11,15 @@
 #define RAIN_OVERLAY_H
 
 struct DrawPixelInfo;
+enum class ZoomLevel : uint8_t;
 
 /**
  * Draw the scrolling rain overlay over the given (screen-space) rectangle.
  * Uses deterministic hashing for all randomness, so it is stateless and
  * purely cosmetic; nothing here touches synchronised game state.
+ * @param zoom Viewport zoom level; the rain scales with it.
  * @param dpi Screen-space rectangle (as returned by ViewportDrawerDynamic::MakeDPIForText()).
  */
-void DrawRainOverlay(const DrawPixelInfo *dpi);
+void DrawRainOverlay(ZoomLevel zoom, const DrawPixelInfo *dpi);
 
 #endif /* RAIN_OVERLAY_H */
