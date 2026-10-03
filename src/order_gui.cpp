@@ -457,6 +457,9 @@ enum RVTransportWidgets : WidgetID {
 	WID_RVT_MIN_WAIT,         ///< Minimum waiting time criterion.
 	WID_RVT_SLOT_LABEL,       ///< Label of the trace restrict slot criterion.
 	WID_RVT_SLOT,             ///< Trace restrict slot criterion.
+	WID_RVT_SLOT_VTYPE_PREV,  ///< Switch the slot dropdown to the previous vehicle type.
+	WID_RVT_SLOT_VTYPE,       ///< Vehicle type whose slots the slot dropdown shows.
+	WID_RVT_SLOT_VTYPE_NEXT,  ///< Switch the slot dropdown to the next vehicle type.
 	WID_RVT_MAX_LABEL,        ///< Label of the per-visit load limit.
 	WID_RVT_MAX,              ///< Per-visit load limit (how many road vehicles are taken at once).
 	WID_RVT_CLOSE,            ///< Close button.
@@ -475,8 +478,11 @@ static const int RVTC_SLOT_ANY = 0xFFFE;
 /** Waiting times which the "minimum waiting time" criterion offers (in days). */
 static const uint16_t _rv_transport_min_wait_presets[] = { 0, 1, 2, 5, 10, 30, 60 };
 
-/** Numbers of road vehicles the per-visit load limit offers (0 = no limit). */
-static const uint8_t _rv_transport_max_presets[] = { 0, 1, 2, 3, 5, 10 };
+	/** Numbers of road vehicles the per-visit load limit offers (0 = no limit). */
+	static const uint8_t _rv_transport_max_presets[] = { 0, 1, 2, 3, 5, 10 };
+
+/** Vehicle types the trace restrict slot selector cycles through. */
+static const VehicleType _rv_transport_slot_types[] = { VehicleType::Road, VehicleType::Train };
 
 /**
  * Complete text of the load state criterion for a button: a widget string can only be a plain
@@ -558,6 +564,35 @@ private:
 
 	SettingsSnapshot last_settings{}; ///< Settings the widgets currently show.
 
+	VehicleType slot_veh_type = VehicleType::Road; ///< Vehicle type whose slots the slot dropdown shows (train / road vehicle).
+
+	/** Cycle the slot dropdown's vehicle type by the given step (either direction wraps). */
+	void CycleSlotVehType(int step)
+	{
+		const size_t count = lengthof(_rv_transport_slot_types);
+		size_t cur = 0;
+		for (size_t i = 0; i < count; ++i) {
+			if (_rv_transport_slot_types[i] == this->slot_veh_type) cur = i;
+		}
+		const VehicleType new_type = _rv_transport_slot_types[(cur + count + step % (int)count) % count];
+		if (new_type == this->slot_veh_type) return;
+		this->slot_veh_type = new_type;
+		/* The selected slot belongs to the previous type, so clear the criterion. */
+		this->ModifyOrder(MOF_RV_SLOT, uint16_t{0});
+		this->UpdateWidgetTexts();
+		this->SetDirty();
+	}
+
+	/** Derive the slot dropdown's vehicle type from the order's currently selected slot. */
+	void UpdateSlotVehTypeFromOrder()
+	{
+		const uint16_t slot_raw = this->order->GetRVTransportSlot();
+		if (slot_raw != 0) {
+			const TraceRestrictSlot *slot = TraceRestrictSlot::GetIfValid(TraceRestrictSlotID{static_cast<uint16_t>(slot_raw - 1)});
+			if (slot != nullptr) this->slot_veh_type = slot->vehicle_type;
+		}
+	}
+
 	/** Read the settings which the widgets should show. */
 	SettingsSnapshot GetSettings() const
 	{
@@ -601,8 +636,28 @@ private:
 			/* A widget string cannot carry a parameter, so a deleted slot is shown as "any" as well. */
 			this->GetWidget<NWidgetCore>(WID_RVT_SLOT)->SetString((slot != nullptr) ? STR_RV_TRANSPORT_CRITERIA_SLOT_SET : STR_ORDER_RV_LOAD_STATE_ANY);
 		}
+		/* Which vehicle type's slots the slot dropdown shows. */
+		this->GetWidget<NWidgetCore>(WID_RVT_SLOT_VTYPE)->SetString(this->slot_veh_type == VehicleType::Train ?
+				STR_RV_TRANSPORT_CRITERIA_SLOT_TRAIN : STR_RV_TRANSPORT_CRITERIA_SLOT_ROAD);
 
 		this->GetWidget<NWidgetCore>(WID_RVT_MAX)->SetString(RVTransportMaxLoadText(this->order->GetRVTransportMax()));
+	}
+
+	/**
+	 * Show the name of the selected trace restrict slot on the slot dropdown. The widget string
+	 * mechanism is bypassed because the text carries the slot's name as a parameter.
+	 */
+	std::string GetWidgetString(WidgetID widget, StringID stringid) const override
+	{
+		if (widget == WID_RVT_SLOT) {
+			const uint16_t slot_raw = this->order->GetRVTransportSlot();
+			if (slot_raw != 0) {
+				const TraceRestrictSlot *slot = TraceRestrictSlot::GetIfValid(TraceRestrictSlotID{static_cast<uint16_t>(slot_raw - 1)});
+				if (slot != nullptr) return slot->name;
+			}
+			return GetString(STR_ORDER_RV_LOAD_STATE_ANY);
+		}
+		return Window::GetWidgetString(widget, stringid);
 	}
 
 	/** Is the edited order still there? */
@@ -703,7 +758,7 @@ private:
 		const TraceRestrictSlotID slot_id = (current == 0) ? TraceRestrictSlotID{} : TraceRestrictSlotID{static_cast<uint16_t>(current - 1)};
 
 		int selected;
-		DropDownList slots = GetSlotDropDownList(this->vehicle->owner, slot_id, selected, VehicleType::Road, false);
+		DropDownList slots = GetSlotDropDownList(this->vehicle->owner, slot_id, selected, this->slot_veh_type, false);
 
 		DropDownList list;
 		list.push_back(MakeDropDownListCheckedItem(current == 0, STR_ORDER_RV_LOAD_STATE_ANY, RVTC_SLOT_ANY));
@@ -726,6 +781,8 @@ public:
 		this->order = v->GetOrder(order_id);
 
 		this->CreateNestedTree();
+		/* Show the type of the selected slot (train / road vehicle) on the slot type selector. */
+		this->UpdateSlotVehTypeFromOrder();
 		/* Set the widget texts before the layout is computed, so that the dropdowns are sized to fit
 		 * their current value (there is no fixed minimum width for them). */
 		this->UpdateWidgetTexts();
@@ -788,6 +845,16 @@ public:
 				ShowDropDownList(this, this->BuildSlotList(),
 						(this->order->GetRVTransportSlot() == 0) ? RVTC_SLOT_ANY : static_cast<int>(this->order->GetRVTransportSlot() - 1),
 						WID_RVT_SLOT, 0);
+				return;
+
+			case WID_RVT_SLOT_VTYPE_PREV:
+				this->CycleSlotVehType(-1);
+				return;
+			case WID_RVT_SLOT_VTYPE_NEXT:
+				this->CycleSlotVehType(1);
+				return;
+			case WID_RVT_SLOT_VTYPE:
+				this->CycleSlotVehType(1);
 				return;
 			case WID_RVT_MAX:
 				ShowDropDownList(this, this->BuildMaxList(), -1, WID_RVT_MAX, 0);
@@ -909,6 +976,9 @@ static constexpr NWidgetPart _nested_rv_transport_widgets[] = {
 		NWidget(NWID_HORIZONTAL),
 			NWidget(WWT_TEXT, Colours::Invalid, WID_RVT_SLOT_LABEL), SetFill(1, 0), SetResize(1, 0), SetStringTip(STR_RV_TRANSPORT_CRITERIA_SLOT, STR_NULL),
 			NWidget(WWT_DROPDOWN, Colours::Grey, WID_RVT_SLOT), SetFill(0, 0), SetResize(0, 0),
+			NWidget(WWT_PUSHARROWBTN, Colours::Grey, WID_RVT_SLOT_VTYPE_PREV), SetMinimalSize(12, 0), SetArrowWidgetTypeTip(ArrowWidgetType::Left, STR_RV_TRANSPORT_CRITERIA_SLOT_TYPE_TIP),
+			NWidget(WWT_PUSHTXTBTN, Colours::Grey, WID_RVT_SLOT_VTYPE), SetMinimalSize(40, 0), SetStringTip(STR_RV_TRANSPORT_CRITERIA_SLOT_ROAD, STR_RV_TRANSPORT_CRITERIA_SLOT_TYPE_TIP),
+			NWidget(WWT_PUSHARROWBTN, Colours::Grey, WID_RVT_SLOT_VTYPE_NEXT), SetMinimalSize(12, 0), SetArrowWidgetTypeTip(ArrowWidgetType::Right, STR_RV_TRANSPORT_CRITERIA_SLOT_TYPE_TIP),
 		EndContainer(),
 		NWidget(NWID_HORIZONTAL),
 			NWidget(WWT_TEXT, Colours::Invalid, WID_RVT_MAX_LABEL), SetFill(1, 0), SetResize(1, 0), SetStringTip(STR_RV_TRANSPORT_CRITERIA_MAX, STR_NULL),

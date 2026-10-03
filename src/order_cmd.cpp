@@ -3071,13 +3071,10 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 			break;
 
 		case MOF_RV_SLOT: {
-			/* RoRo selection criterion: trace restrict slot the candidate must hold (slot id + 1, 0 = any). */
+			/* RoRo selection criterion: trace restrict slot the candidate must hold (slot id + 1, 0 = any).
+			 * Any slot type is accepted: the occupant check is vehicle type agnostic. */
 			if (!order->IsType(OT_GOTO_STATION)) return CommandCost(STR_ERROR_RV_TRANSPORT_STATION_ORDER_ONLY);
-			if (data != 0) {
-				/* Only a road vehicle slot can be held by a road vehicle candidate. */
-				const TraceRestrictSlot *slot = TraceRestrictSlot::GetIfValid(TraceRestrictSlotID{static_cast<uint16_t>(data - 1)});
-				if (slot == nullptr || slot->vehicle_type != VehicleType::Road) return CMD_ERROR;
-			}
+			if (data != 0 && TraceRestrictSlot::GetIfValid(TraceRestrictSlotID{static_cast<uint16_t>(data - 1)}) == nullptr) return CMD_ERROR;
 			break;
 		}
 
