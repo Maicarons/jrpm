@@ -55,7 +55,7 @@ uint8_t RainShadeProgress();
 void WeatherTick();
 bool IsRainActive();
 
-/** Restart the shading transition timer, e.g. after loading a savegame. */
-void WeatherRestartShadeTransition();
+/** Jump the shading level instantly to the current weather's target (e.g. after loading a savegame). */
+void WeatherSnapShade();
 
 #endif /* WEATHER_H */

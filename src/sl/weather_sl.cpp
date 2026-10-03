@@ -35,9 +35,8 @@ static void Load_WTHR()
 	}
 	SlLoadTableObjectChunk(_weather_desc);
 
-	/* Restart the shading transition from the current level, so the fade
-	 * continues smoothly towards the loaded weather instead of jumping. */
-	WeatherRestartShadeTransition();
+	/* Jump the shading straight to the loaded weather, without a fade. */
+	WeatherSnapShade();
 }
 
 extern const ChunkHandler weather_chunk_handlers[] = {

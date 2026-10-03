@@ -52,8 +52,9 @@ uint8_t RainShadeProgress()
 	return _rain_shade_level * 255 / RAIN_SHADE_LEVELS;
 }
 
-void WeatherRestartShadeTransition()
+void WeatherSnapShade()
 {
+	_rain_shade_level = IsRainActive() ? RAIN_SHADE_LEVELS : 0;
 	_rain_shade_step_start = _state_ticks;
 }
 
