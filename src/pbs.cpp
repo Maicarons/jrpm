@@ -9,6 +9,7 @@
 
 #include "stdafx.h"
 #include <deque>
+#include <queue>
 #include "debug.h"
 #include "viewport_func.h"
 #include "vehicle_func.h"
@@ -1704,27 +1705,37 @@ bool IsCoupleApproachPathClearTo(const Train *v, const Train *tgt)
 		return false;
 	}
 
-	btree::btree_set<TileIndex> visited;
-	std::vector<CoupleApproachEntry> todo;
-	visited.insert(moving_front->tile);
-	visited.insert(moving_back->tile);
+	/* Visited (tile, trackdir) pairs, not bare tiles: a tile whose track is
+	 * occupied by a foreign consist may still be passable on a parallel track
+	 * of the same tile. */
+	btree::btree_set<uint64_t> visited;
+	auto visit_key = [](TileIndex t, Trackdir td) {
+		return ((uint64_t)t.base() << 8) | (uint8_t)td;
+	};
+	/* Best-first: explore the branch nearest the partner first. Every branch is
+	 * still explored eventually (a couple may require a detour), so the search
+	 * stays complete; the ordering only makes sure the budget is spent around
+	 * the straight route before it is spent far away. */
+	auto entry_greater = [](const CoupleApproachEntry &a, const CoupleApproachEntry &b) {
+		return a.dist > b.dist;
+	};
+	std::priority_queue<CoupleApproachEntry, std::vector<CoupleApproachEntry>, decltype(entry_greater)> todo(entry_greater);
+	visited.insert(visit_key(moving_front->tile, front_td));
+	visited.insert(visit_key(moving_back->tile, back_td));
 	if (front_td != INVALID_TRACKDIR) {
-		todo.push_back({moving_front->tile, front_td, DistanceManhattan(moving_front->tile, tgt->tile)});
+		todo.push({moving_front->tile, front_td, DistanceManhattan(moving_front->tile, tgt->tile)});
 	}
 	if (back_td != INVALID_TRACKDIR) {
-		todo.push_back({moving_back->tile, back_td, DistanceManhattan(moving_back->tile, tgt->tile)});
+		todo.push({moving_back->tile, back_td, DistanceManhattan(moving_back->tile, tgt->tile)});
 	}
 
 	CFollowTrackRail ft(v, v->GetIndirectCompatibleRailTypes());
 	while (!todo.empty()) {
-		CoupleApproachEntry e = todo.back();
-		todo.pop_back();
+		CoupleApproachEntry e = todo.top();
+		todo.pop();
 
 		if (!ft.Follow(e.tile, e.td)) continue;
 		if (!IsValidTile(ft.new_tile) || IsRailDepotTile(ft.new_tile)) continue;
-		if (visited.find(ft.new_tile) != visited.end()) continue;
-		if (visited.size() >= COUPLE_APPROACH_BUDGET) break;
-		visited.insert(ft.new_tile);
 
 		/* The follower jumps whole station platforms in one step and lands past them, so a
 		 * partner standing on one is stepped over and never seen. Look at every tile the step
@@ -1747,12 +1758,20 @@ bool IsCoupleApproachPathClearTo(const Train *v, const Train *tgt)
 			if (partner_on(t)) { reached = true; break; }
 		}
 		if (reached) return true;
-		if (blocked) continue;
+		if (blocked) {
+			/* A blocked branch is a dead end, not a tile we explored: it must
+			 * not consume budget, and the tile itself stays visitable via any
+			 * other track that reaches it. */
+			continue;
+		}
 
-		uint dist = DistanceManhattan(ft.new_tile, tgt->tile);
 		TrackdirBits tdb = ft.new_td_bits & DiagdirReachesTrackdirs(ft.exitdir);
+		uint dist = DistanceManhattan(ft.new_tile, tgt->tile);
 		for (Trackdir ntd : SetTrackdirBitIterator(tdb)) {
-			todo.push_back({ft.new_tile, ntd, dist});
+			if (visited.size() >= COUPLE_APPROACH_BUDGET && visited.find(visit_key(ft.new_tile, ntd)) == visited.end()) break;
+			auto res = visited.insert(visit_key(ft.new_tile, ntd));
+			if (!res.second) continue;
+			todo.push({ft.new_tile, ntd, dist});
 		}
 	}
 
