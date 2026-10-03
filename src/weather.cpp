@@ -45,6 +45,16 @@ uint8_t RainShadeNom()
 	return _rain_shade_level == 0 ? 256 : RAIN_SHADE_NOMS[_rain_shade_level - 1];
 }
 
+uint32_t RainSeed()
+{
+	return _rain_seed;
+}
+
+uint8_t RainShadeProgress()
+{
+	return _rain_shade_level * 255 / RAIN_SHADE_LEVELS;
+}
+
 static uint32_t RainNextRandom()
 {
 	_rain_seed = _rain_seed * 1103515245u + 12345u;
@@ -68,6 +78,10 @@ void WeatherTick()
 			MarkWholeScreenDirty();
 		}
 	}
+
+	/* The rain overlay animates, so keep the screen redrawn while rain is
+	 * visible (including while it fades in or out). */
+	if (_rain_shade_level != 0 || (IsRainActive() && _rain_shade_level != RAIN_SHADE_LEVELS)) MarkWholeScreenDirty();
 
 	if (_rain_forcing != RainForcing::Auto) return;
 	if (_settings_game.difficulty.rain) {

@@ -31,6 +31,15 @@ extern uint8_t _rain_shade_level;
  */
 uint8_t RainShadeNom();
 
+/** Seed used by the (local, cosmetic) weather randomness. */
+uint32_t RainSeed();
+
+/**
+ * Fade progress of the rain visuals, 0 (no rain) to 255 (fully raining).
+ * Follows _rain_shade_level, so the overlay fades in/out with the shading.
+ */
+uint8_t RainShadeProgress();
+
 void WeatherTick();
 bool IsRainActive();
 
