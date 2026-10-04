@@ -32,6 +32,7 @@
 #include "pathfinder/yapf/yapf_cache.h"
 #include "sound_func.h"
 #include "station_func.h"
+#include "station_base.h"
 #include "station_kdtree.h"
 #include "strings_func.h"
 #include "town.h"
@@ -162,6 +163,25 @@ uint16_t GetAirportNoiseLevelForDistance(uint noise_level, uint distance)
 }
 
 extern uint RotatedAirportSpecPosition(const TileIndex tile, const TileArea tile_area, const DiagDirection rotation);
+
+/**
+ * Recount the company's airport infrastructure as the number of stations with
+ * an airport facility, matching the authoritative recalculation in
+ * AfterLoadCompanyStats(). Custom airport commands add or remove many tiles
+ * per command and may create or delete the airport facility, so maintaining
+ * the counter per tile drifts from the recalculation semantics; the value
+ * feeds the state checksum, so a drift desyncs any client that loads the map.
+ */
+static void RecountAirportInfrastructure(Owner owner)
+{
+	Company *c = Company::GetIfValid(owner);
+	if (c == nullptr) return;
+	uint count = 0;
+	for (const Station *s : Station::Iterate()) {
+		if (s->owner == owner && s->facilities.Test(StationFacility::Airport)) count++;
+	}
+	c->infrastructure.airport = count;
+}
 
 CommandCost AddAirportTileTableToBitmapTileArea(const AirportTileLayout &atl, BitmapTileArea *bta, DiagDirection rotation, uint cost_multiplier)
 {
@@ -1050,9 +1070,7 @@ CommandCost CmdChangeAirType(DoCommandFlags flags, TileIndex tile, AirType air_t
 	_price[Price::BuildStationAirport] * GetAirTypeInfo(air_type)->cost_multiplier) * tiles);
 
 	if (flags.Test(DoCommandFlag::Execute)) {
-		Company *c = Company::Get(st->owner);
-		c->infrastructure.airport += tiles;
-		c->infrastructure.airport -= tiles;
+		RecountAirportInfrastructure(st->owner);
 
 		st->airport.air_type = air_type;
 		st->UpdateAirportDataStructure();
@@ -1349,9 +1367,7 @@ CommandCost RemoveAirportTiles(DoCommandFlags flags, TileIndex start_tile, TileI
 		if (flags.Test(DoCommandFlag::Execute)) {
 			ClearAirportTileToWater(tile, st);
 
-			Company *c = Company::Get(st->owner);
-			c->infrastructure.airport--;
-			c->infrastructure.station--;
+			RecountAirportInfrastructure(st->owner);
 			DeleteNewGRFInspectWindow(GrfSpecFeature::AirportTiles, tile.base());
 			DeleteNewGRFInspectWindow(GrfSpecFeature::AirTypes, tile.base());
 
@@ -1622,12 +1638,12 @@ CommandCost CmdAddRemoveAirportTiles(DoCommandFlags flags, TileIndex start_tile,
 			SetAirGfxType(tile, true);
 			SetAirportGroundAndDensity(tile, AG_AIRTYPE, 0);
 
-			c->infrastructure.airport++;
-			c->infrastructure.station++;
 			DirtyCompanyInfrastructureWindows(c->index);
 			MarkTileDirtyByTile(tile);
 		}
 	}
+
+	if (flags.Test(DoCommandFlag::Execute)) RecountAirportInfrastructure(st->owner);
 
 	if (!tile_changed) return CMD_ERROR;
 
@@ -1755,11 +1771,9 @@ CommandCost CmdBuildAirport(DoCommandFlags flags, TileIndex tile, uint8_t airpor
 
 		st->rect.BeforeAddRect(tile, w, h, StationRect::ADD_TRY);
 
-		uint tiles = 0;
 		for (TileIndex t : new_airport_tiles) {
 			uint pos = RotatedAirportSpecPosition(t, new_airport_tiles, rotation);
 			if (as->layouts[layout].tiles[pos].type == ATT_INVALID) continue; // does not belong to new airport tiles.
-			tiles++;
 			WaterClass wc = HasTileWaterClass(t) ? GetWaterClass(t) : WaterClass::Invalid;
 			MakeAirport(t, st->owner, st->index, 0, wc);
 			SetStationTileRandomBits(t, GB(Random(), 0, 4));
@@ -1802,9 +1816,7 @@ CommandCost CmdBuildAirport(DoCommandFlags flags, TileIndex tile, uint8_t airpor
 			TriggerAirportTileAnimation(st, t, AirportAnimationTrigger::Built);
 		}
 
-		Company *c = Company::Get(st->owner);
-		c->infrastructure.airport += tiles;
-		c->infrastructure.station += tiles;
+		RecountAirportInfrastructure(st->owner);
 
 		st->AfterStationTileSetChange(true, StationType::Airport);
 		InvalidateWindowData(WindowClass::StationView, st->index, -1);
@@ -1868,9 +1880,6 @@ CommandCost RemoveAirport(TileIndex tile, DoCommandFlags flags)
 		tiles++;
 
 		if (flags.Test(DoCommandFlag::Execute)) {
-			Company *c = Company::Get(st->owner);
-			c->infrastructure.airport--;
-			c->infrastructure.station--;
 			DeleteAnimatedTile(tile_cur);
 			ClearAirportTileToWater(tile_cur, st);
 			DeleteNewGRFInspectWindow(GrfSpecFeature::AirportTiles, tile_cur.base());
@@ -1890,6 +1899,8 @@ CommandCost RemoveAirport(TileIndex tile, DoCommandFlags flags)
 		st->UpdateAirportDataStructure();
 		st->airport.Clear();
 		st->facilities.Reset(StationFacility::Airport);
+
+		RecountAirportInfrastructure(st->owner);
 
 		InvalidateWindowData(WindowClass::StationView, st->index, -1);
 
