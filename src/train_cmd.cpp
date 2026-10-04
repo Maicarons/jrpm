@@ -5801,11 +5801,15 @@ static bool IsPlatformAheadOccupied(const Train *consist)
 			if (u->Primary() == consist->Primary()) continue;
 			if (IsCouplePartnerOf(consist, u)) continue;
 			/* The partner of a just-performed decouple necessarily shares the tile
-			 * around the cut with us; it does not stand in our way. JustDecoupled
+			 * around the cut with us; it does not stand in our way. Restrict the
+			 * exemption to that cut tile: once we have turned around to follow the
+			 * partner's direction, the partner still leaving the station stands
+			 * ahead of us on the platform and very much blocks us, and a blanket
+			 * exemption let us reserve a path straight into its tail. JustDecoupled
 			 * is only kept while the part is still in the station it decoupled
 			 * at, so this exemption cannot hide a consist we later meet on the
 			 * same platform after having left and returned. */
-			if (u->Primary()->flags.Test(VehicleRailFlag::JustDecoupled)) continue;
+			if (u->Primary()->flags.Test(VehicleRailFlag::JustDecoupled) && tile == moving_front->tile) continue;
 			return true;
 		}
 	}
