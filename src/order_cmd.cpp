@@ -2953,7 +2953,8 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 				break;
 
 			case OT_DECOUPLE:
-				if (mof != MOF_FIRST_ORDERS && mof != MOF_SECOND_ORDERS && mof != MOF_DECOUPLE_VALUE && mof != MOF_DECOUPLE_FIRST_SCHEDULE && mof != MOF_DECOUPLE_SECOND_SCHEDULE && mof != MOF_DECOUPLE_FIRST_LOAD_SCHEDULE && mof != MOF_DECOUPLE_SECOND_LOAD_SCHEDULE) return CMD_ERROR;
+				if (mof != MOF_FIRST_ORDERS && mof != MOF_SECOND_ORDERS && mof != MOF_DECOUPLE_VALUE && mof != MOF_DECOUPLE_FIRST_SCHEDULE && mof != MOF_DECOUPLE_SECOND_SCHEDULE && mof != MOF_DECOUPLE_FIRST_LOAD_SCHEDULE && mof != MOF_DECOUPLE_SECOND_LOAD_SCHEDULE
+						&& mof != MOF_DECOUPLE_FIRST_SAME_DIR && mof != MOF_DECOUPLE_SECOND_SAME_DIR) return CMD_ERROR;
 				break;
 
 			case OT_SLOT:
@@ -3315,6 +3316,13 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 			if (!target->IsVisibleToCompany(target_owner)) return CMD_ERROR;
 			break;
 		}
+
+		case MOF_DECOUPLE_FIRST_SAME_DIR:
+		case MOF_DECOUPLE_SECOND_SAME_DIR:
+			if (!is_list && v->type != VehicleType::Train) return CMD_ERROR;
+			if (order->GetType() != OT_DECOUPLE) return CMD_ERROR;
+			if (data > 1) return CMD_ERROR;
+			break;
 
 		case MOF_DECOUPLE:
 			if (!is_list && v->type != VehicleType::Train) return CMD_ERROR;
@@ -3797,6 +3805,18 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 
 			case MOF_SECOND_ORDERS:
 				order->SetDecoupleSecondOrdersType((OrderDecoupleOrdersFlags)data);
+				break;
+
+			case MOF_DECOUPLE_FIRST_SAME_DIR:
+				order->SetDecoupleFirstSameDirExit(data != 0);
+				/* At most one part may be allowed a same-direction exit, otherwise
+				 * both parts could wait for each other forever. */
+				if (data != 0) order->SetDecoupleSecondSameDirExit(false);
+				break;
+
+			case MOF_DECOUPLE_SECOND_SAME_DIR:
+				order->SetDecoupleSecondSameDirExit(data != 0);
+				if (data != 0) order->SetDecoupleFirstSameDirExit(false);
 				break;
 
 			case MOF_DECOUPLE_FIRST_SCHEDULE:

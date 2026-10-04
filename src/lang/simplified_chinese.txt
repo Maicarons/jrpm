@@ -5027,6 +5027,9 @@ STR_ORDER_DECOUPLE_LOAD_AND_WAIT                                :（装卸并等
 STR_ORDER_DECOUPLE_WAIT_FOR_COUPLE                              :（等待连接不装卸）
 STR_ORDER_DECOUPLE_LOAD_AND_SCHEDULE                            :（装卸并使用调度计划 {STRING}）
 STR_ORDER_DECOUPLE_USE_SCHEDULE                                 :（使用调度计划 {STRING}）
+STR_ORDER_DECOUPLE_SAME_DIR_EXIT                                :允许等待另一部分离开后同向离开
+STR_ORDER_DECOUPLE_SAME_DIR_FIRST                               :（第一部分可同向离开）
+STR_ORDER_DECOUPLE_SAME_DIR_SECOND                              :（第二部分可同向离开）
 STR_COUPLE_DIAGNOSTIC_BUTTON                                   :{BLACK}诊断
 STR_COUPLE_DIAGNOSTIC_TOOLTIP                                  :{BLACK}显示当前接挂目标、预约关系和候选排除原因
 STR_COUPLE_DIAGNOSTIC_CAPTION                                  :{WHITE}接挂诊断

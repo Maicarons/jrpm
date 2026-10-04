@@ -7592,6 +7592,16 @@ static void TrainEnterStation(Train *consist, StationID station)
 	Train *u = nullptr;
 	uint8_t load_trains = DECOUPLE_NO_LOAD;
 	bool want_decouple = consist->current_order.GetDestination() == station && consist->current_order.GetDecouple() == ODF_DECOUPLE;
+	/* Which parts may leave the station in the same direction as the other
+	 * part. For such a part the JustDecoupled flag below is withheld, so the
+	 * normal departure reverse check can turn it back around once its natural
+	 * side is blocked; waiting for the other part to leave is handled by path
+	 * reservation. Both set would let the parts wait for each other forever,
+	 * so treat that as neither set (the command layer prevents it anyway). */
+	const Order *decouple_flags_order = want_decouple ? consist->GetOrder(consist->cur_implicit_order_index + 1) : nullptr;
+	bool first_same_dir = decouple_flags_order != nullptr && decouple_flags_order->IsType(OT_DECOUPLE) && decouple_flags_order->GetDecoupleFirstSameDirExit();
+	bool second_same_dir = decouple_flags_order != nullptr && decouple_flags_order->IsType(OT_DECOUPLE) && decouple_flags_order->GetDecoupleSecondSameDirExit();
+	if (first_same_dir && second_same_dir) first_same_dir = second_same_dir = false;
 	if (want_decouple) {
 		/* Stopping at a via station leaves an OT_IMPLICIT marker at the implicit index (see the
 		 * implicit-order handling in #HandleLoading), so that index can point at the marker while
@@ -7644,8 +7654,8 @@ static void TrainEnterStation(Train *consist, StationID station)
 		 * decoupled at must not long-reserve (see IsReservationLookAheadLongEnough),
 		 * otherwise the reversal makes it hold the block past the station, on the
 		 * side the train arrived from. */
-		consist->flags.Set(VehicleRailFlag::JustDecoupled);
-		if (decoupled) u->flags.Set(VehicleRailFlag::JustDecoupled);
+		if (!first_same_dir) consist->flags.Set(VehicleRailFlag::JustDecoupled);
+		if (decoupled && !second_same_dir) u->flags.Set(VehicleRailFlag::JustDecoupled);
 		if (trailer == consist) {
 			if (decoupled) ReverseTrainDirection(consist, true);
 			consist = consist->Primary();
@@ -7675,6 +7685,16 @@ static void TrainEnterStation(Train *consist, StationID station)
 		consist->last_station_visited = station;
 		u->last_station_visited = station;
 		if (u != nullptr) {
+		}
+		/* A part allowed a same-direction exit carries no JustDecoupled flag, but
+		 * a part that does not load never passes the OT_LEAVESTATION departure
+		 * handling where the usual reverse check lives, so it would drive off in
+		 * its forced-reversed orientation without ever reconsidering. Give such a
+		 * part the usual chance to reverse in the station right away; loading
+		 * parts get the same check again when they depart. */
+		if (decoupled) {
+			if (!consist->flags.Test(VehicleRailFlag::JustDecoupled) && CheckReverseTrain(consist)) consist->flags.Set(VehicleRailFlag::Reversing);
+			if (!u->flags.Test(VehicleRailFlag::JustDecoupled) && CheckReverseTrain(u)) u->flags.Set(VehicleRailFlag::Reversing);
 		}
 		if (u == consist && consist->owner == _local_company) {
 			AddVehicleAdviceNewsItem(AdviceType::Order, GetEncodedString(STR_NEWS_ORDER_DECOUPLE_FAILED_REASON, consist->index, decouple_failure_reason), consist->index);

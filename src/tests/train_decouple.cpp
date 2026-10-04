@@ -170,3 +170,34 @@ TEST_CASE_METHOD(TrainDecoupleFixture, "Couple - callback trial restores both co
 		CHECK(random_checker.Check());
 	}
 }
+
+TEST_CASE("Decouple - same-direction exit bits")
+{
+	Order order;
+	order.MakeDecouple();
+
+	CHECK(!order.GetDecoupleFirstSameDirExit());
+	CHECK(!order.GetDecoupleSecondSameDirExit());
+
+	order.SetDecoupleFirstSameDirExit(true);
+	CHECK(order.GetDecoupleFirstSameDirExit());
+	CHECK(!order.GetDecoupleSecondSameDirExit());
+
+	order.SetDecoupleSecondSameDirExit(true);
+	CHECK(order.GetDecoupleFirstSameDirExit());
+	CHECK(order.GetDecoupleSecondSameDirExit());
+
+	order.SetDecoupleFirstSameDirExit(false);
+	CHECK(!order.GetDecoupleFirstSameDirExit());
+	CHECK(order.GetDecoupleSecondSameDirExit());
+
+	/* The bits must not collide with the schedule IDs sharing xdata. */
+	order.SetDecoupleFirstScheduleID(OrderListID{1234});
+	order.SetDecoupleSecondScheduleID(OrderListID{5678});
+	CHECK(order.GetDecoupleFirstScheduleID() == OrderListID{1234});
+	CHECK(order.GetDecoupleSecondScheduleID() == OrderListID{5678});
+	CHECK(order.GetDecoupleSecondSameDirExit());
+	order.SetDecoupleFirstSameDirExit(true);
+	CHECK(order.GetDecoupleFirstScheduleID() == OrderListID{1234});
+	CHECK(order.GetDecoupleSecondScheduleID() == OrderListID{5678});
+}

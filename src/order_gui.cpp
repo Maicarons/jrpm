@@ -1191,6 +1191,7 @@ enum OrderDropDownID {
 	ODDI_LABEL_DEPARTURES_VIA,
 	ODDI_WAIT_FOR_COUPLE,
 	ODDI_GO_TO_COUPLE,
+	ODDI_DECOUPLE_SAME_DIR,
 };
 
 static const StringID _order_couple_load_drowdown[] = {
@@ -2213,6 +2214,9 @@ void DrawOrderString(const Vehicle *v, const Order *order, int order_index, int 
 			AppendStringInPlace(line, num_d == 0 ? STR_ORDER_DECOUPLE_DETAILS_AUTO : STR_ORDER_DECOUPLE_DETAILS, num_d,
 					decouple_orders_str(order->GetDecoupleFirstOrdersType(), order->GetDecoupleFirstScheduleID()),
 					decouple_orders_str(order->GetDecoupleSecondOrdersType(), order->GetDecoupleSecondScheduleID()));
+			/* The same-direction exit is exclusive between the parts, so at most one suffix applies. */
+			if (order->GetDecoupleFirstSameDirExit()) AppendStringInPlace(line, STR_ORDER_DECOUPLE_SAME_DIR_FIRST);
+			if (order->GetDecoupleSecondSameDirExit()) AppendStringInPlace(line, STR_ORDER_DECOUPLE_SAME_DIR_SECOND);
 			break;
 		}
 
@@ -5428,7 +5432,21 @@ public:
 					OrderDecoupleOrdersFlags flag = (widget == WID_O_ORDERS_FIRST) ? order->GetDecoupleFirstOrdersType() : order->GetDecoupleSecondOrdersType();
 					selected = DecoupleOrdersDropdownIndex(flag);
 				}
-				ShowDropDownMenu(this, _order_decouple_orders_drowdown, selected, widget, 0, 0);
+				bool first = widget == WID_O_ORDERS_FIRST;
+				DropDownList list;
+				for (uint i = 0; i < lengthof(_order_decouple_orders_drowdown); i++) {
+					list.push_back(MakeDropDownListCheckedItem(i == selected, _order_decouple_orders_drowdown[i], i, false));
+				}
+				if (order != nullptr && order->IsType(OT_DECOUPLE)) {
+					/* Same-direction exit is exclusive between the two parts: the item is
+					 * disabled while the other part holds it, so both can never wait for
+					 * each other to leave. */
+					bool enabled = first ? !order->GetDecoupleSecondSameDirExit() : !order->GetDecoupleFirstSameDirExit();
+					bool checked = first ? order->GetDecoupleFirstSameDirExit() : order->GetDecoupleSecondSameDirExit();
+					list.push_back(MakeDropDownListDividerItem());
+					list.push_back(MakeDropDownListCheckedItem(checked, STR_ORDER_DECOUPLE_SAME_DIR_EXIT, ODDI_DECOUPLE_SAME_DIR, !enabled));
+				}
+				ShowDropDownList(this, std::move(list), selected, widget);
 				break;
 			}
 		}
@@ -5639,10 +5657,20 @@ public:
 				break;
 
 			case WID_O_ORDERS_FIRST:
+				if (index == ODDI_DECOUPLE_SAME_DIR) {
+					const Order *o = OrderAt(this->OrderGetSel());
+					if (o != nullptr && o->IsType(OT_DECOUPLE)) this->ModifyOrder(this->OrderGetSel(), MOF_DECOUPLE_FIRST_SAME_DIR, o->GetDecoupleFirstSameDirExit() ? 0 : 1);
+					break;
+				}
 				this->OrderClick_OrdersFirst(index);
 				break;
 
 			case WID_O_ORDERS_SECOND:
+				if (index == ODDI_DECOUPLE_SAME_DIR) {
+					const Order *o = OrderAt(this->OrderGetSel());
+					if (o != nullptr && o->IsType(OT_DECOUPLE)) this->ModifyOrder(this->OrderGetSel(), MOF_DECOUPLE_SECOND_SAME_DIR, o->GetDecoupleSecondSameDirExit() ? 0 : 1);
+					break;
+				}
 				this->OrderClick_OrdersSecond(index);
 				break;
 

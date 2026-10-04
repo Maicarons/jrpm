@@ -363,6 +363,8 @@ enum ModifyOrderFlags : uint8_t {
 	MOF_RV_MIN_WAIT,     ///< Road vehicle transport (RoRo) selection criterion: minimum waiting time of a candidate.
 	MOF_RV_SLOT,         ///< Road vehicle transport (RoRo) selection criterion: trace restrict slot ("路签") a candidate must hold.
 	MOF_RV_MAX,          ///< Road vehicle transport (RoRo): most road vehicles to load in one visit (0 = no limit).
+	MOF_DECOUPLE_FIRST_SAME_DIR,  ///< Allow the first part to leave the decouple station in the same direction as the other part.
+	MOF_DECOUPLE_SECOND_SAME_DIR, ///< Allow the second part to leave the decouple station in the same direction as the other part.
 	MOF_END
 };
 

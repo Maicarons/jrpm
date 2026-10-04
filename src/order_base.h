@@ -79,6 +79,8 @@ void ClearOrderDestinationRefcountMap();
  * OrderConditionVariable::DispatchSlot: Bits 0-15: Dispatch schedule ID
  * OrderConditionVariable::Percent: Bits 0-7: Jump counter
  * OT_GOTO_COUPLE: Bits 0-15: Trace restrict slot ID to couple with (0xFFFF = any)
+ * OT_DECOUPLE: Bit 16: First part may leave the decouple station in the same direction as the other part,
+ *              Bit 17: Second part may leave the decouple station in the same direction as the other part
  */
 /*
  * xdata2 users:
@@ -826,6 +828,16 @@ public:
 	inline void SetDecoupleFirstOrdersType(OrderDecoupleOrdersFlags orders_type) { SB(this->flags, 0, 3, to_underlying(orders_type)); }
 	/** Set what orders second part should get */
 	inline void SetDecoupleSecondOrdersType(OrderDecoupleOrdersFlags orders_type) { SB(this->flags, 4, 3, to_underlying(orders_type)); }
+	/* The same-direction-exit bits live in xdata (bits 16/17) and not in flags,
+	 * because only the low 8 bits of flags are persisted in savegames. */
+	/** May the first part leave the decouple station in the same direction as the other part (OT_DECOUPLE only)? */
+	inline bool GetDecoupleFirstSameDirExit() const { return HasBit(this->GetXData(), 16); }
+	/** Set whether the first part may leave the decouple station in the same direction as the other part. */
+	inline void SetDecoupleFirstSameDirExit(bool on) { SB(this->GetXDataRef(), 16, 1, on ? 1 : 0); }
+	/** May the second part leave the decouple station in the same direction as the other part (OT_DECOUPLE only)? */
+	inline bool GetDecoupleSecondSameDirExit() const { return HasBit(this->GetXData(), 17); }
+	/** Set whether the second part may leave the decouple station in the same direction as the other part. */
+	inline void SetDecoupleSecondSameDirExit(bool on) { SB(this->GetXDataRef(), 17, 1, on ? 1 : 0); }
 	/** Get the schedule the first part adopts after decoupling (ODOF_EXECUTE_SCHEDULE and ODOF_LOAD_AND_SCHEDULE only). */
 	inline OrderListID GetDecoupleFirstScheduleID() const { return OrderListID{(uint16_t)this->GetXData()}; }
 	/** Set the schedule the first part adopts after decoupling. */

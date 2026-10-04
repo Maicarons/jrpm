@@ -1011,6 +1011,9 @@ STR_ORDER_DECOUPLE_LOAD_AND_WAIT                                :(Load and wait 
 STR_ORDER_DECOUPLE_WAIT_FOR_COUPLE                              :(Wait for couple without loading)
 STR_ORDER_DECOUPLE_LOAD_AND_SCHEDULE                            :(Load and use schedule {RAW_STRING})
 STR_ORDER_DECOUPLE_USE_SCHEDULE                                 :(Use schedule {RAW_STRING})
+STR_ORDER_DECOUPLE_SAME_DIR_EXIT                                :Allow leaving in the same direction once the other part has left
+STR_ORDER_DECOUPLE_SAME_DIR_FIRST                               :(First part may follow the other part's exit)
+STR_ORDER_DECOUPLE_SAME_DIR_SECOND                              :(Second part may follow the other part's exit)
 STR_COUPLE_DIAGNOSTIC_BUTTON                                   :{BLACK}Diagnostics
 STR_COUPLE_DIAGNOSTIC_TOOLTIP                                  :{BLACK}Show the current coupling target, claim and candidate rejection reasons
 STR_COUPLE_DIAGNOSTIC_CAPTION                                  :{WHITE}Coupling diagnostics
