@@ -135,6 +135,27 @@ if ! grep -q '#include <fcntl.h>' "$INI_CPP"; then
     sed -i 's|^#include <fstream>$|#include <fstream>\n#include <fcntl.h>\n#include <unistd.h>|' "$INI_CPP"
 fi
 
+# Keep the game version clean. The copied tree has no .git, so jgrpp's
+# FindVersion.cmake takes the version from the committed .ottdrev-vc (written
+# when the release tag was made) and then verifies it: version_utils.sh hashes
+# CMakeLists.txt + src/** and appends a "-H<hash>" suffix to the version when
+# the hash differs. The bionic include patch above touches src/ini.cpp, so
+# without this the in-game version of a tag build would be
+# "pxp-2610.3-Hxxxxxxxx" instead of "pxp-2610.3". Recompute the hash over the
+# patched tree - the patch only adds two includes and changes no behaviour -
+# so the file stays self-consistent and the version stays the plain tag name.
+SRC_TREE="$SDL/project/jni/application/openttd-jgrpp/src"
+if [ -f "$SRC_TREE/.ottdrev-vc" ] && [ -f "$SRC_TREE/version_utils.sh" ]; then
+    NEWHASH="$( cd "$SRC_TREE" && ./version_utils.sh -s )" || NEWHASH=""
+    if [ -n "$NEWHASH" ]; then
+        sed -i "2s|.*|$NEWHASH|" "$SRC_TREE/.ottdrev-vc"
+        echo "== .ottdrev-vc source hash updated for the patched tree =="
+    else
+        echo "WARNING: could not recompute the .ottdrev-vc source hash;" \
+             "the in-game version will carry a -H suffix" >&2
+    fi
+fi
+
 # --- 3b. Game data package ---------------------------------------------------
 # On first run the SDL wrapper unpacks the game's runtime data from
 # AndroidData/openttd-data-<ver>.zip.xz (see AppDataDownloadUrl in the app
@@ -758,9 +779,12 @@ for A in ${ARCH_LIST}; do
     # 3. ndk-build won't re-copy an "up to date" prebuilt module, so keep its
     #    copy under obj/local/ in sync — the final link uses that one. Any
     #    change there invalidates binaries previously linked against the stub.
+    #    (obj/local/<abi> normally appears only when ndk-build runs in step 7,
+    #    so it does not exist yet on a fresh tree - create it.)
     OBJARCHIVE="project/obj/local/$A/libicudata.a"
     if [ -f "$LIBICUDATA" ] && [ "$(stat -c%s "$LIBICUDATA")" -ge 1000000 ]; then
         if [ ! -f "$OBJARCHIVE" ] || ! cmp -s "$LIBICUDATA" "$OBJARCHIVE"; then
+            mkdir -p "$(dirname "$OBJARCHIVE")"
             cp -f "$LIBICUDATA" "$OBJARCHIVE"
             rm -f project/jni/application/openttd-jgrpp/openttd-build-*/libapplication.so \
                   project/jni/application/openttd-jgrpp/libapplication-*.so \
