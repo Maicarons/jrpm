@@ -452,8 +452,17 @@ fi
 # (SDL2), but the on-disk dir is lowercase sdl2. Fix the generated
 # AndroidSDL.cmake (regenerated on every configure, so patch the generator).
 if ! grep -q '/SDL2/include@/sdl2/include' project/jni/application/openttd-jgrpp/AndroidBuild.sh; then
-    sed -i 's@^\tcmake \\$@\t# Module name SDL2 vs on-disk dir sdl2: fix generated include path.\n\tsed -i "s@/SDL2/include@/sdl2/include@" $CMAKE_SDL\n\tcmake \\@' \
+    # The outer delimiter has to be a character that appears neither in the
+    # pattern nor in the replacement - the replacement contains '@' (the inner
+    # sed) and '#' (the comment), so '|' it is.
+    sed -i 's|^\tcmake \\$|\t# Module name SDL2 vs on-disk dir sdl2: fix generated include path.\n\tsed -i "s@/SDL2/include@/sdl2/include@" $CMAKE_SDL\n\tcmake \\|' \
         project/jni/application/openttd-jgrpp/AndroidBuild.sh
+    # The pattern depends on the exact shape of upstream's cmake invocation; if
+    # it stops matching, fail here instead of shipping the include-path bug.
+    if ! grep -q '/SDL2/include@/sdl2/include' project/jni/application/openttd-jgrpp/AndroidBuild.sh; then
+        echo "ERROR: could not patch the SDL2 include path into AndroidBuild.sh (upstream changed?)" >&2
+        exit 1
+    fi
 fi
 # jgrpp's CMake links the `openttd` target as a PIE executable, but pelya's
 # Android runtime loads the game as a shared library (libapplication.so) and
