@@ -686,6 +686,4 @@ int GetTrainEstimatedMaxAchievableSpeed(const Train *train, int mass, const int 
 int64_t GetTrainPowerToWeightRatio(const Train *train, int mass);
 int64_t GetTrainMaxTractiveEffortToWeightRatio(const Train *train, int mass);
 
-void ResetCoupleSearchCache();
-
 #endif /* TRAIN_H */

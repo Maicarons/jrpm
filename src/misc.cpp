@@ -128,7 +128,6 @@ void InitializeGame(uint size_x, uint size_y, bool reset_date, bool reset_settin
 	ClearCommandQueue();
 	ClearSpecialEventsLog();
 	ClearDesyncMsgLog();
-	ResetCoupleSearchCache();
 
 	_pause_mode = {};
 	_pause_countdown = 0;

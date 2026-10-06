@@ -4671,54 +4671,25 @@ static Track DoTrainPathfind(const Train *v, TileIndex tile, DiagDirection enter
 	return YapfTrainChooseTrack(v, tile, enterdir, tracks, path_found, do_track_reservation, dest, final_dest);
 }
 
-/** Last tick each train performed a couple target search (see CoupleSearchAllowed). */
-static btree::btree_map<VehicleID, uint64_t> _couple_search_last_tick;
+/** Tick of the last failed couple target search, per train (see #DoTrainCouplePathfind). */
+static btree::btree_map<VehicleID, uint64_t> _couple_search_last_fail;
+
+/** A failed couple target search is retried only after this many ticks. */
+constexpr uint64_t COUPLE_FAIL_RETRY_INTERVAL = 60;
 
 /**
- * Clear the couple target search throttle cache. Must be called when the
- * game state is replaced (new game / loading a save), otherwise stale
- * timestamps from a previous game would throttle searches in the new one.
+ * Whether any consist is currently waiting for a couple. The couple target
+ * search walks the entire rail network when no partner is reachable; this
+ * cheap pre-check avoids that scan entirely when nobody is waiting at all.
  */
-void ResetCoupleSearchCache()
+static bool HasWaitingCoupleTrain()
 {
-	_couple_search_last_tick.clear();
-}
-
-/**
- * Throttle the couple target search. It runs a full path search plus an
- * approach walk, which is far too expensive to repeat every tick while the
- * train cannot find a reachable partner. A search is retried only after a
- * short interval.
- */
-static bool CoupleSearchAllowed(const Train *v)
-{
-	constexpr uint64_t COUPLE_SEARCH_INTERVAL = 30;
-
-	const uint64_t now = _tick_counter;
-
-	/* Drop entries for trains that no longer exist. */
-	if (_couple_search_last_tick.size() > 128) {
-		for (auto i = _couple_search_last_tick.begin(); i != _couple_search_last_tick.end();) {
-			if (Train::GetIfValid(i->first) == nullptr) {
-				i = _couple_search_last_tick.erase(i);
-			} else {
-				++i;
-			}
-		}
+	for (Vehicle *v : Vehicle::Iterate()) {
+		if (v->type != VehicleType::Train || !v->IsPrimaryVehicle()) continue;
+		if (v->vehstatus.Test(VehState::Crashed)) continue;
+		if (v->current_order.IsType(OT_WAIT_COUPLE)) return true;
 	}
-
-	const VehicleID id = v->Primary()->index;
-	auto it = _couple_search_last_tick.find(id);
-	if (it == _couple_search_last_tick.end()) {
-		_couple_search_last_tick.emplace(id, now);
-		return true;
-	}
-	/* The tick counter is saved/restored with the game, so guard against it
-	 * moving backwards relative to a cached timestamp. */
-	if (it->second > now) it->second = now;
-	else if (now < it->second + COUPLE_SEARCH_INTERVAL) return false;
-	it->second = now;
-	return true;
+	return false;
 }
 
 /**
@@ -4732,12 +4703,48 @@ static bool CoupleSearchAllowed(const Train *v)
  */
 static Track DoTrainCouplePathfind(const Train *v, bool do_track_reservation, Train **couple_target, uint32_t *couple_cost)
 {
-	if (!CoupleSearchAllowed(v)) {
+	const VehicleID id = v->Primary()->index;
+	const uint64_t now = _tick_counter;
+
+	/* Nobody is waiting for a couple anywhere: no target can be found, so do
+	 * not walk the whole network to prove it. */
+	if (!HasWaitingCoupleTrain()) {
 		if (couple_target != nullptr) *couple_target = nullptr;
 		if (couple_cost != nullptr) *couple_cost = 0;
 		return INVALID_TRACK;
 	}
+
+	/* Drop entries for trains that no longer exist. */
+	if (_couple_search_last_fail.size() > 128) {
+		for (auto i = _couple_search_last_fail.begin(); i != _couple_search_last_fail.end();) {
+			if (Train::GetIfValid(i->first) == nullptr) {
+				i = _couple_search_last_fail.erase(i);
+			} else {
+				++i;
+			}
+		}
+	}
+
+	/* A search that found no reachable partner is expensive; retry it only
+	 * after an interval instead of every track choice. */
+	auto it = _couple_search_last_fail.find(id);
+	if (it != _couple_search_last_fail.end()) {
+		/* The tick counter is saved/restored with the game, so guard against it
+		 * moving backwards relative to a cached timestamp. */
+		if (it->second > now) it->second = now;
+		else if (now < it->second + COUPLE_FAIL_RETRY_INTERVAL) {
+			if (couple_target != nullptr) *couple_target = nullptr;
+			if (couple_cost != nullptr) *couple_cost = 0;
+			return INVALID_TRACK;
+		}
+	}
+
 	Track ret = YapfTrainCoupleTrack(v, !do_track_reservation, couple_target, couple_cost);
+	if (ret == INVALID_TRACK) {
+		_couple_search_last_fail[id] = now;
+	} else {
+		_couple_search_last_fail.erase(id);
+	}
 	return ret;
 }
 
@@ -6729,15 +6736,61 @@ static Train *DecoupleTrain(Train *v, bool &consist_in_rear, StringID &failure_r
  */
 static bool CoupleOrderLoadOk(const Order &order, const Train *t)
 {
+	/* The expensive consist scan below only matters when the order actually
+	 * constrains the load; ODC_ANY must not pay for it (this check runs per
+	 * candidate inside the couple pathfinder). */
+	switch (order.GetCoupleLoad()) {
+		case ODC_ANY: return true;
+		case ODC_IS_EMPTY:
+		case ODC_IS_FULL: break;
+		default: NOT_REACHED();
+	}
+
+	struct ConsistPart {
+		uint32_t stored;
+		uint16_t cargo_cap;
+		CargoType cargo_type;
+		uint32_t carried_tonnes;
+	};
+	std::vector<ConsistPart> parts;
+	for (const Train *u = t->First(); u != nullptr; u = u->Next()) {
+		parts.push_back({u->cargo.StoredCount(), u->cargo_cap, u->cargo_type, 0});
+	}
+
+	/* RVTransportGetPartCargoAmount() walks every vehicle in the game once per
+	 * consist part, which is O(chain * vehicles) per candidate and stalls the
+	 * game when the couple pathfinder probes a station platform. Gather the
+	 * tonnes carried on all parts of this consist in a single global pass
+	 * instead; the result is identical. */
+	{
+		btree::btree_map<uint32_t, size_t> host_slot;
+		size_t i = 0;
+		for (const Train *u = t->First(); u != nullptr; u = u->Next(), i++) {
+			host_slot[u->index.base()] = i;
+		}
+		for (const Vehicle *v : Vehicle::Iterate()) {
+			if ((v->rv_transport_flags & RVTF_TRANSPORTED) == 0) continue;
+			auto it = host_slot.find(v->transported_host_part.base());
+			if (it == host_slot.end()) continue;
+			parts[it->second].carried_tonnes += v->transported_weight;
+		}
+	}
+
 	uint cargo = 0;
 	uint capacity = 0;
-	for (const Train *u = t->First(); u != nullptr; u = u->Next()) {
-		cargo += RVTransportGetPartCargoAmount(u);
-		capacity += u->cargo_cap;
+	for (const ConsistPart &p : parts) {
+		uint amount = p.stored;
+		if (p.carried_tonnes != 0 && IsValidCargoType(p.cargo_type)) {
+			const CargoSpec *cs = CargoSpec::Get(p.cargo_type);
+			if (cs->weight != 0) {
+				amount = std::min<uint32_t>(p.stored + p.carried_tonnes * 16 / cs->weight, p.cargo_cap);
+			}
+		}
+		cargo += amount;
+		capacity += p.cargo_cap;
 	}
 
 	switch (order.GetCoupleLoad()) {
-		case ODC_ANY: return true;
 		case ODC_IS_EMPTY: return cargo == 0;
 		case ODC_IS_FULL: return capacity > 0 && cargo == capacity;
 		default: NOT_REACHED();
