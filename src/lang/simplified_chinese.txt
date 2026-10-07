@@ -57,6 +57,7 @@ STR_CARGO_PLURAL_BATTERIES                                      :电池
 STR_CARGO_PLURAL_PLASTIC                                        :塑料
 STR_CARGO_PLURAL_FIZZY_DRINKS                                   :汽水
 STR_CARGO_PLURAL_VEHICLES                                        :载具（汽车）
+STR_CARGO_PLURAL_RAILVEHICLES                                    :载具（火车）
 
 # Singular cargo name
 STR_CARGO_SINGULAR_NOTHING                                      :
@@ -92,6 +93,7 @@ STR_CARGO_SINGULAR_BATTERY                                      :电池
 STR_CARGO_SINGULAR_PLASTIC                                      :塑料
 STR_CARGO_SINGULAR_FIZZY_DRINK                                  :汽水
 STR_CARGO_SINGULAR_VEHICLE                                       :汽车
+STR_CARGO_SINGULAR_RAILVEHICLE                                   :载具（火车）
 
 # Quantity of cargo
 STR_QUANTITY_NOTHING                                            :
@@ -127,6 +129,7 @@ STR_QUANTITY_BATTERIES                                          :{COMMA}{NBSP}�
 STR_QUANTITY_PLASTIC                                            :{VOLUME_LONG}塑料
 STR_QUANTITY_FIZZY_DRINKS                                       :{COMMA}{NBSP}瓶汽水
 STR_QUANTITY_VEHICLES                                            :{WEIGHT_LONG}的载具（汽车）
+STR_QUANTITY_RAILVEHICLES                                        :{WEIGHT_LONG}的载具（火车）
 STR_QUANTITY_N_A                                                :不适用
 
 # Two letter abbreviation of cargo name
@@ -163,6 +166,7 @@ STR_ABBREV_BATTERIES                                            :电
 STR_ABBREV_PLASTIC                                              :塑
 STR_ABBREV_FIZZY_DRINKS                                         :汽
 STR_ABBREV_VEHICLES                                              :载具
+STR_ABBREV_RAILVEHICLES                                          :火车
 STR_ABBREV_ALL                                                  :全
 
 # 'Mode' of transport for cargoes
@@ -1379,6 +1383,8 @@ STR_CONFIG_SETTING_TRAIN_FLIP_REVERSE_NONE                      :无
 
 STR_CONFIG_SETTING_DISASTERS                                    :灾难：{STRING}
 STR_CONFIG_SETTING_DISASTERS_HELPTEXT                           :灾难可能引起堵车或者车祸或者建筑损毁
+STR_CONFIG_SETTING_RAIN                                         :随机下雨：{STRING}
+STR_CONFIG_SETTING_RAIN_HELPTEXT                                :地图上会不定期下雨。下雨时世界会变暗，仅为视觉效果
 
 STR_CONFIG_SETTING_CITY_APPROVAL                                :地方政府态度：{STRING}
 STR_CONFIG_SETTING_CITY_APPROVAL_HELPTEXT                       :设置相关参数以决定各公司造成的噪音及环境破坏时，各城镇对该公司的评价及未来城镇建设的影响
@@ -2350,6 +2356,10 @@ STR_CHEAT_CHANGE_DATE                                           :{LTBLUE}改变�
 STR_CHEAT_CHANGE_DATE_QUERY_CAPT                                :{WHITE}改变当前年份
 STR_CHEAT_SETUP_PROD                                            :{LTBLUE}允许修改产量：{ORANGE}{STRING}
 STR_CHEAT_STATION_RATING                                        :{LTBLUE}车站评价固定为 100%：{ORANGE}{STRING}
+STR_CHEAT_RAIN                                                  :{LTBLUE}天气：{ORANGE}{STRING}
+STR_CHEAT_RAIN_AUTO                                             :自动
+STR_CHEAT_RAIN_RAINING                                          :永远下雨
+STR_CHEAT_RAIN_SUNNY                                            :永远晴天
 
 # Livery window
 STR_LIVERY_CAPTION                                              :{WHITE}{COMPANY} 的色彩方案
@@ -4613,11 +4623,11 @@ STR_VEHICLE_STATUS_WAITING_UNBUNCHING                           :{LTBLUE}等待�
 STR_VEHICLE_STATUS_CRASHED                                      :{RED}已撞毁！
 STR_VEHICLE_STATUS_WAITING_TO_BE_TRANSPORTED                    :{LTBLUE}等待被运载
 STR_VEHICLE_STATUS_BEING_TRANSPORTED                            :{LTBLUE}正在被运载
-STR_VEHICLE_STATUS_CARRYING_ROAD_VEHICLES                       :{LTBLUE}载有 {COMMA} 台载具（汽车）
-STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLES                       :载运的载具（汽车）：
+STR_VEHICLE_STATUS_CARRYING_ROAD_VEHICLES                       :{LTBLUE}载有 {COMMA} 台载具
+STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLES                       :载运的载具：
 STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLE                        :{BLACK}{VEHICLE}
 STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLE_EXTRA                  :{BLACK}（{COMMA} 吨）
-STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLE_NONE                   :{LTBLUE}本列车没有载运载具（汽车）
+STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLE_NONE                   :{LTBLUE}本列车没有载运载具
 STR_VEHICLE_STATUS_BROKEN_DOWN                                  :{RED}抛锚
 STR_VEHICLE_STATUS_STOPPED                                      :{RED}停运
 STR_VEHICLE_STATUS_TRAIN_STOPPING_VEL                           :{RED}{VELOCITY} - 正在停止
@@ -4729,6 +4739,8 @@ STR_VEHICLE_DETAILS_TRAIN_TOTAL_CARGO_TOOLTIP                   :{BLACK}显示�
 
 STR_VEHICLE_DETAILS_TRAIN_ARTICULATED_RV_CAPACITY               :{BLACK}容量：{LTBLUE}{STRING}
 
+STR_VEHICLE_DETAILS_HOLD_CAPACITY                               :（{STRING}）
+
 # Vehicle refit
 STR_REFIT_CAPTION                                               :{WHITE}{VEHICLE}（改装）
 STR_REFIT_TITLE                                                 :{GOLD}选择运输的货物类型：
@@ -4780,12 +4792,12 @@ STR_ORDER_DROP_LOAD_IF_POSSIBLE                                 :若有普通货
 STR_ORDER_DROP_FULL_LOAD_ALL                                    :满载所有普通货物
 STR_ORDER_DROP_FULL_LOAD_ANY                                    :满载任一普通货物
 STR_ORDER_DROP_NO_LOADING                                       :不装载普通货物
-STR_ORDER_DROP_LOAD_ROAD_VEHICLES                               :装载载具（汽车）
-STR_ORDER_DROP_UNLOAD_ROAD_VEHICLES                             :卸载载具（汽车）
-STR_ORDER_DROP_UNLOAD_ALL_ROAD_VEHICLES                         :卸载所有载具（汽车）
-STR_ORDER_DROP_UNLOAD_ALL_ROAD_VEHICLES_TOOLTIP                 :{BLACK}无视每台车自己订单里声明的卸货站，把车上的载具（汽车）全部卸在这里。不勾选时，只卸"自己的订单写着要在本站被卸下"的车。
-STR_ORDER_DROP_RV_MATCH_DEST                                    :只装载去下一站的载具（汽车）
-STR_ORDER_DROP_WAIT_FOR_ROAD_VEHICLES                           :等待载具（汽车）
+STR_ORDER_DROP_LOAD_ROAD_VEHICLES                               :装载载具
+STR_ORDER_DROP_UNLOAD_ROAD_VEHICLES                             :卸载载具
+STR_ORDER_DROP_UNLOAD_ALL_ROAD_VEHICLES                         :卸载所有载具
+STR_ORDER_DROP_UNLOAD_ALL_ROAD_VEHICLES_TOOLTIP                 :{BLACK}无视每台车自己订单里声明的卸货站，把车上的载具全部卸在这里。不勾选时，只卸"自己的订单写着要在本站被卸下"的车。
+STR_ORDER_DROP_RV_MATCH_DEST                                    :只装载去下一站的载具
+STR_ORDER_DROP_WAIT_FOR_ROAD_VEHICLES                           :等待载具
 STR_ORDER_DROP_WAIT_TO_BE_TRANSPORTED                           :等待被运载
 STR_ORDER_DROP_BE_UNLOADED_HERE                                 :在此被卸下
 STR_ORDER_DROP_RV_LOAD_STATE                                    :载具条件：{STRING}
@@ -4799,15 +4811,15 @@ STR_ORDER_DROP_RV_MIN_WAIT_NUM                                  :最短等待：
 STR_ORDER_RV_CARGO_CAN_CARRY                                    :可载货物：
 STR_ORDER_RV_CARGO_IS_CARRYING                                  :正载货物：
 STR_ORDER_RV_SLOT                                               :路签：{TRSLOT}
-STR_ORDER_DROP_RV_TRANSPORT                                     :载具（汽车）运输…
+STR_ORDER_DROP_RV_TRANSPORT                                     :载具运输…
 STR_ORDER_DROP_RV_LOAD_ANY                                       :装载任意载具
 STR_ORDER_DROP_RV_LOAD_NEXT                                      :装载去下一站的载具
-STR_ORDER_DROP_RV_LOAD_OPTIONS                                   :载具（汽车）装载选项…
+STR_ORDER_DROP_RV_LOAD_OPTIONS                                   :载具装载选项…
 STR_ORDER_RV_TRANSPORT_MORE_OPTIONS                             :（其他选项）
 STR_ORDER_RV_CARGO_LOAD_DEFAULT                                 :装载普通货物
 STR_ORDER_RV_CARGO_UNLOAD_DEFAULT                               :卸载普通货物
-STR_ERROR_RV_REFIT_SCHEDULE                                      :{WHITE}载具有调度计划时不能在“载具（汽车）”与普通货物之间互相改装，请先清空调度计划。
-STR_RV_TRANSPORT_CRITERIA_CAPTION                               :载具（汽车）运输
+STR_ERROR_RV_REFIT_SCHEDULE                                      :{WHITE}载具有调度计划时不能在“载具”与普通货物之间互相改装，请先清空调度计划。
+STR_RV_TRANSPORT_CRITERIA_CAPTION                               :载具运输
 STR_RV_TRANSPORT_CRITERIA_LOAD_STATE                            :载货状态
 STR_RV_TRANSPORT_CRITERIA_CARGO                                 :货物
 STR_RV_TRANSPORT_CRITERIA_CARGO_MODE                            :货物判据
@@ -4816,6 +4828,9 @@ STR_RV_TRANSPORT_CRITERIA_IS_CARRYING                           :必须正装载
 STR_RV_TRANSPORT_CRITERIA_MIN_WAIT                              :最短等待
 STR_RV_TRANSPORT_CRITERIA_SLOT                                  :路签
 STR_RV_TRANSPORT_CRITERIA_SLOT_SET                              :已指定路签
+STR_RV_TRANSPORT_CRITERIA_SLOT_TYPE_TIP                         :{BLACK}在汽车路签与火车路签之间切换
+STR_RV_TRANSPORT_CRITERIA_SLOT_ROAD                             :汽车
+STR_RV_TRANSPORT_CRITERIA_SLOT_TRAIN                            :火车
 STR_RV_TRANSPORT_CRITERIA_LOAD_STATE_ANY                        :任意
 STR_RV_TRANSPORT_CRITERIA_LOAD_STATE_EMPTY                      :仅空车
 STR_RV_TRANSPORT_CRITERIA_LOAD_STATE_FULL                       :仅满载
@@ -5038,6 +5053,9 @@ STR_ORDER_DECOUPLE_LOAD_AND_WAIT                                :（装卸并等
 STR_ORDER_DECOUPLE_WAIT_FOR_COUPLE                              :（等待连接不装卸）
 STR_ORDER_DECOUPLE_LOAD_AND_SCHEDULE                            :（装卸并使用调度计划 {STRING}）
 STR_ORDER_DECOUPLE_USE_SCHEDULE                                 :（使用调度计划 {STRING}）
+STR_ORDER_DECOUPLE_SAME_DIR_EXIT                                :允许等待另一部分离开后同向离开
+STR_ORDER_DECOUPLE_SAME_DIR_FIRST                               :（第一部分可同向离开）
+STR_ORDER_DECOUPLE_SAME_DIR_SECOND                              :（第二部分可同向离开）
 STR_COUPLE_DIAGNOSTIC_BUTTON                                   :{BLACK}诊断
 STR_COUPLE_DIAGNOSTIC_TOOLTIP                                  :{BLACK}显示当前接挂目标、预约关系和候选排除原因
 STR_COUPLE_DIAGNOSTIC_CAPTION                                  :{WHITE}接挂诊断

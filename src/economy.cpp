@@ -1816,15 +1816,16 @@ static void HandleStationRefit(Vehicle *v, Vehicle *v_start, CargoArray &consist
 
 	bool is_auto_refit = new_cid == CARGO_AUTO_REFIT;
 	bool check_order = (v->Primary()->current_order.GetLoadType() == OrderLoadType::CargoTypeLoad);
-	/* Road vehicle transport: refitting to or from the dedicated "Vehicles (Road)" cargo is only
+	/* Road vehicle transport: refitting to or from the dedicated vehicle transport cargoes is only
 	 * done manually in a depot, never automatically at a station. */
 	const CargoType vehicles_cargo = RV_TRANSPORT_CARGO_SLOT;
+	const CargoType rail_cargo = RAIL_TRANSPORT_CARGO_SLOT;
 	if (is_auto_refit) {
 		/* Get a refittable cargo type with waiting cargo for next_station or StationID::Invalid(). */
 		new_cid = v_start->cargo_type;
 		for (CargoType cid : refit_mask) {
 			if (check_order && v->Primary()->current_order.GetCargoLoadType(cid) == OrderLoadType::NoLoad) continue;
-			if (cid == vehicles_cargo) continue;
+			if (cid == vehicles_cargo || cid == rail_cargo) continue;
 			if (st->goods[cid].data != nullptr && st->goods[cid].data->cargo.HasCargoFor(next_station.Get(cid))) {
 				/* Try to find out if auto-refitting would succeed. In case the refit is allowed,
 				 * the returned refit capacity will be greater than zero. */
@@ -1846,7 +1847,9 @@ static void HandleStationRefit(Vehicle *v, Vehicle *v_start, CargoArray &consist
 
 	/* Refit if given a valid cargo (never to or from the road vehicle transport cargo, see above). */
 	if (new_cid < NUM_CARGO && new_cid != GetOverallCargoOfArticulatedVehicle(v_start) &&
-			new_cid != vehicles_cargo && GetOverallCargoOfArticulatedVehicle(v_start) != vehicles_cargo) {
+			new_cid != vehicles_cargo && new_cid != rail_cargo &&
+			GetOverallCargoOfArticulatedVehicle(v_start) != vehicles_cargo &&
+			GetOverallCargoOfArticulatedVehicle(v_start) != rail_cargo) {
 		/* StationID::Invalid() because in the DistributionType::Manual case that's correct and in the DistributionType::Asymmetric/DistributionType::Symmetric
 		 * cases the next hop of the vehicle doesn't really tell us anything if the cargo had been
 		 * "via any station" before reserving. We rather produce some more "any station" cargo than
@@ -2050,8 +2053,8 @@ static void LoadUnloadVehicle(Vehicle *front)
 	/* We have not waited enough time till the next round of loading/unloading */
 	if (front->load_unload_ticks != 0) return;
 
-	/* RoRo: a road vehicle waiting to be transported does not load/unload normal cargo. */
-	if (front->type == VehicleType::Road && (front->rv_transport_flags & RVTF_WAITING) != 0) {
+	/* RoRo: a vehicle waiting to be transported does not load/unload normal cargo. */
+	if ((front->type == VehicleType::Road || front->type == VehicleType::Train) && (front->rv_transport_flags & RVTF_WAITING) != 0) {
 		front->load_unload_ticks = 1;
 		return;
 	}
@@ -2154,7 +2157,7 @@ static void LoadUnloadVehicle(Vehicle *front)
 		 * vehicles, never normal cargo. It is left alone while this order loads/unloads normal cargo:
 		 * the road vehicles on it are handled by the vehicle transport code above (and a carried road
 		 * vehicle is not part of the cargo lists at all). */
-		if (v->cargo_type == vehicles_cargo) continue;
+		if (v->cargo_type == vehicles_cargo || v->cargo_type == RAIL_TRANSPORT_CARGO_SLOT) continue;
 		artic_part++;
 
 		/* ge and ged must both be changed together, when the cargo is changed (e.g. after HandleStationRefit) */

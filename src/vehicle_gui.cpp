@@ -898,6 +898,11 @@ struct RefitWindow : public Window {
 				CargoType cargo_type = cs->Index();
 				/* Skip cargo type if it's not listed */
 				if (!cmask.Test(cargo_type)) continue;
+				/* Road vehicle transport: the built-in vehicle transport cargoes may only be chosen
+				 * when the "carrier parts" setting lets this engine become a carrier part; a wagon
+				 * whose own cargo does not qualify cannot gain the dedicated cargo by refitting. */
+				if ((cargo_type == RV_TRANSPORT_CARGO_SLOT || cargo_type == RAIL_TRANSPORT_CARGO_SLOT) &&
+						!RVTransportEngineMayBeRefitToVehicles(e)) continue;
 				/* Road vehicle transport: the built-in cargo is identified by its slot, as a NewGRF may
 				 * define a cargo using the same label. No special refit handling is needed. */
 
@@ -1731,6 +1736,13 @@ uint ShowRefitOptionsList(int left, int right, int y, EngineID engine)
 {
 	/* List of cargo types of this engine */
 	CargoTypes present = GetUnionOfArticulatedRefitMasks(engine, false);
+
+	/* Road vehicle transport: don't advertise the dedicated vehicle transport cargoes when the
+	 * "carrier parts" setting does not let this engine become a carrier part. */
+	if (!RVTransportEngineMayBeRefitToVehicles(Engine::Get(engine))) {
+		present.Reset(RV_TRANSPORT_CARGO_SLOT);
+		present.Reset(RAIL_TRANSPORT_CARGO_SLOT);
+	}
 
 	/* Draw nothing if the engine is not refittable */
 	if (HasAtMostOneBit(present.base())) return y;
@@ -3142,6 +3154,9 @@ static_assert(WID_VD_DETAILS_CARRIED          == WID_VD_DETAILS_CARGO_CARRIED + 
 /** Row of the "carried road vehicles" tab which is at this line (RoRo), or nullptr. */
 extern const Vehicle *GetTrainDetailsCarriedVehicleRow(VehicleID veh_id, int row);
 
+/** Road vehicle row drawn on this line of the last drawn per-vehicle train details tab (RoRo), or nullptr. */
+extern const Vehicle *GetTrainDetailsCarriedRowAtLine(int line);
+
 /** Vehicle details widgets (other than train). */
 static constexpr std::initializer_list<NWidgetPart> _nested_nontrain_vehicle_details_widgets = {
 	NWidget(NWID_HORIZONTAL),
@@ -3996,8 +4011,12 @@ struct VehicleDetailsWindow : Window {
 				break;
 
 			case WID_VD_MATRIX: {
-				/* RoRo: on the "carried road vehicles" tab a line opens the window of that vehicle. */
-				if (this->tab != TDW_TAB_CARRIED) break;
+				/* RoRo: a line which lists a carried road vehicle opens the window of that vehicle. Trains
+				 * list them on their "carried" tab and, under the wagon holding them, on every tab which
+				 * has a line per wagon; the other vehicle types have no such lines here. */
+				const Vehicle *v = Vehicle::Get(this->window_number);
+				if (v->type != VehicleType::Train) break;
+
 				const NWidgetBase *matrix = this->GetWidget<NWidgetBase>(WID_VD_MATRIX);
 				if (matrix == nullptr || pt.x < matrix->pos_x || pt.x >= matrix->pos_x + (int)matrix->current_x ||
 						pt.y < matrix->pos_y || pt.y >= matrix->pos_y + (int)matrix->current_y) {
@@ -4005,7 +4024,9 @@ struct VehicleDetailsWindow : Window {
 				}
 				const int line_height = std::max<int>(this->resize.step_height, 1);
 				const int row = this->vscroll->GetPosition() + (pt.y - matrix->pos_y) / line_height;
-				const Vehicle *rv = GetTrainDetailsCarriedVehicleRow(this->window_number, row);
+				const Vehicle *rv = (this->tab == TDW_TAB_CARRIED)
+						? GetTrainDetailsCarriedVehicleRow(this->window_number, row)
+						: GetTrainDetailsCarriedRowAtLine(row);
 				if (rv != nullptr) {
 					ShowVehicleViewWindow(rv);
 					ScrollMainWindowTo(rv->x_pos, rv->y_pos, rv->z_pos);
@@ -4794,12 +4815,6 @@ public:
 					text_colour = ExtendedTextColour{TextColour::Orange, ExtendedTextColourFlag::Forced};
 				}
 			}
-		}
-
-		/* RoRo: a carrier reports how many road vehicles it is currently carrying. */
-		if (v->type != VehicleType::Road) {
-			const uint32_t carried = RVTransportCountOnCarrier(v);
-			if (carried > 0) append(STR_VEHICLE_STATUS_CARRYING_ROAD_VEHICLES, carried);
 		}
 
 		return buffer.to_string();

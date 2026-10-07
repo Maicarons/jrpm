@@ -17,6 +17,7 @@
 #include "vehicle_func.h"
 #include "zoom_func.h"
 #include "ship.h"
+#include "roadveh_transport.h"
 #include "core/format.hpp"
 
 #include "table/strings.h"
@@ -110,12 +111,25 @@ void DrawShipDetails(const Vehicle *v, const Rect &r)
 		for (const Vehicle *u = v; u != nullptr; u = u->Next()) {
 			if (u->cargo_cap == 0) continue;
 
-			if (u->cargo.StoredCount() > 0) {
-				DrawString(r.left, r.right, y, GetString(STR_VEHICLE_DETAILS_CARGO_FROM, u->cargo_type, u->cargo.StoredCount(), u->cargo.GetFirstStation()));
+			const uint cargo_amount = RVTransportGetPartCargoAmount(u);
+			/* The hold line: what the hold carries now, followed by what it can carry at most, so
+			 * that the capacity of every hold of a multi-hold ship is visible. */
+			format_buffer line;
+			if (cargo_amount > 0) {
+				if (u->cargo.StoredCount() > 0) {
+					AppendStringInPlace(line, STR_VEHICLE_DETAILS_CARGO_FROM, u->cargo_type, cargo_amount, u->cargo.GetFirstStation());
+				} else {
+					/* RoRo: the amount is the road vehicles on this hold, which come from no station. */
+					AppendStringInPlace(line, STR_JUST_CARGO, u->cargo_type, cargo_amount);
+				}
 				feeder_share += u->cargo.GetFeederShare();
 			} else {
-				DrawString(r.left, r.right, y, STR_VEHICLE_DETAILS_CARGO_EMPTY);
+				AppendStringInPlace(line, STR_VEHICLE_DETAILS_CARGO_EMPTY);
 			}
+			format_buffer hold_capacity;
+			AppendStringInPlace(hold_capacity, STR_JUST_CARGO, u->cargo_type, u->cargo_cap);
+			AppendStringInPlace(line, STR_VEHICLE_DETAILS_HOLD_CAPACITY, hold_capacity);
+			DrawString(r.left, r.right, y, line);
 			y += GetCharacterHeight(FontSize::Normal);
 		}
 		y += WidgetDimensions::scaled.vsep_normal;
@@ -123,12 +137,23 @@ void DrawShipDetails(const Vehicle *v, const Rect &r)
 		DrawString(r.left, r.right, y, GetString(STR_VEHICLE_INFO_CAPACITY, v->cargo_type, v->cargo_cap, GetCargoSubtypeText(v)));
 		y += GetCharacterHeight(FontSize::Normal) + WidgetDimensions::scaled.vsep_normal;
 
-		if (v->cargo.StoredCount() > 0) {
-			DrawString(r.left, r.right, y, GetString(STR_VEHICLE_DETAILS_CARGO_FROM, v->cargo_type, v->cargo.StoredCount(), v->cargo.GetFirstStation()));
+		const uint cargo_amount = RVTransportGetPartCargoAmount(v);
+		format_buffer line;
+		if (cargo_amount > 0) {
+			if (v->cargo.StoredCount() > 0) {
+				AppendStringInPlace(line, STR_VEHICLE_DETAILS_CARGO_FROM, v->cargo_type, cargo_amount, v->cargo.GetFirstStation());
+			} else {
+				/* RoRo: the amount is the road vehicles on this ship, which come from no station. */
+				AppendStringInPlace(line, STR_JUST_CARGO, v->cargo_type, cargo_amount);
+			}
 			feeder_share += v->cargo.GetFeederShare();
 		} else {
-			DrawString(r.left, r.right, y, STR_VEHICLE_DETAILS_CARGO_EMPTY);
+			AppendStringInPlace(line, STR_VEHICLE_DETAILS_CARGO_EMPTY);
 		}
+		format_buffer hold_capacity;
+		AppendStringInPlace(hold_capacity, STR_JUST_CARGO, v->cargo_type, v->cargo_cap);
+		AppendStringInPlace(line, STR_VEHICLE_DETAILS_HOLD_CAPACITY, hold_capacity);
+		DrawString(r.left, r.right, y, line);
 		y += GetCharacterHeight(FontSize::Normal) + WidgetDimensions::scaled.vsep_normal;
 	}
 

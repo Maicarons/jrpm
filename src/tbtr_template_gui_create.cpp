@@ -34,6 +34,7 @@
 #include "company_func.h"
 #include "tilehighlight_func.h"
 #include "window_gui.h"
+#include "roadveh_transport.h"
 #include "vehiclelist.h"
 #include "order_backup.h"
 #include "group.h"
@@ -419,7 +420,7 @@ public:
 		for (const Vehicle *w = v; w != nullptr; w = w->Next()) {
 			if (w->cargo_cap > 0 && w->cargo_type < NUM_CARGO) {
 				capacity[w->cargo_type] += w->cargo_cap;
-				loaded  [w->cargo_type] += w->cargo.StoredCount();
+				loaded  [w->cargo_type] += RVTransportGetPartCargoAmount(w);
 			}
 
 			if (w->type == VehicleType::Train && !w->HasArticulatedPart()) {

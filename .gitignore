@@ -22,3 +22,8 @@ openttd.new
 *.grf.corrupt_bak
 .mimosa/
 .zcode/
+# /build* above would swallow this, but the Android CI (.github/workflows/
+# android.yml) checks the repository out fresh and runs it from there.
+!/build-android-local.sh
+# Signed APKs written by that script.
+/upload/

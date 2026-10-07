@@ -72,6 +72,9 @@ static constexpr CargoLabel CT_FIZZY_DRINKS{"FZDR"};
 /** Dedicated cargo for road vehicle transport: trains refit to it to carry road vehicles (label "VEHC", VEHicle Car). */
 static constexpr CargoLabel CT_VEHICLES{"VEHC"};
 
+/** Dedicated cargo for train transport: ships refit to it to carry trains (label "RAIL", RAIL VEHicle). */
+static constexpr CargoLabel CT_RAILVEHICLES{'RAIL'};
+
 /** Dummy label for engines that carry no cargo; they actually carry 0 passengers. */
 static constexpr CargoLabel CT_NONE = CT_PASSENGERS;
 
@@ -81,6 +84,7 @@ static constexpr CargoType NUM_ORIGINAL_CARGO{12}; ///< Original number of cargo
 static constexpr CargoType NUM_GRF_CARGO{64}; ///< Maximum number of cargo types which a NewGRF can define. Kept at 64 so that the slots above it stay reserved for internal use.
 static constexpr CargoType NUM_CARGO{128}; ///< Maximum number of cargo types in a game.
 static constexpr CargoType RV_TRANSPORT_CARGO_SLOT{NUM_CARGO - 1}; ///< Cargo slot reserved for the built-in "Vehicles (Road)" cargo (road vehicle transport). Must be outside the NewGRF range.
+static constexpr CargoType RAIL_TRANSPORT_CARGO_SLOT{NUM_CARGO - 2}; ///< Cargo slot reserved for the built-in "Vehicles (Train)" cargo (train transport). Must be outside the NewGRF range.
 
 /* The built-in cargoes are identified by their slot, never by their label: a NewGRF is free to
  * define a cargo with the same label (CT_VEHICLES), and BuildCargoLabelMap() resolves duplicate
@@ -88,6 +92,7 @@ static constexpr CargoType RV_TRANSPORT_CARGO_SLOT{NUM_CARGO - 1}; ///< Cargo sl
 
 static_assert(NUM_GRF_CARGO <= NUM_CARGO);
 static_assert(RV_TRANSPORT_CARGO_SLOT >= NUM_GRF_CARGO);
+static_assert(RAIL_TRANSPORT_CARGO_SLOT >= NUM_GRF_CARGO);
 
 /* CARGO_AUTO_REFIT and CARGO_NO_REFIT are stored in save-games for refit-orders, so should not be changed. */
 static constexpr CargoType CARGO_AUTO_REFIT{0xFD}; ///< Automatically choose cargo type when doing auto refitting.

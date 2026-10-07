@@ -15,6 +15,7 @@
 #include "company_base.h"
 #include "console_func.h"
 #include "economy_base.h"   // CargoPayment must be complete: the station stop of a carried vehicle deletes its payment
+#include "engine_base.h"
 #include "order_func.h"
 #include "strings_func.h"
 #include "town.h"
@@ -31,21 +32,52 @@
 #include "pathfinder/yapf/yapf.h"
 #include "tracerestrict.h"
 #include "ground_vehicle.hpp"
+#include "pbs.h"
+#include "rail.h"
 #include "roadveh.h"
 #include "settings_type.h"
 #include "station_base.h"
 #include "station_map.h"
 #include "tilearea_type.h"
+#include "tile_map.h"
+#include "train.h"
+#include "tunnelbridge_map.h"
 #include "vehicle_base.h"
+
+#include <cstdarg>
+#include <set>
 
 #include "safeguards.h"
 
-/** Weight of a road vehicle in tonnes (including its current cargo), from the consist weight cache. */
+/**
+ * Is this vehicle the unit which holds the vehicle transport state of its consist?
+ *
+ * For a road vehicle that is its front engine. For a train it is the primary vehicle: the engine
+ * routes station arrival through TrainEnterStation(), which hands the consist information to
+ * Primary(), and Vehicle::BeginLoading() - and with it RVTransportSetWaiting() - therefore runs on
+ * the primary. After a no-swap couple/decouple the primary may sit mid-chain, so it is not enough
+ * to test IsFrontEngine() (the physical chain head) when looking for a waiting or carried train.
+ */
+static bool RVTransportIsStateHolder(const Vehicle *v)
+{
+	if (v == nullptr) return false;
+	if (v->type == VehicleType::Train) return v == Train::From(v)->Primary();
+	return v->IsFrontEngine();
+}
+
+/** Weight of a road vehicle or train in tonnes (including its current cargo), from the consist weight cache. */
 uint32_t RVTransportGetVehicleWeightTonnes(const Vehicle *rv)
 {
-	if (rv == nullptr || rv->type != VehicleType::Road) return 0;
-	if (!rv->IsFrontEngine()) return 0;
-	return RoadVehicle::From(rv)->gcache.cached_weight;
+	if (rv == nullptr) return 0;
+	if (rv->type != VehicleType::Road && rv->type != VehicleType::Train) return 0;
+	if (!RVTransportIsStateHolder(rv)) return 0;
+	return rv->GetGroundVehicleCache()->cached_weight;
+}
+
+/** Is this the dedicated cargo of vehicle transport ("Vehicles (Road)" or "Vehicles (Train)")? */
+bool RVTransportIsSpecialCargo(CargoType ct)
+{
+	return ct == RV_TRANSPORT_CARGO_SLOT || ct == RAIL_TRANSPORT_CARGO_SLOT;
 }
 
 /**
@@ -54,6 +86,9 @@ uint32_t RVTransportGetVehicleWeightTonnes(const Vehicle *rv)
  * This is the built-in cargo's own label, see CT_VEHICLES.
  */
 static constexpr CargoLabel RV_TRANSPORT_VEHICLES_CARGO_LABEL = CT_VEHICLES;
+
+/** Cargo label of the dedicated "Vehicles (Train)" cargo (see CT_RAILVEHICLES). */
+static constexpr CargoLabel RV_TRANSPORT_RAIL_CARGO_LABEL = CT_RAILVEHICLES;
 
 /** Is this carrier part able to carry road vehicles? */
 bool RVTransportPartCanCarry(const Vehicle *part)
@@ -64,6 +99,15 @@ bool RVTransportPartCanCarry(const Vehicle *part)
 	if (!_settings_game.vehicle.rv_transport_enabled) return false;
 	if (part->cargo_cap == 0) return false;
 	if (!IsValidCargoType(part->cargo_type)) return false;
+
+	/* An aircraft never carries trains: the dedicated "Vehicles (Train)" cargo is a ship hold's
+	 * property, and no aircraft gets it through its refit mask. This guard also keeps a NewGRF
+	 * which puts the rail cargo (or a cargo with its label) on an aircraft from loading trains. */
+	if (part->type == VehicleType::Aircraft &&
+			(part->cargo_type == RAIL_TRANSPORT_CARGO_SLOT ||
+			 CargoSpec::Get(part->cargo_type)->label == RV_TRANSPORT_RAIL_CARGO_LABEL)) {
+		return false;
+	}
 
 	switch (static_cast<RVTransportCarrierParts>(_settings_game.vehicle.rv_transport_carrier_parts)) {
 		case RVTransportCarrierParts::AnyPart:
@@ -84,8 +128,43 @@ bool RVTransportPartCanCarry(const Vehicle *part)
 			 * no 'VEHC' cargo, so with it only bulk wagons qualify. */
 			if (IsCargoInClass(part->cargo_type, CargoClass::Bulk)) return true;
 			if (IsCargoInClass(part->cargo_type, CargoClass::Oversized)) return true;
-			return CargoSpec::Get(part->cargo_type)->label == RV_TRANSPORT_VEHICLES_CARGO_LABEL;
+			const CargoLabel label = CargoSpec::Get(part->cargo_type)->label;
+			return label == RV_TRANSPORT_VEHICLES_CARGO_LABEL || label == RV_TRANSPORT_RAIL_CARGO_LABEL;
 		}
+	}
+
+	return false;
+}
+
+bool RVTransportEngineMayBeRefitToVehicles(const Engine *e)
+{
+	if (e == nullptr) return false;
+	/* Same master switch as RVTransportPartCanCarry(): with it off nothing becomes a carrier. */
+	if (!_settings_game.vehicle.rv_transport_enabled) return false;
+
+	/* The default-cargo criterion below is a wagon rule: it keeps a coach or a mail van from
+	 * gaining the dedicated cargo. Ships and aircraft have no such distinction - turning a cargo
+	 * ship or a passenger plane into a vehicle carrier is the point of the refit - so they are
+	 * always allowed (the master switch is the only gate). */
+	if (e->type != VehicleType::Train) return true;
+
+	/* Judge by the engine's default cargo: that is what the wagon natively carries, the same
+	 * criterion the loading-time check applies to a part's cargo. A wagon already refitted to the
+	 * dedicated transport cargo qualifies through it as well, since that cargo is 'Oversized'. */
+	const CargoSpec *cs = (IsValidCargoType(e->info.cargo_type)) ? CargoSpec::Get(e->info.cargo_type) : nullptr;
+	if (cs == nullptr || !cs->IsValid()) return false;
+
+	switch (static_cast<RVTransportCarrierParts>(_settings_game.vehicle.rv_transport_carrier_parts)) {
+		case RVTransportCarrierParts::AnyPart:
+			return true;
+
+		case RVTransportCarrierParts::OversizedOnly:
+			return cs->classes.Test(CargoClass::Oversized);
+
+		case RVTransportCarrierParts::BulkOversizedOrVehicles:
+			if (cs->classes.Test(CargoClass::Bulk)) return true;
+			if (cs->classes.Test(CargoClass::Oversized)) return true;
+			return cs->label == RV_TRANSPORT_VEHICLES_CARGO_LABEL || cs->label == RV_TRANSPORT_RAIL_CARGO_LABEL;
 	}
 
 	return false;
@@ -100,17 +179,79 @@ uint32_t RVTransportGetPartCapacityTonnes(const Vehicle *part)
 	return static_cast<uint32_t>(part->cargo_cap) * cs->weight / 16;
 }
 
-/** Tonnes already used on this carrier part by carried road vehicles. */
-uint32_t RVTransportGetPartUsedTonnes(const Vehicle *part)
+/** Tonnes of road vehicles this carrier part holds. */
+uint32_t RVTransportGetPartCarriedTonnes(const Vehicle *part)
 {
 	if (part == nullptr) return 0;
-	uint32_t used = 0;
+	uint32_t carried = 0;
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & RVTF_TRANSPORTED) == 0) continue;
 		if (v->transported_host_part != part->index) continue;
-		used += v->transported_weight;
+		carried += v->transported_weight;
+	}
+	return carried;
+}
+
+/** Tonnes already used on this carrier part: the road vehicles on it plus the cargo it carries. */
+uint32_t RVTransportGetPartUsedTonnes(const Vehicle *part)
+{
+	if (part == nullptr) return 0;
+	uint32_t used = RVTransportGetPartCarriedTonnes(part);
+	if (IsValidCargoType(part->cargo_type)) {
+		used += static_cast<uint32_t>(CargoSpec::Get(part->cargo_type)->WeightOfNUnits(part->cargo.StoredCount()));
 	}
 	return used;
+}
+
+/** Cargo units to display for this carrier part (see RVTransportGetPartCargoAmount()). */
+uint16_t RVTransportGetPartCargoAmount(const Vehicle *part)
+{
+	if (part == nullptr) return 0;
+
+	const uint32_t stored = part->cargo.StoredCount();
+	const uint32_t carried = RVTransportGetPartCarriedTonnes(part);
+	if (carried == 0 || !IsValidCargoType(part->cargo_type)) return static_cast<uint16_t>(stored);
+
+	const CargoSpec *cs = CargoSpec::Get(part->cargo_type);
+	if (cs->weight == 0) return static_cast<uint16_t>(stored);
+
+	/* One unit weighs CargoSpec::weight / 16 tonnes, the inverse of RVTransportGetPartCapacityTonnes():
+	 * a part's road vehicle capacity and the amount it reports are expressed in the same tonnes. */
+	const uint32_t amount = stored + carried * 16 / cs->weight;
+	return static_cast<uint16_t>(std::min<uint32_t>(amount, part->cargo_cap));
+}
+
+/** Collect the road vehicles this carrier part holds (front vehicles only, in vehicle id order). */
+void RVTransportGetPartCarriedVehicles(const Vehicle *part, std::vector<const Vehicle *> &out)
+{
+	out.clear();
+	if (part == nullptr) return;
+	for (const Vehicle *v : Vehicle::Iterate()) {
+		if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) continue;
+		if (v->transported_host_part != part->index) continue;
+		if (!RVTransportIsStateHolder(v)) continue;
+		out.push_back(v);
+	}
+}
+
+/** Carrier this road vehicle is on, from the part it occupies (see the header). */
+Vehicle *RVTransportGetCarrier(const Vehicle *rv)
+{
+	if (rv == nullptr || (rv->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) return nullptr;
+	const Vehicle *part = Vehicle::GetIfValid(rv->transported_host_part);
+	return (part != nullptr) ? part->First() : nullptr;
+}
+
+/**
+ * Is this road vehicle on this carrier? Both sides are reduced to the front of their chain, so a
+ * caller may pass the chain head or any vehicle of the carrier (the details window can be opened on
+ * a wagon as well) and gets the same answer.
+ */
+static bool RVTransportIsOnCarrier(const Vehicle *carrier, const Vehicle *rv)
+{
+	if (carrier == nullptr) return false;
+	const Vehicle *rv_carrier = RVTransportGetCarrier(rv);
+	return rv_carrier != nullptr && rv_carrier == carrier->First();
 }
 
 /** Number of road vehicles currently carried by this carrier. */
@@ -120,8 +261,8 @@ uint32_t RVTransportCountOnCarrier(const Vehicle *carrier)
 	uint32_t count = 0;
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & RVTF_TRANSPORTED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
-		if (!v->IsFrontEngine()) continue;      // an articulated vehicle counts once
+		if (!RVTransportIsStateHolder(v)) continue;   // one count per vehicle
+		if (!RVTransportIsOnCarrier(carrier, v)) continue;
 		count++;
 	}
 	return count;
@@ -133,8 +274,8 @@ Vehicle *RVTransportFindFirstOnCarrier(const Vehicle *carrier)
 	if (carrier == nullptr) return nullptr;
 	for (Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & RVTF_TRANSPORTED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
-		if (!v->IsFrontEngine()) continue;
+		if (!RVTransportIsStateHolder(v)) continue;
+		if (!RVTransportIsOnCarrier(carrier, v)) continue;
 		return v;
 	}
 	return nullptr;
@@ -147,21 +288,23 @@ void RVTransportGetCarriedVehicles(const Vehicle *carrier, std::vector<const Veh
 	if (carrier == nullptr) return;
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
-		if (!v->IsFrontEngine()) continue;
+		if (!RVTransportIsStateHolder(v)) continue;
+		if (!RVTransportIsOnCarrier(carrier, v)) continue;
 		out.push_back(v);
 	}
 }
 
-/** Weight in tonnes of the road vehicles this carrier holds. */
+/** Weight in tonnes of the vehicles this carrier holds. */
 uint32_t RVTransportGetCarriedWeightTonnes(const Vehicle *carrier)
 {
 	if (carrier == nullptr) return 0;
 	uint32_t weight = 0;
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
-		if (!v->IsFrontEngine()) continue;
+		if (!RVTransportIsOnCarrier(carrier, v)) continue;
+		/* Every member carries the weight it occupies on its host part: a road vehicle the whole
+		 * weight on its front, a train the weight of its carriage on each carriage's first
+		 * vehicle (the rest of the chain records none), so summing every member gives the total. */
 		weight += v->transported_weight;
 	}
 	return weight;
@@ -174,7 +317,7 @@ bool RVTransportPartHoldsRoadVehicles(const Vehicle *part)
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) continue;
 		if (v->transported_host_part != part->index) continue;
-		if (!v->IsFrontEngine()) continue;
+		if (!RVTransportIsStateHolder(v)) continue;
 		return true;
 	}
 	return false;
@@ -208,34 +351,93 @@ uint16_t RVTransportExtraCargoAmount(const Vehicle *part)
 bool RVTransportVehicleCarriesOnlyVehicles(const Vehicle *v)
 {
 	if (v == nullptr) return false;
-	const CargoType vehicles_cargo = RV_TRANSPORT_CARGO_SLOT;
-	if (!IsValidCargoType(vehicles_cargo)) return false;
+	if (!IsValidCargoType(RV_TRANSPORT_CARGO_SLOT)) return false;
 
 	bool has_cargo_part = false;
-	for (const Vehicle *u = v; u != nullptr; u = u->Next()) {
+	for (const Vehicle *u = v->First(); u != nullptr; u = u->Next()) {
 		if (u->cargo_cap == 0) continue;
 		has_cargo_part = true;
-		if (u->cargo_type != vehicles_cargo) return false;
+		if (!RVTransportIsSpecialCargo(u->cargo_type)) return false;
 	}
 	return has_cargo_part;
+}
+
+/**
+ * Set or clear the "stopped" state of the whole consist a waiting vehicle belongs to. A waiting
+ * train is halted as a whole, the way the engine stops a consist (TrainEnterStation() and the
+ * coupling code do the same), so that no part of it keeps rolling while it waits to be loaded.
+ */
+static void RVTransportSetChainStopped(Vehicle *v, bool stopped)
+{
+	for (Vehicle *u = v->First(); u != nullptr; u = u->Next()) {
+		if (stopped) {
+			u->vehstatus.Set(VehState::Stopped);
+			u->cur_speed = 0;
+		} else {
+			u->vehstatus.Reset(VehState::Stopped);
+		}
+	}
+}
+
+/**
+ * Clear the reservations of the platform tiles around a train's head which no vehicle stands on.
+ * The engine frees the look-ahead ahead of a train only up to the first tile, and platform tiles
+ * are never freed when a vehicle leaves them, so a train stopped mid-platform keeps reservations
+ * over the rest of the platform unless they are cleared here.
+ */
+static void RVTransportClearNearbyPlatformReservations(Train *tr)
+{
+	const TileIndex head_tile = tr->First()->tile;
+	if (!IsRailStationTile(head_tile)) return;
+	const TileIndexDiff delta = TileOffsByAxis(GetRailStationAxis(head_tile));
+	for (int pass = 0; pass < 2; pass++) {
+		const TileIndexDiff step = (pass == 0) ? delta : -delta;
+		TileIndex pt = head_tile;
+		while (IsValidTile(pt + step) && IsCompatibleTrainStationTile(pt + step, pt)) {
+			pt += step;
+			TrackBits reserved = GetReservedTrackbits(pt);
+			if (reserved == TRACK_BIT_NONE) continue;
+			if (GetFirstVehicleOnTile(pt, VehicleType::Train) != nullptr) continue; // a train stands there
+			for (Track t = TRACK_BEGIN; t < TRACK_END; t++) {
+				if ((reserved & TrackToTrackBits(t)) == TRACK_BIT_NONE) continue;
+				UnreserveRailTrack(pt, t);
+			}
+		}
+	}
 }
 
 /** Set or clear the "waiting to be transported" state; a waiting vehicle is stopped. */
 void RVTransportSetWaiting(Vehicle *rv, bool waiting)
 {
-	if (rv == nullptr || rv->type != VehicleType::Road) return;
+	if (rv == nullptr || (rv->type != VehicleType::Road && rv->type != VehicleType::Train)) return;
+	/* A train's transport state lives on its primary vehicle (see RVTransportIsStateHolder). */
+	if (rv->type == VehicleType::Train) rv = Train::From(rv)->Primary();
 	if ((rv->rv_transport_flags & RVTF_TRANSPORTED) != 0) return; // carried vehicles are not waiting
 
 	if (waiting) {
 		rv->rv_transport_flags |= RVTF_WAITING;
 		rv->transport_wait_tick = static_cast<uint32_t>(_tick_counter);
 		rv->rv_transport_flags &= ~RVTF_UNLOAD_WARNED;   // a new trip, so the warning may be shown again
-		rv->vehstatus.Set(VehState::Stopped);
-		rv->cur_speed = 0;
+		if (rv->type == VehicleType::Train) {
+			Train *tr = Train::From(rv);
+			/* Drop the remaining path reservation: a waiting train never departs by itself, so its
+			 * look-ahead would block the rest of the platform forever. The train keeps blocking the
+			 * tiles it stands on by being there, like any stopped train. */
+			if (tr->IsPrimaryVehicle()) FreeTrainTrackReservation(tr);
+			RVTransportClearNearbyPlatformReservations(tr);
+			RVTransportSetChainStopped(rv, true);
+		} else {
+			rv->vehstatus.Set(VehState::Stopped);
+			rv->cur_speed = 0;
+		}
 	} else {
 		rv->rv_transport_flags &= ~RVTF_WAITING;
 		rv->transport_wait_tick = 0;
-		rv->vehstatus.Reset(VehState::Stopped);
+		if (rv->type == VehicleType::Train) {
+			RVTransportSetChainStopped(rv, false);
+		} else {
+			rv->vehstatus.Reset(VehState::Stopped);
+		}
 	}
 	SetWindowDirty(WindowClass::VehicleView, rv->index);
 	SetWindowDirty(WindowClass::VehicleDetails, rv->index);
@@ -248,7 +450,9 @@ void RVTransportSetWaiting(Vehicle *rv, bool waiting)
  */
 void RVTransportTickWaiting(Vehicle *rv)
 {
-	if (rv == nullptr || rv->type != VehicleType::Road) return;
+	if (rv == nullptr || (rv->type != VehicleType::Road && rv->type != VehicleType::Train)) return;
+	/* A train's transport state lives on its primary vehicle (see RVTransportIsStateHolder). */
+	if (rv->type == VehicleType::Train) rv = Train::From(rv)->Primary();
 	if ((rv->rv_transport_flags & RVTF_WAITING) == 0) return;
 
 	/* With the master switch off a vehicle must not wait for a carrier which will never take it: it
@@ -285,7 +489,7 @@ void RVTransportTickWaiting(Vehicle *rv)
  */
 void RVTransportCheckCarriedTooLong(Vehicle *v)
 {
-	if (v == nullptr || v->type != VehicleType::Road || !v->IsFrontEngine()) return;
+	if (v == nullptr || (v->type != VehicleType::Road && v->type != VehicleType::Train) || !RVTransportIsStateHolder(v)) return;
 	if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) return;
 	if ((v->rv_transport_flags & RVTF_UNLOAD_WARNED) != 0) return;
 
@@ -486,52 +690,161 @@ bool RVTransportAttach(Vehicle *carrier, Vehicle *part, Vehicle *rv, bool force)
 
 	if (carrier == nullptr || part == nullptr || rv == nullptr) return false;
 	if (carrier->type == VehicleType::Road) return false; // carriers are trains/ships/aircraft, not road vehicles
-	if (rv->type != VehicleType::Road) return false;
-	if (!rv->IsFrontEngine()) return false;              // carriers take a whole road vehicle, never a lone part
+	if (rv->type != VehicleType::Road && rv->type != VehicleType::Train) return false;
+	if (!RVTransportIsStateHolder(rv)) return false;     // carriers take a whole vehicle, never a lone part
 	if ((rv->rv_transport_flags & RVTF_TRANSPORTED) != 0) return false;
 	if (part->First() != carrier) return false;          // part must belong to this carrier
 	if (!force && !RVTransportPartCanCarry(part)) return false;
 
-	/* Carrying a road vehicle of another company is infrastructure sharing of a sort, and is off by
-	 * default: a carrier only takes the road vehicles of its own company. */
+	/* Carrying a vehicle of another company is infrastructure sharing of a sort, and is off by
+	 * default: a carrier only takes the vehicles of its own company. */
 	if (!force && rv->owner != carrier->owner && !_settings_game.economy.infrastructure_sharing_rv) return false;
 
-	/* Articulated road vehicles are carried as a whole: cached_weight covers every part. */
+	/* A carried road vehicle is a whole vehicle: cached_weight covers every part. */
 	uint32_t weight = RVTransportGetVehicleWeightTonnes(rv);
 	if (weight == 0) weight = 1;
-	if (!force) {
+
+	/* A train is loaded carriage by carriage: every carriage only has to fit in one carrier part
+	 * ("hold") on its own, the consist as a whole may span several holds. The carriages keep their
+	 * order and are filled into the parts from `part` onwards. Each carriage remembers the part it
+	 * went on and its weight, which its first vehicle records below so that the per-part weight
+	 * accounting (RVTransportGetPartCarriedTonnes) sees exactly what is on each hold. */
+	std::vector<Vehicle *> carriage_hosts;                 // host part per chain vehicle (train only)
+	std::vector<uint32_t> carriage_weights;                // weight each member records (train only)
+	if (rv->type == VehicleType::Train && !force) {
+		/* Weight of each carriage: an articulated unit counts once, on its first part. */
+		std::vector<std::pair<Vehicle *, uint32_t>> carriages;
+		for (Vehicle *u = rv->First(); u != nullptr; u = u->Next()) {
+			const uint32_t w = Train::From(u)->GetSelfWeight();
+			if (u->IsArticulatedPart() && !carriages.empty()) {
+				carriages.back().second += w;
+				continue;
+			}
+			carriages.emplace_back(u, w);
+		}
+
+		carriage_hosts.clear();
+		carriage_weights.clear();
+		Vehicle *part_it = part;
+		size_t ci = 0;
+		Vehicle *current_host = part;
+		for (Vehicle *u = rv->First(); u != nullptr; u = u->Next()) {
+			uint32_t member_weight = 0;
+			if (ci < carriages.size() && carriages[ci].first == u) {
+				member_weight = carriages[ci].second;
+				/* Fill the parts onwards, in order, with whole carriages: find the first hold with
+				 * room for this carriage on its own. */
+				while (part_it != nullptr && (!RVTransportPartCanCarry(part_it)
+						|| RVTransportGetPartUsedTonnes(part_it) + carriages[ci].second > RVTransportGetPartCapacityTonnes(part_it))) {
+					part_it = part_it->Next();
+				}
+				if (part_it == nullptr) {
+					/* Some carriage found no hold with room for it: nothing is loaded. */
+					return false;
+				}
+				current_host = part_it;
+				ci++;
+			}
+			carriage_hosts.push_back(current_host);
+			carriage_weights.push_back(member_weight);
+		}
+		{
+			uint32_t total = 0;
+			unsigned holds = 0;
+			const Vehicle *prev = nullptr;
+			for (size_t i = 0; i < carriage_hosts.size(); i++) {
+				total += carriage_weights[i];
+				if (carriage_hosts[i] != prev) holds++;
+				prev = carriage_hosts[i];
+			}
+		}
+	} else if (!force) {
 		const uint32_t capacity = RVTransportGetPartCapacityTonnes(part);
 		const uint32_t used = RVTransportGetPartUsedTonnes(part);
 		if (used + weight > capacity) return false;      // refused: no room on this part
 	}
 
+	/* A waiting train holds PBS reservations: the tiles it stands on, and the look-ahead
+	 * reservation chain which can reach several tiles ahead of its front. All of them must go, or
+	 * the tiles stay reserved forever for a train which is no longer there. */
+	if (rv->type == VehicleType::Train) {
+		Train *tr = Train::From(rv);
+		if (tr->IsPrimaryVehicle()) FreeTrainTrackReservation(tr);
+		for (Vehicle *u = rv->First(); u != nullptr; u = u->Next()) {
+			TrackBits reserved = GetReservedTrackbits(u->tile);
+			for (Track t = TRACK_BEGIN; t < TRACK_END; t++) {
+				if ((reserved & TrackToTrackBits(t)) == TRACK_BIT_NONE) continue;
+				UnreserveRailTrack(u->tile, t);
+			}
+		}
+
+		/* The arrival path reservation of a waiting train covers the whole platform it stopped on,
+		 * and the chain walk above only reaches the tiles ahead of the front. Clear the remaining
+		 * reservations of that platform as well: every reserved tile of a platform our train
+		 * occupies is part of its own arrival path (PBS never grants a second reservation onto a
+		 * platform a train is standing on), so nothing of another train can be lost here. Tiles
+		 * with a vehicle on them are skipped - those are the train's own parts, handled above. */
+		const TileIndex head_tile = Train::From(rv)->First()->tile;
+		if (IsRailStationTile(head_tile)) {
+			const TileIndexDiff delta = TileOffsByAxis(GetRailStationAxis(head_tile));
+			for (int pass = 0; pass < 2; pass++) {
+				const TileIndexDiff step = (pass == 0) ? delta : -delta;
+				TileIndex pt = head_tile;
+				while (IsValidTile(pt + step) && IsCompatibleTrainStationTile(pt + step, pt)) {
+					pt += step;
+					TrackBits reserved = GetReservedTrackbits(pt);
+					if (reserved == TRACK_BIT_NONE) continue;
+					if (GetFirstVehicleOnTile(pt, VehicleType::Train) != nullptr) continue; // a train (ours or another) stands there
+					for (Track t = TRACK_BEGIN; t < TRACK_END; t++) {
+						if ((reserved & TrackToTrackBits(t)) == TRACK_BIT_NONE) continue;
+						UnreserveRailTrack(pt, t);
+					}
+				}
+			}
+		}
+	}
+
 	/* The road vehicle leaves the road stop it was loaded at: free a parking bay while the vehicle
 	 * state still holds the bay number (a drive-through stop is handled after the road network
 	 * removal below, when the vehicle is no longer part of the stop's occupancy). */
-	if (IsBayRoadStopTile(rv->tile)) RVTransportReleaseRoadStop(rv);
+	if (rv->type == VehicleType::Road && IsBayRoadStopTile(rv->tile)) RVTransportReleaseRoadStop(rv);
 
-	/* Hide the whole road vehicle: every part of an articulated vehicle is drawn and hashed on its
+	/* Hide the whole vehicle: every part of an articulated vehicle is drawn and hashed on its
 	 * own, and in a bend the parts are not even on the same tile. */
 	rv->rv_transport_flags &= ~RVTF_WAITING;
-	for (Vehicle *u = rv; u != nullptr; u = u->Next()) {
-		u->rv_transport_flags |= RVTF_TRANSPORTED;
-		u->transported_by = carrier->index;
-		u->transported_host_part = part->index;
-		/* The station it is loaded at: the vehicle transport fee is charged on the direct distance
-		 * from there to the station it is put down at again. A waiting vehicle is always at the
-		 * station it waits at. */
-		u->transported_from = rv->last_station_visited;
-		/* Only the front records the weight of the whole (articulated) vehicle. */
-		u->transported_weight = (u == rv) ? static_cast<uint16_t>(std::min<uint32_t>(weight, UINT16_MAX)) : 0;
+	{
+		/* Weight each chain member records on its host part: a train non-force load puts the
+		 * weight of every carriage on its first vehicle (the hold accounting sums these per
+		 * part); everything else keeps the whole weight on the state holder. */
+		size_t i = 0;
+		for (Vehicle *u = rv->First(); u != nullptr; u = u->Next(), i++) {
+			const bool distributed = !carriage_hosts.empty();
+			const Vehicle *host = distributed ? carriage_hosts[i] : part;
+			u->rv_transport_flags |= RVTF_TRANSPORTED;
+			u->transported_by = carrier->index;
+			u->transported_host_part = host->index;
+			/* The station it is loaded at: the vehicle transport fee is charged on the direct distance
+			 * from there to the station it is put down at again. A waiting vehicle is always at the
+			 * station it waits at. */
+			u->transported_from = rv->last_station_visited;
+			/* Weight on the host part: a distributed train puts every carriage's weight on its first
+			 * vehicle; everything else keeps the whole weight on the state holder. */
+			u->transported_weight = 0;
+			if (distributed && carriage_weights[i] != 0) {
+				u->transported_weight = static_cast<uint16_t>(std::min<uint32_t>(carriage_weights[i], UINT16_MAX));
+			} else if (u == rv) {
+				u->transported_weight = static_cast<uint16_t>(std::min<uint32_t>(weight, UINT16_MAX));
+			}
 
-		u->vehstatus.Set(VehState::Stopped);
-		u->vehstatus.Set(VehState::Hidden);
-		u->cur_speed = 0;
-		RoadVehicle::From(u)->state = DiagDirToDiagTrackdir(DirToDiagDir(u->direction));
-		UpdateVehicleTileHash(u, true);   // off the road network (like virtual vehicles)
-		InvalidateVehicleTickCaches();
-		u->UpdateIsDrawn();
-		u->Vehicle::UpdateViewport(true); // appears/disappears: mark the area dirty
+			u->vehstatus.Set(VehState::Stopped);
+			u->vehstatus.Set(VehState::Hidden);
+			u->cur_speed = 0;
+			if (u->type == VehicleType::Road) RoadVehicle::From(u)->state = DiagDirToDiagTrackdir(DirToDiagDir(u->direction));
+			UpdateVehicleTileHash(u, true);   // off the road network (like virtual vehicles)
+			InvalidateVehicleTickCaches();
+			u->UpdateIsDrawn();
+			u->Vehicle::UpdateViewport(true); // appears/disappears: mark the area dirty
+		}
 	}
 
 	/* Drive-through stop: the vehicle is off the road network now, so the cached occupancy of the
@@ -754,6 +1067,412 @@ bool FindFreeRoadStopTile(const Station *st, Vehicle *rv, TileIndex &out_tile, D
 	return true;
 }
 
+/* ---- Train detach: the ship counterpart of the road stop machinery above. ---- */
+
+/**
+ * A platform of this station's rail station where a train could be put back on the rails, plus the
+ * direction the train would face (and leave in) when it is put on the platform end.
+ */
+struct RVTransportRailCandidate {
+	TileIndex exit_end;         ///< the last platform tile towards the exit
+	DiagDirection dir;          ///< direction the train faces (its direction of travel when leaving)
+	uint platform_tiles;        ///< length of the platform, in tiles
+};
+
+/** Node budget for one rail reachability probe; bounds the cost of choosing a platform. */
+static const int RVTRANSPORT_RAIL_PROBE_MAX_NODES = 10000;
+
+/** Is this rail type usable by the given train (one the train can run on)? */
+static bool RVTransportRailTypeCompatible(const Train *tr, RailType rt)
+{
+	/* The train must not only be *allowed* on this rail type but also able to drive away from
+	 * the platform by itself, so require power, the same criterion the engine uses for moving:
+	 * a merely compatible rail type (e.g. declared compatible by a rail NewGRF) would leave the
+	 * consist stranded on the platform. */
+	return HasPowerOnRail(tr->railtypes, rt);
+}
+
+/** Is this tile a rail tile (plain rail, rail station or rail tunnel/bridge head) the train can use? */
+static bool RVTransportIsRailTileFor(const Train *tr, TileIndex t)
+{
+	if (!IsValidTile(t)) return false;
+	if (IsPlainRailTile(t)) return RVTransportRailTypeCompatible(tr, GetRailType(t));
+	if (IsRailStationTile(t)) return RVTransportRailTypeCompatible(tr, GetRailType(t));
+	return IsTileType(t, TileType::TunnelBridge) && GetTunnelBridgeTransportType(t) == TransportType::Rail;
+}
+
+/**
+ * Simplified rail reachability probe: can the train reach the target station's rail tiles from the
+ * platform end it would be put on? A plain breadth-first walk along the tracks, honouring rail type
+ * compatibility but not signals or PBS reservations (a first version; a YAPF probe can replace it
+ * later). Deterministic, and bounded by \a max_nodes.
+ */
+static bool RVTransportRailReachable(const Train *tr, TileIndex start_tile, Trackdir start_td, StationID target, int max_nodes)
+{
+	std::set<std::pair<uint32_t, uint8_t>> visited;
+	std::vector<std::pair<TileIndex, Trackdir>> queue;
+	queue.push_back({start_tile, start_td});
+	visited.insert({start_tile.base(), to_underlying(start_td)});
+
+	int nodes = 0;
+	for (size_t i = 0; i < queue.size() && nodes < max_nodes; i++) {
+		const TileIndex tile = queue[i].first;
+		const Trackdir td = queue[i].second;
+
+		const DiagDirection exitdir = TrackdirToExitdir(td);
+		const TileIndex next = TileAddByDiagDir(tile, exitdir);
+		if (!IsValidTile(next)) continue;
+		nodes++;
+
+		/* Arriving at a rail tile of the target station ends the probe. */
+		if ((IsRailStationTile(next) || IsRailWaypointTile(next)) && GetStationIndex(next) == target) return true;
+
+		TrackBits bits = TRACK_BIT_NONE;
+		if (IsPlainRailTile(next)) {
+			if (!RVTransportRailTypeCompatible(tr, GetRailType(next))) continue;
+			bits = GetTrackBits(next);
+		} else if (IsRailStationTile(next) || IsRailWaypointTile(next)) {
+			if (!RVTransportRailTypeCompatible(tr, GetRailType(next))) continue;
+			bits = GetRailStationTrackBits(next);
+		} else if (IsTileType(next, TileType::TunnelBridge) && GetTunnelBridgeTransportType(next) == TransportType::Rail) {
+			bits = DiagDirToDiagTrackBits(ReverseDiagDir(exitdir)); // tunnel/bridge: keep heading through
+		} else {
+			continue;
+		}
+
+		const TrackBits connecting = bits & DiagdirReachesTracks(ReverseDiagDir(exitdir));
+		for (Track t = TRACK_BEGIN; t < TRACK_END; t++) {
+			if ((connecting & TrackToTrackBits(t)) == TRACK_BIT_NONE) continue;
+			const Trackdir ntd = TrackEnterdirToTrackdir(t, ReverseDiagDir(exitdir));
+			if (ntd == INVALID_TRACKDIR) continue;
+			if (!visited.insert({next.base(), to_underlying(ntd)}).second) continue;
+			queue.push_back({next, ntd});
+		}
+	}
+	return false;
+}
+
+/**
+ * Collect every platform of this station's rail station where the given train can be put back on the
+ * rails: the rail type must be compatible with the train, the platform must be at least as long as
+ * the train, the tiles the train would occupy must be free of vehicles and of other trains' PBS
+ * reservations, and the platform end it would leave by must lead onto usable rail. The candidates
+ * come in a fixed order (area order, then the platform ends), which is used as the tie-break when
+ * several of them turn out to be equally good.
+ * @param st         station to look at
+ * @param tr         train to put down
+ * @param candidates [out] the candidates, in the order they were found
+ */
+static void CollectFreeRailPlatformTiles(const Station *st, const Train *tr, std::vector<RVTransportRailCandidate> &candidates)
+{
+	const uint tiles_needed = CeilDiv(tr->gcache.cached_total_length, TILE_SIZE);
+	std::set<TileIndex> seen;
+
+
+	for (TileIndex t : st->train_station) {
+		if (!st->TileBelongsToRailStation(t)) continue;
+		if (!seen.insert(t).second) continue;
+
+		const Axis axis = GetRailStationAxis(t);
+		const TileIndexDiff delta = TileOffsByAxis(axis);
+
+		/* Walk to the start of this platform (the far end against the axis direction). */
+		TileIndex start = t;
+		while (IsValidTile(start - delta) && IsCompatibleTrainStationTile(start - delta, start)) start -= delta;
+
+		/* Walk to its end. */
+		TileIndex end = start;
+		while (IsValidTile(end + delta) && IsCompatibleTrainStationTile(end + delta, end)) end += delta;
+		const uint platform_len = static_cast<uint>(std::abs(static_cast<int>(end.base()) - static_cast<int>(start.base())) / std::abs(delta)) + 1;
+		if (platform_len < tiles_needed) {
+			continue;
+		}
+
+		/* One candidate per platform end, described by the end the train leaves by. */
+		for (DiagDirection dd = DiagDirection::Begin; dd < DiagDirection::End; dd++) {
+			const TileIndexDiffC off = TileIndexDiffCByDiagDir(dd);
+			const bool along_axis = (axis == Axis::X) ? (off.x != 0) : (off.y != 0);
+			if (!along_axis) continue;
+			const bool towards_end = (axis == Axis::X) ? (off.x > 0) : (off.y > 0);
+			const TileIndex exit_end = towards_end ? end : start;
+
+			/* The tiles the train would occupy, walking backwards from the exit end - backwards
+			 * means against the exit direction, which for the far end of the platform is the axis
+			 * direction and for the near end against it. */
+			const TileIndexDiff back_step = -TileOffsByDiagDir(dd);
+			bool free = true;
+			TileIndex pt = exit_end;
+			for (uint i = 0; i < tiles_needed && free; i++) {
+				if (!st->TileBelongsToRailStation(pt) || !RVTransportRailTypeCompatible(tr, GetRailType(pt))) {
+					free = false;
+					break;
+				}
+				if (GetReservedTrackbits(pt) != TRACK_BIT_NONE) {
+					/* A reservation nobody owns is an orphan: its chain was broken (e.g. another
+					 * train was loaded onto a carrier from this platform earlier), so no engine will
+					 * ever free it. Clear it and use the tile; a reservation owned by a train still
+					 * blocks the platform as before. */
+					bool orphan = true;
+					Train *res_owner = nullptr;
+					for (Track t = TRACK_BEGIN; t < TRACK_END; t++) {
+						if ((GetReservedTrackbits(pt) & TrackToTrackBits(t)) == TRACK_BIT_NONE) continue;
+						res_owner = GetTrainForReservation(pt, t);
+						if (res_owner != nullptr) {
+							orphan = false;
+							break;
+						}
+					}
+					if (orphan) {
+						for (Track t = TRACK_BEGIN; t < TRACK_END; t++) {
+							if ((GetReservedTrackbits(pt) & TrackToTrackBits(t)) == TRACK_BIT_NONE) continue;
+							UnreserveRailTrack(pt, t);
+						}
+					} else {
+						free = false;
+						break;
+					}
+				}
+				if (GetFirstVehicleOnTile(pt, VehicleType::Train) != nullptr) {
+					free = false;
+					break;
+				}
+				if (free && i + 1 < tiles_needed) {
+					if (!IsValidTile(pt + back_step) || !IsCompatibleTrainStationTile(pt + back_step, pt)) {
+						free = false;
+						break;
+					}
+				}
+				pt += back_step;
+			}
+			if (!free) continue;
+
+			/* The train has to be able to leave the platform: usable rail beyond the end it faces,
+			 * and that tile must have a track which actually connects to the platform. */
+			const TileIndex exit_tile = TileAddByDiagDir(exit_end, dd);
+			if (!RVTransportIsRailTileFor(tr, exit_tile)) {
+				continue;
+			}
+			TrackBits exit_bits = TRACK_BIT_NONE;
+			if (IsPlainRailTile(exit_tile)) exit_bits = GetTrackBits(exit_tile);
+			else if (IsRailStationTile(exit_tile)) exit_bits = GetRailStationTrackBits(exit_tile);
+			if ((exit_bits & DiagdirReachesTracks(ReverseDiagDir(dd))) == TRACK_BIT_NONE) {
+				continue;
+			}
+
+			candidates.push_back({exit_end, dd, platform_len});
+		}
+	}
+}
+
+/**
+ * Find the platform of this station where the given train should be put back on the rails.
+ *
+ * When the train has a station to drive to after this one, every candidate is scored by a rail
+ * reachability probe from the platform end it would leave by, and a reachable one always beats an
+ * unreachable one; among the reachable ones the shortest direct distance to that station wins, and
+ * ties keep the order the candidates were found in. Without a next station, the first candidate is
+ * used.
+ * @param st      station to put the train down at
+ * @param tr      train to put down
+ * @param out_tile [out] the last platform tile towards the exit
+ * @param out_dir  [out] direction the train faces
+ * @param out_platform_tiles [out] length of the platform, in tiles
+ * @return whether a platform was found
+ */
+static bool FindFreeRailPlatformTile(const Station *st, const Train *tr, TileIndex &out_tile, DiagDirection &out_dir, uint &out_platform_tiles)
+{
+	std::vector<RVTransportRailCandidate> candidates;
+	CollectFreeRailPlatformTiles(st, tr, candidates);
+	if (candidates.empty()) {
+		return false;
+	}
+
+	const RVTransportNextLeg leg = RVTransportGetNextLeg(tr, st->index);
+
+	size_t best = 0;
+	if (leg.station != StationID::Invalid()) {
+		int best_dist = 0;
+		bool found_reachable = false;
+		const Station *target = Station::GetIfValid(leg.station);
+		const TileIndex target_xy = (target != nullptr) ? target->xy : INVALID_TILE;
+		for (size_t i = 0; i < candidates.size(); i++) {
+			const TileIndex exit_end = candidates[i].exit_end;
+			const Trackdir start_td = TrackEnterdirToTrackdir(GetRailStationTrack(exit_end), ReverseDiagDir(candidates[i].dir));
+			if (start_td == INVALID_TRACKDIR) continue;
+
+			const bool reachable = RVTransportRailReachable(tr, exit_end, start_td, leg.station, RVTRANSPORT_RAIL_PROBE_MAX_NODES);
+			if (!reachable) continue;
+
+			/* Direct distance from the platform end to the next station, as the tie-break. */
+			int dist = INT_MAX;
+			if (target_xy != INVALID_TILE) {
+				const int dx = std::abs(static_cast<int>(TileX(exit_end)) - static_cast<int>(TileX(target_xy)));
+				const int dy = std::abs(static_cast<int>(TileY(exit_end)) - static_cast<int>(TileY(target_xy)));
+				dist = std::max(dx, dy);
+			}
+			if (!found_reachable || dist < best_dist) {
+				found_reachable = true;
+				best_dist = dist;
+				best = i;
+			}
+		}
+	}
+
+	out_tile = candidates[best].exit_end;
+	out_dir = candidates[best].dir;
+	out_platform_tiles = candidates[best].platform_tiles;
+	return true;
+}
+
+/**
+ * Put a carried train back on the rails, centred on the platform it is dropped on.
+ *
+ * The platform tiles between the leading vehicle and the exit end are reserved for the train (the
+ * reservation is cleared again by the engine when the train leaves), and the track beyond the exit
+ * end is held for it as well when that track has
+ * exactly one continuation - on a junction the engine's own pathfinder picks a branch when the
+ * train departs. The consist is laid out with the exact centre-to-centre spacing the engine itself
+ * uses (see Train::CalcNextVehicleOffset()), so the vehicles stand bumper to bumper like a train
+ * which has just stopped at the station.
+ *
+ * @param tr             the train being put down
+ * @param exit_end       the last platform tile towards the exit
+ * @param dir            direction the train faces
+ * @param platform_tiles length of the platform, in tiles
+ * @return true when the train was placed (and the reservations taken)
+ */
+static bool RVTransportPlaceTrainOnPlatform(Train *tr, TileIndex exit_end, DiagDirection dir, uint platform_tiles, bool tail_leads = false)
+{
+	tr = Train::From(tr->First());
+	extern void UpdateVehicleTileHash(Vehicle *v, bool remove);
+
+	const uint platform_units = platform_tiles * TILE_SIZE;
+	const uint train_units = tr->gcache.cached_total_length;
+	if (train_units > platform_units) return false;
+
+	/* Centre the consist on the platform: the gap between its front and the exit end equals the gap
+	 * between its rear and the far end, exactly like the engine centres a stopping train. */
+	const uint gap = (platform_units - train_units) / 2;
+
+	/* Pixel step of one vehicle unit along the exit direction, and the position of the exit edge:
+	 * the boundary between the exit end tile and the tile beyond it. */
+	const TileIndexDiffC unit = TileIndexDiffCByDir(DiagDirToDir(dir));
+	const int edge_x = TileX(exit_end) * TILE_SIZE + TILE_SIZE / 2 + unit.x * (TILE_SIZE / 2);
+	const int edge_y = TileY(exit_end) * TILE_SIZE + TILE_SIZE / 2 + unit.y * (TILE_SIZE / 2);
+
+	/* Lay the consist out from the leading end towards the rear. Normally the leading end is the
+	 * chain front; when only the chain tail can lead the train (a locomotive at the rear), the
+	 * consist is laid out mirrored and flagged as driving backwards, so the tail leads the
+	 * departure instead of the train backing out of the platform. All vehicles face the exit
+	 * direction and none drives forwards, so the rounding of Train::CalcNextVehicleOffset() is the
+	 * forward one.
+	 * Note the consist caches MUST be refreshed after this (ConsistChanged below): the no-driving-cab
+	 * speed limit is part of the consist cache, and it is judged by the leading end, which the
+	 * backwards flag changes to the chain tail. */
+	int s = static_cast<int>(gap) + (tr->gcache.cached_veh_length + 1) / 2; // centre of the leading vehicle
+	std::vector<TileIndex> span; // the tiles the consist stands on
+	TileIndex leading_tile = INVALID_TILE; // the tile the leading vehicle (front or tail) stands on
+	for (Vehicle *u = (tail_leads ? tr->Last() : tr); u != nullptr; u = (tail_leads ? u->Previous() : u->Next())) {
+		Train *tu = Train::From(u);
+		const int x = edge_x - unit.x * s;
+		const int y = edge_y - unit.y * s;
+
+		u->rv_transport_flags &= ~RVTF_TRANSPORTED;
+		u->rv_transport_flags &= ~RVTF_WAITING;
+		u->transported_by = VehicleID::Invalid();
+		u->transported_host_part = VehicleID::Invalid();
+		u->transported_weight = 0;
+		u->transported_from = StationID::Invalid();
+		u->transport_wait_tick = 0;
+
+		u->direction = DiagDirToDir(tail_leads ? ReverseDiagDir(dir) : dir);
+		u->vehicle_flags.Set(VehicleFlag::DrivingBackwards, tail_leads);
+		tu->flags.Reset(VehicleRailFlag::Reversing);
+		tu->flags.Reset(VehicleRailFlag::BeyondPlatformEnd);
+		tu->cur_speed = 0;
+		u->progress = 0;
+		u->vehstatus.Reset(VehState::Hidden);
+		u->vehstatus.Reset(VehState::Stopped);
+
+		const TileIndex pt = TileVirtXY(x, y);
+		if (IsRailStationTile(pt)) {
+			tu->track = TrackToTrackBits(GetRailStationTrack(pt));
+		} else if (IsPlainRailTile(pt)) {
+			tu->track = GetTrackBits(pt);
+		}
+
+		TrainMoveToPosition(tu, x, y);
+		UpdateVehicleTileHash(u, false);  // back on the rail network
+		InvalidateVehicleTickCaches();
+
+		/* Remember the tiles the consist stands on, and the tile of the leading vehicle: the
+		 * platform tiles between it and the exit end (inclusive) are reserved below. */
+		if (std::find(span.begin(), span.end(), tu->tile) == span.end()) span.push_back(tu->tile);
+		if (leading_tile == INVALID_TILE) leading_tile = tu->tile;
+
+		Vehicle *u_next = tail_leads ? u->Previous() : u->Next();
+		if (u_next != nullptr) {
+			s += tu->gcache.cached_veh_length / 2 + (Train::From(u_next)->gcache.cached_veh_length + 1) / 2;
+		}
+	}
+
+	/* Refresh the consist caches: setting the backwards flag above changed the leading end, so the
+	 * no-driving-cab speed limit and friends must be re-judged from the new tail-leading state. */
+	tr->ConsistChanged(CCF_COUPLE);
+
+	/* Reserve a contiguous chain from the exit end back to and including the leading vehicle's
+	 * tile. The chain must end on a tile the train actually stands on: PBS attributes a
+	 * reservation to a train found on the reserved chain itself, and a chain which ends on an
+	 * empty tile in front of the train can fail to be attributed (its owner would look like an
+	 * orphan and be cleaned up). The tiles behind the leading vehicle must NOT be reserved:
+	 * platform tiles are never unreserved when a vehicle leaves them (ClearPathReservation only
+	 * updates the platform-occupancy flag there), and the engine never frees reservations behind
+	 * a train, so those would linger forever. When the train departs it adopts this chain into
+	 * its own path reservation, which is freed again when the train next stops. The chain must be
+	 * contiguous, or the tiles behind a gap would look like another train's reservation and the
+	 * train would wait at "red" for its own exit. */
+	const TileIndexDiff back_step = -TileOffsByDiagDir(dir);
+	std::vector<TileIndex> reserve_tiles;
+	for (TileIndex pt = exit_end;; pt += back_step) {
+		reserve_tiles.push_back(pt);
+		if (pt == leading_tile) break;
+		if (!IsValidTile(pt + back_step) || !IsCompatibleTrainStationTile(pt + back_step, pt) || reserve_tiles.size() > platform_tiles) break;
+	}
+	bool all_reserved = true;
+	for (const TileIndex &pt : reserve_tiles) {
+		Track track = (IsRailStationTile(pt)) ? GetRailStationTrack(pt) : FindFirstTrack(GetTrackBits(pt));
+		if (!TryReserveRailTrack(pt, track)) {
+			all_reserved = false;
+		} else {
+		}
+	}
+
+	/* Hold the track beyond the exit end for the train, so that it can actually leave. */
+	bool exit_held = true;
+	const TileIndex exit_tile = TileAddByDiagDir(exit_end, dir);
+	if (IsValidTile(exit_tile)) {
+		TrackBits bits = TRACK_BIT_NONE;
+		if (IsPlainRailTile(exit_tile)) bits = GetTrackBits(exit_tile);
+		else if (IsRailStationTile(exit_tile)) bits = GetRailStationTrackBits(exit_tile);
+		const TrackBits connecting = bits & DiagdirReachesTracks(ReverseDiagDir(dir));
+		if (CountBits(static_cast<uint8_t>(connecting)) == 1) {
+			/* Exactly one continuation: hold it for the train. On a fork or a dead end the engine's
+			 * own pathfinder reserves a branch (or waits) when the train departs. */
+			exit_held = TryReserveRailTrack(exit_tile, FindFirstTrack(connecting));
+		}
+	}
+
+	if (!exit_held || !all_reserved) {
+		/* The way out is already reserved by another train: leave the train on the carrier and try
+		 * again later, rather than parking it somewhere it cannot move from. */
+		for (const TileIndex &pt : reserve_tiles) UnreserveRailTrack(pt, (IsRailStationTile(pt)) ? GetRailStationTrack(pt) : FindFirstTrack(GetTrackBits(pt)));
+		return false;
+	}
+
+	tr->MarkDirty();
+	return true;
+}
+
 /* Debug helpers: only compiled in for a test build (RORO_DEBUG_COMMANDS), see console_cmds.cpp. */
 #ifdef RORO_DEBUG_COMMANDS
 
@@ -958,6 +1677,35 @@ static void RVTransportPayTransportFee(const Vehicle *carrier, const Vehicle *rv
 }
 
 /**
+ * Clear every reservation on this station's rail platforms that no train owns. PBS attribution is
+ * geometric (it follows the reserved chain and looks for a train on it), so a reservation with no
+ * train anywhere on its chain is an orphan: its chain was broken earlier (e.g. a train was loaded
+ * onto a carrier from this platform), and no engine will ever free it. Such reservations would
+ * block placements forever, so they are removed here.
+ */
+static void RVTransportHealOrphanReservations(const Station *st)
+{
+	for (TileIndex t : st->train_station) {
+		if (!st->TileBelongsToRailStation(t)) continue;
+		TrackBits reserved = GetReservedTrackbits(t);
+		if (reserved == TRACK_BIT_NONE) continue;
+		bool orphan = true;
+		for (Track tr = TRACK_BEGIN; tr < TRACK_END; tr++) {
+			if ((reserved & TrackToTrackBits(tr)) == TRACK_BIT_NONE) continue;
+			if (GetTrainForReservation(t, tr) != nullptr) {
+				orphan = false;
+				break;
+			}
+		}
+		if (!orphan) continue;
+		for (Track tr = TRACK_BEGIN; tr < TRACK_END; tr++) {
+			if ((GetReservedTrackbits(t) & TrackToTrackBits(tr)) == TRACK_BIT_NONE) continue;
+			UnreserveRailTrack(t, tr);
+		}
+	}
+}
+
+/**
  * Unload road vehicles carried by this carrier at the given station.
  * @return true if at least one road vehicle reached the road network.
  */
@@ -967,11 +1715,15 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 
 	if (carrier == nullptr || st == nullptr) return false;
 
+
+	/* Remove phantom reservations before trying to place anything. */
+	RVTransportHealOrphanReservations(st);
+
 	bool any = false;
 	for (Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & RVTF_TRANSPORTED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
-		if (!v->IsFrontEngine()) continue;          // the parts are handled together with the front
+		if (!RVTransportIsStateHolder(v)) continue; // the parts are handled together with the whole vehicle
+		if (!RVTransportIsOnCarrier(carrier, v)) continue;
 
 		/* Only unload a road vehicle which wants to be dropped here: the station of its own "be
 		 * unloaded here" order. A road vehicle which declares no destination at all is dropped at the
@@ -979,8 +1731,78 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 		 * order says "unload all road vehicles" drops everything, whatever the vehicles declare. */
 		if (!force && (carrier->current_order.GetRVTransportFlags() & ORVTF_UNLOAD_ALL) == 0) {
 			const StationID declared = RVTransportGetDeclaredDestination(v);
-			if (declared != StationID::Invalid() && declared != st->index) continue;
+			if (declared != StationID::Invalid() && declared != st->index) {
+				continue;
+			}
 		}
+
+		/* Trains are put back on the rails of this station's platforms; road vehicles use the
+		 * road stops below. */
+		if (v->type == VehicleType::Train) {
+			TileIndex exit_end = INVALID_TILE;
+			DiagDirection dir = DiagDirection::Begin;
+			uint platform_tiles = 0;
+			Train *consist = Train::From(v->First());
+			if (!FindFreeRailPlatformTile(st, consist, exit_end, dir, platform_tiles)) {
+				continue; // no room: stay on the carrier, retry later
+			}
+
+			/* Don't let the train back out of the platform: when only the chain tail can lead the
+			 * train (a locomotive at the rear), place the consist mirrored and marked as driving
+			 * backwards, so the tail leads the departure towards the next destination. The consist
+			 * caches are refreshed inside the placement, so the no-driving-cab speed limit is not
+			 * applied to the (locomotive-equipped) leading end. */
+			const bool tail_leads = !consist->CanLeadTrain() && consist->Last()->CanLeadTrain();
+
+			/* Remember how the train was carried, in case the platform refuses it below: a
+			 * distributed train records a host part and weight per member, so snapshot every
+			 * member rather than only the state holder's. */
+			std::vector<VehicleID> snap_hosts;
+			std::vector<uint16_t> snap_weights;
+			for (Vehicle *u = v->First(); u != nullptr; u = u->Next()) {
+				snap_hosts.push_back(u->transported_host_part);
+				snap_weights.push_back(u->transported_weight);
+			}
+			const VehicleID host_part = v->transported_host_part;
+			const StationID transported_from = v->transported_from;
+
+			if (!RVTransportPlaceTrainOnPlatform(consist, exit_end, dir, platform_tiles, tail_leads)) {
+				/* The way out of the platform is blocked: put the train back on the carrier rather
+				 * than parking it somewhere it cannot move from, and retry later. */
+				size_t i = 0;
+				for (Vehicle *u = v->First(); u != nullptr; u = u->Next(), i++) {
+					u->rv_transport_flags |= RVTF_TRANSPORTED;
+					u->transported_by = carrier->index;
+					u->transported_host_part = snap_hosts[i];
+					u->transported_weight = snap_weights[i];
+					u->transported_from = transported_from;
+					u->vehicle_flags.Reset(VehicleFlag::DrivingBackwards); // the layout attempt may have set it
+					u->vehstatus.Set(VehState::Stopped);
+					u->vehstatus.Set(VehState::Hidden);
+					u->cur_speed = 0;
+					UpdateVehicleTileHash(u, true);   // off the rail network again
+					InvalidateVehicleTickCaches();
+					u->UpdateIsDrawn();
+					u->Vehicle::UpdateViewport(true);
+				}
+				continue;
+			}
+
+			RVTransportPayTransportFee(carrier, v, transported_from, st);
+
+			/* The train stands centred on the platform now: let it enter the station's loading logic
+			 * exactly like a train which has just arrived, so that the "be unloaded here" order it
+			 * is on completes and the train departs through the normal engine flow. */
+			Train *primary = consist->Primary();
+			primary->last_station_visited = st->index;
+			primary->BeginLoading();
+
+			carrier->MarkDirty();
+			RVTransportRefreshCarrier(carrier, Vehicle::GetIfValid(host_part));
+			any = true;
+			continue;
+		}
+
 
 		TileIndex tile = INVALID_TILE;
 		DiagDirection dd = DiagDirection::NE;
@@ -1000,7 +1822,7 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 
 		/* Put the whole road vehicle on that tile, in the same way a vehicle leaves a depot: every
 		 * part starts on the tile and spreads out while the vehicle drives off. */
-		for (Vehicle *u = v; u != nullptr; u = u->Next()) {
+		for (Vehicle *u = v->First(); u != nullptr; u = u->Next()) {
 			u->rv_transport_flags &= ~RVTF_TRANSPORTED;
 			u->transported_by = VehicleID::Invalid();
 			u->transported_host_part = VehicleID::Invalid();
@@ -1034,7 +1856,7 @@ bool RVTransportDetachAtStation(Vehicle *carrier, Station *st, bool force)
 		if (rs == nullptr || !rs->Enter(RoadVehicle::From(v))) {
 			/* The stop refused the vehicle after all: put it back on the carrier rather than leaving
 			 * it half placed (its room was checked above, so this should not happen). */
-			for (Vehicle *u = v; u != nullptr; u = u->Next()) {
+			for (Vehicle *u = v->First(); u != nullptr; u = u->Next()) {
 				u->rv_transport_flags |= RVTF_TRANSPORTED;
 				u->transported_by = carrier->index;
 				u->transported_host_part = host_part;
@@ -1128,8 +1950,8 @@ uint32_t RVTransportCountWantingUnloadHere(const Vehicle *carrier, const Station
 	uint32_t count = 0;
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
-		if (!v->IsFrontEngine()) continue;
+		if (!RVTransportIsStateHolder(v)) continue;
+		if (!RVTransportIsOnCarrier(carrier, v)) continue;
 		const StationID declared = RVTransportGetDeclaredDestination(v);
 		if (declared != StationID::Invalid() && declared != st->index) continue; // wants another station
 		count++;
@@ -1254,10 +2076,14 @@ Vehicle *RVTransportFindWaitingAtStation(const Station *st, const Vehicle *carri
 	if (st == nullptr) return nullptr;
 	for (Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & RVTF_WAITING) == 0) continue;
-		if (v->type != VehicleType::Road) continue;
-		if (!v->IsFrontEngine()) continue;
-		if (v->last_station_visited != st->index) continue;
-		if (carrier != nullptr && !RVTransportOrderAllowsCandidate(carrier, v)) continue; // does not match: skip it
+		if (v->type != VehicleType::Road && v->type != VehicleType::Train) continue;
+		if (!RVTransportIsStateHolder(v)) continue;
+		if (v->last_station_visited != st->index) {
+			continue;
+		}
+		if (carrier != nullptr && !RVTransportOrderAllowsCandidate(carrier, v)) {
+			continue; // does not match: skip it
+		}
 		return v;
 	}
 	return nullptr;
@@ -1283,10 +2109,22 @@ static bool RVTransportCanPutDownHere(const RoadVehicle *rv, TileIndex t)
 }
 
 /**
- * Check the carried state of all road vehicles after a savegame was loaded. A road vehicle which
+ * Train counterpart of RVTransportCanPutDownHere(): can the train stand on this tile (plain rail,
+ * rail station or a rail tunnel/bridge)?
+ */
+static bool RVTransportTrainCanPutDownHere(const Train *tr, TileIndex t)
+{
+	if (!IsValidTile(t)) return false;
+	if (IsPlainRailTile(t)) return RVTransportRailTypeCompatible(tr, GetRailType(t));
+	if (IsRailStationTile(t) || IsRailWaypointTile(t)) return RVTransportRailTypeCompatible(tr, GetRailType(t));
+	return IsTileType(t, TileType::TunnelBridge) && GetTunnelBridgeTransportType(t) == TransportType::Rail;
+}
+
+/**
+ * Check the carried state of all carried vehicles after a savegame was loaded. A vehicle which
  * claims to be carried by a vehicle that does not exist any more (or by something which cannot be
- * a carrier) must not stay hidden and frozen on the map: it is put back on the road, or, if there
- * is no sane place for it, removed.
+ * a carrier) must not stay hidden and frozen on the map: it is put back on the road or the rails,
+ * or, if there is no sane place for it, removed.
  */
 void RVTransportValidateAfterLoad()
 {
@@ -1294,11 +2132,12 @@ void RVTransportValidateAfterLoad()
 	std::vector<VehicleID> remove;
 
 	for (Vehicle *v : Vehicle::Iterate()) {
-		if (v->type != VehicleType::Road) continue;
+		if (v->type != VehicleType::Road && v->type != VehicleType::Train) continue;
 
-		if (!v->IsFrontEngine()) {
-			/* A part of an articulated road vehicle follows its front: only clear stale state here. */
-			if ((v->First()->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) {
+		if (!RVTransportIsStateHolder(v)) {
+			/* A following part - of an articulated road vehicle or of a train - follows the unit which
+			 * holds the transport state: only clear stale state here. */
+			if ((v->Primary()->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) {
 				/* A part which was carried itself is hidden because it is being carried: nothing
 				 * else can hide it, because it is off the road network and frozen. A part which
 				 * was not carried is hidden for one of the engine's own reasons instead (a road
@@ -1326,8 +2165,12 @@ void RVTransportValidateAfterLoad()
 			continue;
 		}
 
-		const Vehicle *carrier = Vehicle::GetIfValid(v->transported_by);
-		if (carrier != nullptr && carrier->type != VehicleType::Road && carrier->First() == carrier) {
+		/* The part the vehicle occupies decides whether it is really carried: it has to exist, and a
+		 * road vehicle is never a carrier. The stored transported_by is deliberately not consulted:
+		 * it names a vehicle of the consist the road vehicle was loaded onto, which splitting,
+		 * joining or rearranging the consist may have moved into another part since. */
+		const Vehicle *part = Vehicle::GetIfValid(v->transported_host_part);
+		if (part != nullptr && part->type != v->type) {
 			/* Carried as expected. A savegame written before the road vehicle's order was advanced when
 			 * it was loaded still has the "wait to be transported" order as its current order: catch
 			 * up. The station stop of the vehicle is finished here as well - a savegame can also have
@@ -1338,10 +2181,13 @@ void RVTransportValidateAfterLoad()
 			continue; // carried as expected
 		}
 
-		Debug(misc, 0, "RoRo: road vehicle #{} was carried by missing vehicle #{}", v->index.base(), v->transported_by.base());
+		Debug(misc, 0, "RoRo: road vehicle #{} was carried by missing part #{}", v->index.base(), v->transported_host_part.base());
 		v->transported_by = VehicleID::Invalid();
 		v->transported_host_part = VehicleID::Invalid();
-		if (RVTransportCanPutDownHere(RoadVehicle::From(v), v->tile)) {
+		const bool can_put_down = (v->type == VehicleType::Train)
+				? RVTransportTrainCanPutDownHere(Train::From(v), v->tile)
+				: RVTransportCanPutDownHere(RoadVehicle::From(v), v->tile);
+		if (can_put_down) {
 			release.push_back(v->index);
 		} else {
 			remove.push_back(v->index);
@@ -1357,7 +2203,7 @@ void RVTransportValidateAfterLoad()
 		if (front == nullptr) continue;
 
 		std::vector<VehicleID> chain;
-		for (Vehicle *u = front; u != nullptr; u = u->Next()) chain.push_back(u->index);
+		for (Vehicle *u = front->First(); u != nullptr; u = u->Next()) chain.push_back(u->index);
 		for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
 			Vehicle *u = Vehicle::GetIfValid(*it);
 			if (u == nullptr) continue;
@@ -1386,7 +2232,7 @@ void RVTransportForceRelease(Vehicle *rv)
 
 	/* Release the whole (possibly articulated) road vehicle at its remembered tile. */
 	const TileIndex tile = rv->tile;
-	for (Vehicle *u = rv; u != nullptr; u = u->Next()) {
+	for (Vehicle *u = rv->First(); u != nullptr; u = u->Next()) {
 		u->rv_transport_flags &= ~Vehicle::RV_TRANSPORT_CARRIED;
 		u->transported_by = VehicleID::Invalid();
 		u->transported_host_part = VehicleID::Invalid();
@@ -1406,6 +2252,20 @@ void RVTransportForceRelease(Vehicle *rv)
 			rvv->frame = 0;
 			UpdateVehicleTileHash(u, true);    // make sure it is not listed where it came from
 			UpdateVehicleTileHash(u, false);   // back on the road network
+		} else if (u->type == VehicleType::Train && IsValidTile(tile)) {
+			Train *tu = Train::From(u);
+			u->tile = tile;
+			u->x_pos = TileX(tile) * TILE_SIZE + TILE_SIZE / 2;
+			u->y_pos = TileY(tile) * TILE_SIZE + TILE_SIZE / 2;
+			u->z_pos = GetSlopePixelZ(u->x_pos, u->y_pos);
+			u->direction = DiagDirToDir(DiagDirection::NE);
+			if (IsRailStationTile(tile)) {
+				tu->track = TrackToTrackBits(GetRailStationTrack(tile));
+			} else if (IsPlainRailTile(tile)) {
+				tu->track = GetTrackBits(tile);
+			}
+			UpdateVehicleTileHash(u, true);    // make sure it is not listed where it came from
+			UpdateVehicleTileHash(u, false);   // back on the rail network
 		}
 		InvalidateVehicleTickCaches();
 		u->UpdateIsDrawn();
@@ -1423,14 +2283,16 @@ const Vehicle *RVTransportGetFollowVehicle(const Vehicle *v)
 	if (v == nullptr) return nullptr;
 	if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) return v;
 
-	const Vehicle *carrier = Vehicle::GetIfValid(v->transported_by);
+	const Vehicle *carrier = RVTransportGetCarrier(v);
 	if (carrier == nullptr) return v;
 	return carrier->GetMovingFront();
 }
 
 /**
- * Destroy the road vehicles carried by this carrier: they are lost together with it, exactly like
- * the wagons of a crashed train, instead of being left behind on the map.
+ * Destroy the road vehicles held by this vehicle: they are lost together with it, exactly like the
+ * wagons of a crashed train, instead of being left behind on the map. Covers both a whole carrier
+ * which is going away (they are on one of its parts) and a single part which is removed on its own
+ * (a wagon sold in a depot), which loses the road vehicles it holds.
  */
 void RVTransportDestroyCarriedVehicles(Vehicle *carrier)
 {
@@ -1441,8 +2303,8 @@ void RVTransportDestroyCarriedVehicles(Vehicle *carrier)
 	std::vector<VehicleID> fronts;
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if ((v->rv_transport_flags & Vehicle::RV_TRANSPORT_CARRIED) == 0) continue;
-		if (v->transported_by != carrier->index) continue;
 		if (!v->IsFrontEngine()) continue;
+		if (v->transported_host_part != carrier->index && !RVTransportIsOnCarrier(carrier, v)) continue;
 		fronts.push_back(v->index);
 	}
 
@@ -1453,7 +2315,7 @@ void RVTransportDestroyCarriedVehicles(Vehicle *carrier)
 		/* Gather the whole (possibly articulated) vehicle, then delete it from the rear, as a part
 		 * must never outlive the vehicle it is attached to. */
 		std::vector<VehicleID> chain;
-		for (Vehicle *u = front; u != nullptr; u = u->Next()) chain.push_back(u->index);
+		for (Vehicle *u = front->First(); u != nullptr; u = u->Next()) chain.push_back(u->index);
 
 		for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
 			Vehicle *u = Vehicle::GetIfValid(*it);

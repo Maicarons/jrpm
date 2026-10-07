@@ -2708,7 +2708,7 @@ uint8_t CalcPercentVehicleFilled(const Vehicle *front, StringID *colour)
 	 * (e.g. a primary vehicle sitting at the chain tail after a decouple),
 	 * so always walk from the physical chain head. */
 	for (const Vehicle *v = front->First(); v != nullptr; v = v->Next()) {
-		count += v->cargo.StoredCount();
+		count += RVTransportGetPartCargoAmount(v);
 		max += v->cargo_cap;
 		if (v->cargo_cap != 0 && colour != nullptr) {
 			unloading += v->vehicle_flags.Test(VehicleFlag::CargoUnloading) ? 1 : 0;
@@ -2752,7 +2752,7 @@ uint8_t CalcPercentVehicleFilledOfCargo(const Vehicle *front, CargoType cargo)
 	/* Count up max and used */
 	for (const Vehicle *v = front->First(); v != nullptr; v = v->Next()) {
 		if (v->cargo_type != cargo) continue;
-		count += v->cargo.StoredCount();
+		count += RVTransportGetPartCargoAmount(v);
 		max += v->cargo_cap;
 	}
 
@@ -3638,11 +3638,6 @@ void Vehicle::BeginLoading()
 	Station::Get(this->last_station_visited)->MarkTilesDirty(true);
 	this->cur_speed = 0;
 	this->MarkDirty();
-
-	/* RoRo: a road vehicle whose order says "wait to be transported" stops here and waits. */
-	if (this->type == VehicleType::Road && (this->current_order.GetRVTransportFlags() & ORVTF_OWN_WAIT) != 0) {
-		RVTransportSetWaiting(this, true);
-	}
 }
 
 /**
@@ -3936,6 +3931,17 @@ void Vehicle::HandleLoading(bool mode)
 			bool cont_wait = ShouldVehicleContinueWaiting(this);
 			if (mode || !this->vehicle_flags.Test(VehicleFlag::LoadingFinished) || (this->current_order_time < wait_time && this->current_order.GetLeaveType() != OLT_LEAVE_EARLY) || cont_wait) {
 				if (!mode && this->type == VehicleType::Train && Train::From(this)->flags.Test(VehicleRailFlag::AdvanceInPlatform)) this->AdvanceLoadingInStation();
+				return;
+			}
+
+			/* RoRo: a vehicle whose order says "wait to be transported" first finishes its normal
+			 * loading and unloading like any other vehicle, and then stops here to wait for a
+			 * carrier instead of departing. The order is not advanced: it stays the executed one
+			 * until the vehicle is picked up by a carrier (which advances it to its "be unloaded
+			 * here" order). */
+			if ((this->type == VehicleType::Road || this->type == VehicleType::Train) &&
+					(this->current_order.GetRVTransportFlags() & ORVTF_OWN_WAIT) != 0) {
+				RVTransportSetWaiting(this, true);
 				return;
 			}
 

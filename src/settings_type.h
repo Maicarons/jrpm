@@ -165,6 +165,7 @@ struct DifficultySettings {
 	bool     economy;                               ///< how volatile is the economy
 	TrainFlipReversingAllowed train_flip_reverse_allowed; ///< which stations can the train reverse at?
 	bool     disasters;                             ///< are disasters enabled
+	bool     rain;                                  ///< is random rain enabled
 	uint8_t  town_council_tolerance;                ///< minimum required town ratings to be allowed to demolish stuff
 	bool     infinite_money;                        ///< whether spending money despite negative balance is allowed
 	bool     money_cheat_in_multiplayer;            ///< is the money cheat permitted for non-admin multiplayer clients

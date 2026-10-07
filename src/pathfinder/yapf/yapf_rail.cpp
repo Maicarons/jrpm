@@ -181,20 +181,36 @@ private:
 		TileIndex     start = tile;
 		TileIndexDiff diff = TileOffsByDiagDir(dir);
 		const Train *v = Yapf().GetVehicle();
+		const bool couple = v->current_order.IsType(OT_GOTO_COUPLE);
+		/* Every tile walked below belongs to the same continuous platform strip
+		 * as \a start, so whether that strip is the couple partner's can be
+		 * decided once instead of per tile (IsCouplePartnerTile walks the whole
+		 * strip each call). */
+		const bool partner_strip = couple && IsCouplePartnerTile(v, start);
 
-		/* The couple semantics: nothing may stand between us and the partner
-		 * before anything is reserved towards it. A train parked on the far
-		 * side of the partner is not in the way and does not hold the couple
-		 * up, so only the track we actually travel is looked at. */
-		if (v->current_order.IsType(OT_GOTO_COUPLE) && !IsCoupleApproachPathClear(v)) return false;
-
+		/* Tiles of the claimed couple partner's own platform are shared: the
+		 * partner's arrival reservation covers the whole strip, also the empty
+		 * tiles in front of and behind its body. Any other reservation on the
+		 * platform (another train standing in the same block) still blocks.
+		 *
+		 * A foreign consist standing on the part of the platform between us and
+		 * the partner also blocks. Tiles on the far side of the partner are not
+		 * travelled, so they are exempt: the walk goes from the far end towards
+		 * the origin, so only tiles from the partner onwards are checked. */
+		bool seen_partner = false;
 		do {
-			/* Tiles of the claimed couple partner's own platform are shared:
-			 * the partner's arrival reservation covers the whole strip, also
-			 * the empty tiles in front of and behind its body. Any other
-			 * reservation on the platform (another train standing in the same
-			 * block) still blocks. */
-			if (HasStationReservation(tile) && !IsCouplePartnerTile(v, tile)) return false;
+			const bool on_partner = partner_strip && IsCouplePartnerVehicleTile(v, tile);
+			if (on_partner) seen_partner = true;
+			/* A foreign consist standing on a tile we reserve is in the way. On the
+			 * partner's own strip only the part between the partner and the origin is
+			 * travelled, and the partner's own tiles are the contact point; every
+			 * other strip is traversed in full. */
+			if (couple && !on_partner && (seen_partner || !partner_strip) && HasForeignConsistOnTile(v, tile)) {
+				return false;
+			}
+			if (HasStationReservation(tile) && !partner_strip) {
+				return false;
+			}
 			SetRailStationReservation(tile, true);
 			MarkTileDirtyByTile(tile, VMDF_NOT_MAP_MODE);
 			tile = TileAdd(tile, diff);
@@ -215,6 +231,7 @@ private:
 	 */
 	bool ReserveSingleTrack(TileIndex tile, Trackdir td)
 	{
+		const Train *v = Yapf().GetVehicle();
 		if (IsRailStationTile(tile)) {
 			if (!ReserveRailStationPlatform(tile, TrackdirToExitdir(ReverseTrackdir(td)))) {
 				/* Platform could not be reserved, undo. */
@@ -222,6 +239,15 @@ private:
 				this->res_fail_td = td;
 			}
 		} else {
+			/* A goto-couple train may only travel towards its partner while no
+			 * foreign consist stands on the track tile it passes. Plain-track
+			 * reservations alone miss a foreign train on a crossing/parallel
+			 * track bit, which then gets driven into. */
+			if (v->current_order.IsType(OT_GOTO_COUPLE) && HasForeignConsistOnTile(v, tile)) {
+				this->res_fail_tile = tile;
+				this->res_fail_td = td;
+				return false;
+			}
 			if (!TryReserveRailTrackdir(Yapf().GetVehicle(), tile, td)) {
 				/* Tile couldn't be reserved, undo. */
 				this->res_fail_tile = tile;

@@ -968,6 +968,14 @@ static void CalculateRefitMasks()
 				CargoType vehicles_cargo = RV_TRANSPORT_CARGO_SLOT;
 				if (IsValidCargoType(vehicles_cargo)) ei->refit_mask.Set(vehicles_cargo);
 			}
+			/* Train transport: only ships may be refitted to the dedicated "Vehicles (Train)" cargo,
+			 * so that a train can never be carried by a ship's or aircraft's counterpart: an aircraft
+			 * can never take a train (the rail cargo is a ship hold's property), and this keeps the
+			 * refit option from being offered to aircraft at all. */
+			if (e->type == VehicleType::Ship) {
+				CargoType rail_cargo = RAIL_TRANSPORT_CARGO_SLOT;
+				if (IsValidCargoType(rail_cargo)) ei->refit_mask.Set(rail_cargo);
+			}
 		}
 
 		/* Clear invalid cargoslots (from default vehicles or pre-NewCargo GRFs) */

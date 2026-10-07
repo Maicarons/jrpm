@@ -57,6 +57,7 @@ STR_CARGO_PLURAL_BATTERIES                                      :Batteries
 STR_CARGO_PLURAL_PLASTIC                                        :Plastic
 STR_CARGO_PLURAL_FIZZY_DRINKS                                   :Fizzy Drinks
 STR_CARGO_PLURAL_VEHICLES                                        :Vehicles (Car)
+STR_CARGO_PLURAL_RAILVEHICLES                                    :Vehicles (Train)
 
 # Singular cargo name
 STR_CARGO_SINGULAR_NOTHING                                      :
@@ -92,6 +93,7 @@ STR_CARGO_SINGULAR_BATTERY                                      :Battery
 STR_CARGO_SINGULAR_PLASTIC                                      :Plastic
 STR_CARGO_SINGULAR_FIZZY_DRINK                                  :Fizzy Drink
 STR_CARGO_SINGULAR_VEHICLE                                       :Vehicle (Car)
+STR_CARGO_SINGULAR_RAILVEHICLE                                   :Vehicle (Train)
 
 # Quantity of cargo
 STR_QUANTITY_NOTHING                                            :
@@ -127,6 +129,7 @@ STR_QUANTITY_BATTERIES                                          :{COMMA} batter{
 STR_QUANTITY_PLASTIC                                            :{VOLUME_LONG} of plastic
 STR_QUANTITY_FIZZY_DRINKS                                       :{COMMA} fizzy drink{P "" s}
 STR_QUANTITY_VEHICLES                                            :{WEIGHT_LONG} of vehicles (car)
+STR_QUANTITY_RAILVEHICLES                                        :{WEIGHT_LONG} of vehicles (train)
 STR_QUANTITY_N_A                                                :N/A
 
 # Two letter abbreviation of cargo name
@@ -163,6 +166,7 @@ STR_ABBREV_BATTERIES                                            :BA
 STR_ABBREV_PLASTIC                                              :PL
 STR_ABBREV_FIZZY_DRINKS                                         :FZ
 STR_ABBREV_VEHICLES                                              :VC
+STR_ABBREV_RAILVEHICLES                                          :VT
 STR_ABBREV_ALL                                                  :ALL
 
 # 'Mode' of transport for cargoes
@@ -1016,6 +1020,9 @@ STR_ORDER_DECOUPLE_LOAD_AND_WAIT                                :(Load and wait 
 STR_ORDER_DECOUPLE_WAIT_FOR_COUPLE                              :(Wait for couple without loading)
 STR_ORDER_DECOUPLE_LOAD_AND_SCHEDULE                            :(Load and use schedule {RAW_STRING})
 STR_ORDER_DECOUPLE_USE_SCHEDULE                                 :(Use schedule {RAW_STRING})
+STR_ORDER_DECOUPLE_SAME_DIR_EXIT                                :Allow leaving in the same direction once the other part has left
+STR_ORDER_DECOUPLE_SAME_DIR_FIRST                               :(First part may follow the other part's exit)
+STR_ORDER_DECOUPLE_SAME_DIR_SECOND                              :(Second part may follow the other part's exit)
 STR_COUPLE_DIAGNOSTIC_BUTTON                                   :{BLACK}Diagnostics
 STR_COUPLE_DIAGNOSTIC_TOOLTIP                                  :{BLACK}Show the current coupling target, claim and candidate rejection reasons
 STR_COUPLE_DIAGNOSTIC_CAPTION                                  :{WHITE}Coupling diagnostics
@@ -1467,6 +1474,8 @@ STR_CONFIG_SETTING_TRAIN_FLIP_REVERSE_NONE                      :None
 
 STR_CONFIG_SETTING_DISASTERS                                    :Disasters: {STRING2}
 STR_CONFIG_SETTING_DISASTERS_HELPTEXT                           :Toggle disasters which may occasionally block or destroy vehicles or infrastructure
+STR_CONFIG_SETTING_RAIN                                         :Random rain: {STRING2}
+STR_CONFIG_SETTING_RAIN_HELPTEXT                                :Occasionally let it rain over the whole map. Rain darkens the world and is purely visual
 
 STR_CONFIG_SETTING_CITY_APPROVAL                                :Local authority attitude: {STRING2}
 STR_CONFIG_SETTING_CITY_APPROVAL_HELPTEXT                       :Choose how much noise and environmental damage by companies affect their town rating and further construction actions in the town
@@ -2444,6 +2453,10 @@ STR_CHEAT_CHANGE_DATE                                           :{LTBLUE}Change 
 STR_CHEAT_CHANGE_DATE_QUERY_CAPT                                :{WHITE}Change current year
 STR_CHEAT_SETUP_PROD                                            :{LTBLUE}Enable modifying production values: {ORANGE}{STRING}
 STR_CHEAT_STATION_RATING                                        :{LTBLUE}Fix station ratings at 100%: {ORANGE}{STRING}
+STR_CHEAT_RAIN                                                  :{LTBLUE}Weather: {ORANGE}{STRING}
+STR_CHEAT_RAIN_AUTO                                             :Automatic
+STR_CHEAT_RAIN_RAINING                                          :Always raining
+STR_CHEAT_RAIN_SUNNY                                            :Always clear
 
 # Livery window
 STR_LIVERY_CAPTION                                              :{WHITE}{COMPANY} - Colour Scheme
@@ -4749,11 +4762,11 @@ STR_VEHICLE_STATUS_WAITING_UNBUNCHING                           :{LTBLUE}Waiting
 STR_VEHICLE_STATUS_CRASHED                                      :{RED}Crashed!
 STR_VEHICLE_STATUS_WAITING_TO_BE_TRANSPORTED                    :{LTBLUE}Waiting to be transported
 STR_VEHICLE_STATUS_BEING_TRANSPORTED                            :{LTBLUE}Being transported
-STR_VEHICLE_STATUS_CARRYING_ROAD_VEHICLES                       :{LTBLUE}Carrying {COMMA} vehicles (car)
-STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLES                       :Carried vehicles (car):
+STR_VEHICLE_STATUS_CARRYING_ROAD_VEHICLES                       :{LTBLUE}Carrying {COMMA} vehicles
+STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLES                       :Carried vehicles:
 STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLE                        :{BLACK}{VEHICLE}
 STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLE_EXTRA                  :{BLACK} ({COMMA}t)
-STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLE_NONE                   :{LTBLUE}This train is not carrying any vehicle (car)
+STR_VEHICLE_DETAILS_CARRIED_ROAD_VEHICLE_NONE                   :{LTBLUE}This train is not carrying any vehicle
 STR_VEHICLE_STATUS_BROKEN_DOWN                                  :{RED}Broken down
 STR_VEHICLE_STATUS_STOPPED                                      :{RED}Stopped
 STR_VEHICLE_STATUS_TRAIN_STOPPING_VEL                           :{RED}{VELOCITY} - Stopping
@@ -4903,6 +4916,8 @@ STR_VEHICLE_DETAILS_TRAIN_TOTAL_CARGO_TOOLTIP                   :{BLACK}Show tot
 
 STR_VEHICLE_DETAILS_TRAIN_ARTICULATED_RV_CAPACITY               :{BLACK}Capacity: {LTBLUE}{RAW_STRING}
 
+STR_VEHICLE_DETAILS_HOLD_CAPACITY                               : ({RAW_STRING})
+
 # Vehicle refit
 STR_REFIT_CAPTION                                               :{WHITE}{VEHICLE} (Refit)
 STR_REFIT_TITLE                                                 :{GOLD}Select cargo type to carry:
@@ -4954,15 +4969,15 @@ STR_ORDER_DROP_LOAD_IF_POSSIBLE                                 :Load normal car
 STR_ORDER_DROP_FULL_LOAD_ALL                                    :Full load all normal cargo
 STR_ORDER_DROP_FULL_LOAD_ANY                                    :Full load any normal cargo
 STR_ORDER_DROP_NO_LOADING                                       :No normal cargo loading
-STR_ORDER_DROP_LOAD_ROAD_VEHICLES                               :Load vehicles (car)
-STR_ORDER_DROP_UNLOAD_ROAD_VEHICLES                             :Unload vehicles (car)
-STR_ORDER_DROP_UNLOAD_ALL_ROAD_VEHICLES                         :Unload all vehicles (car)
-STR_ORDER_DROP_UNLOAD_ALL_ROAD_VEHICLES_TOOLTIP                 :{BLACK}Unload every vehicle (car) here, including the ones whose own schedule says they want to get off somewhere else. Without this, only the vehicles which name this station in their own orders are dropped here.
-STR_ORDER_DROP_RV_MATCH_DEST                                    :Only vehicles (car) for the next stop
-STR_ORDER_DROP_WAIT_FOR_ROAD_VEHICLES                           :Wait for vehicles (car)
+STR_ORDER_DROP_LOAD_ROAD_VEHICLES                               :Load vehicles
+STR_ORDER_DROP_UNLOAD_ROAD_VEHICLES                             :Unload vehicles
+STR_ORDER_DROP_UNLOAD_ALL_ROAD_VEHICLES                         :Unload all vehicles
+STR_ORDER_DROP_UNLOAD_ALL_ROAD_VEHICLES_TOOLTIP                 :{BLACK}Unload every vehicle here, including the ones whose own schedule says they want to get off somewhere else. Without this, only the vehicles which name this station in their own orders are dropped here.
+STR_ORDER_DROP_RV_MATCH_DEST                                    :Only vehicles for the next stop
+STR_ORDER_DROP_WAIT_FOR_ROAD_VEHICLES                           :Wait for vehicles
 STR_ORDER_DROP_WAIT_TO_BE_TRANSPORTED                           :Wait to be transported
 STR_ORDER_DROP_BE_UNLOADED_HERE                                 :Be unloaded here
-STR_ORDER_DROP_RV_LOAD_STATE                                    :Vehicles (car): {STRING}
+STR_ORDER_DROP_RV_LOAD_STATE                                    :Vehicles: {STRING}
 STR_ORDER_RV_LOAD_STATE_ANY                                     :any
 STR_ORDER_RV_LOAD_STATE_EMPTY                                   :empty only
 STR_ORDER_RV_LOAD_STATE_FULL                                    :full only
@@ -4973,15 +4988,15 @@ STR_ORDER_DROP_RV_MIN_WAIT_NUM                                  :Wait at least: 
 STR_ORDER_RV_CARGO_CAN_CARRY                                    :Cargo: 
 STR_ORDER_RV_CARGO_IS_CARRYING                                  :Carrying: 
 STR_ORDER_RV_SLOT                                               :Slot: {TRSLOT}
-STR_ORDER_DROP_RV_TRANSPORT                                     :Vehicles (car) transport...
-STR_ORDER_DROP_RV_LOAD_ANY                                       :Load any vehicles (car)
-STR_ORDER_DROP_RV_LOAD_NEXT                                      :Load vehicles (car) going to the next stop
-STR_ORDER_DROP_RV_LOAD_OPTIONS                                   :Vehicles (car) loading options...
+STR_ORDER_DROP_RV_TRANSPORT                                     :Vehicles transport...
+STR_ORDER_DROP_RV_LOAD_ANY                                       :Load any vehicles
+STR_ORDER_DROP_RV_LOAD_NEXT                                      :Load vehicles going to the next stop
+STR_ORDER_DROP_RV_LOAD_OPTIONS                                   :Vehicles loading options...
 STR_ORDER_RV_TRANSPORT_MORE_OPTIONS                             :(other options)
 STR_ORDER_RV_CARGO_LOAD_DEFAULT                                 :Load normal cargo
 STR_ORDER_RV_CARGO_UNLOAD_DEFAULT                               :Unload normal cargo
-STR_ERROR_RV_REFIT_SCHEDULE                                      :{WHITE}Can't convert between vehicles (car) transport and normal cargo while the vehicle has a schedule; clear its orders first.
-STR_RV_TRANSPORT_CRITERIA_CAPTION                               :Vehicles (car) transport
+STR_ERROR_RV_REFIT_SCHEDULE                                      :{WHITE}Can't convert between vehicle transport and normal cargo while the vehicle has a schedule; clear its orders first.
+STR_RV_TRANSPORT_CRITERIA_CAPTION                               :Vehicles transport
 STR_RV_TRANSPORT_CRITERIA_LOAD_STATE                            :Load state
 STR_RV_TRANSPORT_CRITERIA_CARGO                                 :Cargo
 STR_RV_TRANSPORT_CRITERIA_CARGO_MODE                            :Cargo criterion
@@ -4990,6 +5005,9 @@ STR_RV_TRANSPORT_CRITERIA_IS_CARRYING                           :must be carryin
 STR_RV_TRANSPORT_CRITERIA_MIN_WAIT                              :Minimum waiting time
 STR_RV_TRANSPORT_CRITERIA_SLOT                                  :Trace restrict slot
 STR_RV_TRANSPORT_CRITERIA_SLOT_SET                              :a slot is set
+STR_RV_TRANSPORT_CRITERIA_SLOT_TYPE_TIP                         :{BLACK}Switch the slot list between road vehicle and train slots
+STR_RV_TRANSPORT_CRITERIA_SLOT_ROAD                             :Road
+STR_RV_TRANSPORT_CRITERIA_SLOT_TRAIN                            :Trains
 STR_RV_TRANSPORT_CRITERIA_LOAD_STATE_ANY                        :any
 STR_RV_TRANSPORT_CRITERIA_LOAD_STATE_EMPTY                      :empty only
 STR_RV_TRANSPORT_CRITERIA_LOAD_STATE_FULL                       :full only
@@ -5002,7 +5020,7 @@ STR_RV_TRANSPORT_CRITERIA_MIN_WAIT_10                           :10 days
 STR_RV_TRANSPORT_CRITERIA_MIN_WAIT_30                           :30 days
 STR_RV_TRANSPORT_CRITERIA_MIN_WAIT_60                           :60 days
 STR_RV_TRANSPORT_CRITERIA_MIN_WAIT_CUSTOM                       :a custom time
-STR_RV_TRANSPORT_CRITERIA_MAX                                   :Most vehicles (car) at once
+STR_RV_TRANSPORT_CRITERIA_MAX                                   :Most vehicles at once
 STR_RV_TRANSPORT_CRITERIA_MAX_ANY                               :Take any number
 STR_RV_TRANSPORT_CRITERIA_MAX_1                                 :Take at most 1
 STR_RV_TRANSPORT_CRITERIA_MAX_2                                 :Take at most 2
@@ -5774,8 +5792,8 @@ STR_ERROR_CAN_T_RENAME_AIRCRAFT_TYPE                            :Can't rename ai
 ###length VEHICLE_TYPES
 STR_ERROR_CAN_T_SELL_TRAIN                                      :Can't sell railway vehicle...
 STR_ERROR_CAN_T_SELL_ROAD_VEHICLE                               :Can't sell road vehicle...
-STR_ERROR_RV_TRANSPORT_CANNOT_SELL_CARRIED                      :Can't sell a vehicle (car) which is being transported
-STR_ERROR_RV_TRANSPORT_CANNOT_SELL_CARRIER                      :Unload the carried vehicles (car) first
+STR_ERROR_RV_TRANSPORT_CANNOT_SELL_CARRIED                      :Can't sell a vehicle which is being transported
+STR_ERROR_RV_TRANSPORT_CANNOT_SELL_CARRIER                      :Unload the carried vehicles first
 STR_ERROR_CAN_T_SELL_SHIP                                       :Can't sell ship...
 STR_ERROR_CAN_T_SELL_AIRCRAFT                                   :Can't sell aircraft...
 
@@ -5823,7 +5841,7 @@ STR_ERROR_TOO_MANY_ORDERS                                       :too many orders
 STR_ERROR_CAN_T_INSERT_NEW_ORDER                                :Can't insert new order...
 STR_ERROR_CAN_T_DELETE_THIS_ORDER                               :Can't delete this order...
 STR_ERROR_CAN_T_MODIFY_THIS_ORDER                               :Can't modify this order...
-STR_ERROR_RV_TRANSPORT_STATION_ORDER_ONLY                       :Vehicles (car) transport can only be set on a station order
+STR_ERROR_RV_TRANSPORT_STATION_ORDER_ONLY                       :Vehicles transport can only be set on a station order
 STR_ERROR_CAN_T_MOVE_THIS_ORDER                                 :Can't move this order...
 STR_ERROR_CAN_T_SKIP_ORDER                                      :Can't skip current order...
 STR_ERROR_CAN_T_SKIP_TO_ORDER                                   :Can't skip to selected order...

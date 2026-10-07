@@ -777,6 +777,15 @@ static void AfterLoadValidateCoupleClaims()
 	/* Restore the persisted claim state onto the train primaries. */
 	SlApplyCoupleClaims();
 
+	/* Claim data written by the same build (current feature version, e.g. the
+	 * map snapshot a joining client downloads) is authoritative: it mirrors
+	 * the live server's couple state, including halves that look one-sided
+	 * because the counterpart is re-derived during play. Wiping "inconsistent"
+	 * entries here would make the joining client drop state the server still
+	 * acts on, and re-derive it differently -> desync on join. Only sanitize
+	 * migrated data from older feature versions. */
+	if (_sl_xv_feature_versions[XSLFI_COUPLE_CLAIM_STATE] >= 1) return;
+
 	for (Train *t : Train::Iterate()) {
 		if (!t->IsPrimaryVehicle()) continue;
 
@@ -808,6 +817,7 @@ static void AfterLoadValidateCoupleClaims()
 
 		if (t->couple_body_hold && !t->current_order.IsType(OT_WAIT_COUPLE)) t->couple_body_hold = false;
 	}
+
 }
 
 /**

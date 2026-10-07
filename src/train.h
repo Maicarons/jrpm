@@ -112,6 +112,7 @@ void DeleteVisibleTrain(Train *v);
 void CheckBreakdownFlags(Train *v);
 void GetTrainSpriteSize(EngineID engine, uint &width, uint &height, int &xoffs, int &yoffs, EngineImageType image_type);
 bool TrainFitStation(const Train *v);
+void TrainMoveToPosition(Train *v, int x, int y);
 bool IsCoupleArrangementValid(Train *v_phys, Train *u_phys);
 
 /** First rule which rejects a train as a coupling candidate. */
@@ -632,6 +633,18 @@ private:
 	void UpdateTrainSpeedAdaptationLimitInternal(uint16_t speed);
 
 public:
+	/** RoRo: weight of this single vehicle including its cargo, for the carriage-by-carriage loading of carriers. */
+	inline uint16_t GetSelfWeight() const
+	{
+		return this->GetWeight();
+	}
+
+	/** RoRo: weight of this single vehicle when fully loaded with its current cargo, for the carriage-by-carriage loading of carriers. */
+	inline uint16_t GetSelfMaxWeight() const
+	{
+		return this->GetMaxWeight();
+	}
+
 	inline void UpdateTrainSpeedAdaptationLimit(uint16_t speed)
 	{
 		if (speed != this->signal_speed_restriction) this->UpdateTrainSpeedAdaptationLimitInternal(speed);

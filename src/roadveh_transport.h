@@ -11,11 +11,13 @@
 #define ROADVEH_TRANSPORT_H
 
 #include "core/enum_type.hpp"
+#include "cargo_type.h"
 #include "station_type.h"
 #include "vehicle_type.h"
 
 class Vehicle;
 struct Station;
+struct Engine;
 
 /** Bits stored in Vehicle::rv_transport_flags. */
 static const uint8_t RVTF_WAITING     = 1 << 0; ///< Road vehicle waits at a station to be loaded onto a carrier.
@@ -94,11 +96,66 @@ uint32_t RVTransportGetVehicleWeightTonnes(const Vehicle *rv);
 /** Transport capacity in tonnes of a carrier part (based on its current cargo and capacity). */
 uint32_t RVTransportGetPartCapacityTonnes(const Vehicle *part);
 
-/** Tonnes already used on this carrier part by carried road vehicles. */
+/**
+ * Tonnes of road vehicles this carrier part holds. Counted per part, so it is the room the parts
+ * next to it have which decides whether another road vehicle still fits.
+ */
+uint32_t RVTransportGetPartCarriedTonnes(const Vehicle *part);
+
+/**
+ * Tonnes already used on this carrier part: the road vehicles on it plus the cargo it really
+ * carries. A part which is already loaded (a bulk wagon full of coal, say) therefore has less room
+ * left for a road vehicle than an empty one, and the sum can never exceed the part's capacity.
+ */
 uint32_t RVTransportGetPartUsedTonnes(const Vehicle *part);
+
+/**
+ * Cargo units a carrier part should be displayed as carrying: what it really carries plus the road
+ * vehicles on it, converted into the part's own cargo units (one unit weighs CargoSpec::weight / 16
+ * tonnes, so for a cargo with a weight of 16 this is simply the tonnage) and capped at the part's
+ * capacity. Every place which shows a part's cargo reads this instead of Vehicle::cargo.StoredCount(),
+ * so that a part which carries road vehicles shows the weight which is really on it.
+ * @param part The carrier part (a road vehicle is never a carrier).
+ * @return The number of units to display, never more than the part's capacity.
+ */
+uint16_t RVTransportGetPartCargoAmount(const Vehicle *part);
+
+/**
+ * Collect the road vehicles this carrier part holds (front vehicles only, in vehicle id order).
+ * @param part Carrier part (wagon, ship hold, aircraft body) to look at.
+ * @param out Receives the road vehicles on that part.
+ */
+void RVTransportGetPartCarriedVehicles(const Vehicle *part, std::vector<const Vehicle *> &out);
+
+/**
+ * Carrier this road vehicle is on: the front vehicle of the chain its part belongs to. The answer
+ * is derived from the part the vehicle occupies (transported_host_part) instead of from the stored
+ * transported_by, so it follows the consist when the carrier is split into parts, joined again or
+ * rearranged in a depot; a stored carrier would keep pointing at a vehicle of the other part.
+ * @param rv The road vehicle to look at.
+ * @return The carrier front vehicle, or nullptr when the vehicle is not carried (any more).
+ */
+Vehicle *RVTransportGetCarrier(const Vehicle *rv);
 
 /** Can this carrier part carry road vehicles at all (cargo class oversized)? */
 bool RVTransportPartCanCarry(const Vehicle *part);
+
+/**
+ * May this engine be turned into a carrier part by refitting it to the dedicated vehicle transport
+ * cargoes ("Vehicles (Road)" / "Vehicles (Train)") under the current "carrier parts" setting?
+ * For trains the setting decides which parts of a carrier may take vehicles, and the same rule
+ * decides which wagons may become such a part by refitting, so a wagon whose own cargo does not
+ * qualify (a passenger coach, a mail van, ...) cannot gain the dedicated cargo. Judged by the
+ * engine's default cargo: the dedicated transport cargoes are themselves classified 'Oversized',
+ * so a part already refitted to them keeps qualifying. Ships and aircraft are always allowed:
+ * turning a cargo ship or a passenger plane into a vehicle carrier is the point of the refit.
+ * @param e The engine to look at.
+ * @return Whether refitting the engine to a vehicle transport cargo is currently allowed.
+ */
+bool RVTransportEngineMayBeRefitToVehicles(const Engine *e);
+
+/** Is this the dedicated cargo of vehicle transport ("Vehicles (Road)" or "Vehicles (Train)")? */
+bool RVTransportIsSpecialCargo(CargoType ct);
 
 /**
  * Set/clear the "waiting to be transported" state of a road vehicle.

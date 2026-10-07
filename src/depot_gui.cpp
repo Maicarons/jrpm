@@ -31,6 +31,7 @@
 #include "order_backup.h"
 #include "zoom_func.h"
 #include "error.h"
+#include "roadveh_transport.h"
 #include "tbtr_template_vehicle.h"
 #include "core/geometry_func.hpp"
 #include "departures_gui.h"
@@ -912,7 +913,7 @@ struct DepotWindow : Window {
 		for (const Vehicle *w = v; w != nullptr; w = w->Next()) {
 			if (w->cargo_cap > 0 && w->cargo_type < NUM_CARGO) {
 				capacity[w->cargo_type] += w->cargo_cap;
-				loaded  [w->cargo_type] += w->cargo.StoredCount();
+				loaded  [w->cargo_type] += RVTransportGetPartCargoAmount(w);
 			}
 
 			if (w->type == VehicleType::Train && !w->HasArticulatedPart()) {

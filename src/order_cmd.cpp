@@ -2731,18 +2731,43 @@ CommandCost CmdReverseOrderList(DoCommandFlags flags, VehicleID veh, ReverseOrde
 	CommandCost ret = CheckOwnership(v->owner);
 	if (ret.Failed()) return ret;
 
+	/* A decouple order is bound to the station order before it; the two form
+	 * an inseparable pair whenever the list is reordered or copied. */
+	auto is_station_with_decouple = [](const Order &o) {
+		return o.IsType(OT_GOTO_STATION) && o.GetDecouple() == ODF_DECOUPLE;
+	};
+
 	switch (op) {
 		case ReverseOrderOperation::Reverse: {
 			VehicleOrderID order_count = v->GetNumOrders();
 			if (order_count < 2) return CMD_ERROR;
 			if (flags.Test(DoCommandFlag::Execute)) {
+				/* Reversing the list would put the decouple ahead of its station.
+				 * Pairs are reversed as one unit: the pair members keep the
+				 * positions a plain reversal would give them, only their internal
+				 * order is restored. */
+				std::vector<VehicleOrderID> remap(order_count);
+				for (VehicleOrderID k = 0; k < order_count; ++k) remap[k] = (order_count - 1) - k;
+				for (VehicleOrderID k = 0; k + 1 < order_count; ++k) {
+					if (is_station_with_decouple(*v->GetOrder(k)) && v->GetOrder(k + 1)->IsType(OT_DECOUPLE)) {
+						remap[k] = (order_count - 2) - k;
+						remap[k + 1] = (order_count - 1) - k;
+					}
+				}
+
 				auto map_order_id = [&](VehicleOrderID idx) -> VehicleOrderID {
 					if (idx == INVALID_VEH_ORDER_ID) return idx;
-					return (order_count - 1) - idx;
+					return remap[idx];
 				};
 
 				std::vector<Order> &orders = v->orders->GetOrderVector();
 				std::reverse(orders.begin(), orders.end());
+				for (size_t j = 0; j + 1 < orders.size(); ++j) {
+					if (orders[j].IsType(OT_DECOUPLE) && is_station_with_decouple(orders[j + 1])) {
+						std::swap(orders[j], orders[j + 1]);
+						++j;
+					}
+				}
 				AdjustTravelAfterOrderReverse(orders);
 
 				/* As we move an order, the order to skip to will be 'wrong'. */
@@ -2784,8 +2809,33 @@ CommandCost CmdReverseOrderList(DoCommandFlags flags, VehicleID veh, ReverseOrde
 					return CommandCost(STR_ERROR_UNBUNCHING_ONLY_ONE_ALLOWED);
 				}
 			}
-			for (uint i = max_order - 1; i >= 1; i--) {
+			for (int i = static_cast<int>(max_order) - 1; i >= 1; i--) {
+				/* A decouple order is bound to the station order before it. Copy
+				 * a pair as one unit so the appended block keeps the decouple
+				 * after its station; skip a decouple order whose station lies
+				 * outside the copied range, and strip the decouple flag from a
+				 * station whose decouple order is outside it. */
+				if (v->GetOrder(i)->IsType(OT_DECOUPLE) && i >= 2 &&
+						is_station_with_decouple(*v->GetOrder(i - 1))) {
+					Order station_copy(*v->GetOrder(i - 1));
+					CommandCost ret = PreInsertOrderCheck(v, station_copy, {CmdInsertOrderIntlFlag::AllowLoadByCargoType, CmdInsertOrderIntlFlag::NoUnbunchChecks});
+					if (ret.Failed()) return ret;
+					Order decouple_copy(*v->GetOrder(i));
+					ret = PreInsertOrderCheck(v, decouple_copy, {CmdInsertOrderIntlFlag::AllowLoadByCargoType, CmdInsertOrderIntlFlag::NoUnbunchChecks});
+					if (ret.Failed()) return ret;
+					if (flags.Test(DoCommandFlag::Execute)) {
+						v->orders->InsertOrderAt(std::move(station_copy), v->GetNumOrders());
+						v->orders->InsertOrderAt(std::move(decouple_copy), v->GetNumOrders());
+					}
+					i--;
+					continue;
+				}
+				if (v->GetOrder(i)->IsType(OT_DECOUPLE) && i == 1) continue;
 				Order new_order(*v->GetOrder(i));
+				if (i == static_cast<int>(max_order) - 1 && is_station_with_decouple(new_order)) {
+					new_order.SetDecouple(ODF_NOTHING);
+					new_order.SetNumDecouple(0);
+				}
 				CommandCost ret = PreInsertOrderCheck(v, new_order, {CmdInsertOrderIntlFlag::AllowLoadByCargoType, CmdInsertOrderIntlFlag::NoUnbunchChecks});
 				if (ret.Failed()) return ret;
 
@@ -2904,7 +2954,8 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 				break;
 
 			case OT_DECOUPLE:
-				if (mof != MOF_FIRST_ORDERS && mof != MOF_SECOND_ORDERS && mof != MOF_DECOUPLE_VALUE && mof != MOF_DECOUPLE_FIRST_SCHEDULE && mof != MOF_DECOUPLE_SECOND_SCHEDULE && mof != MOF_DECOUPLE_FIRST_LOAD_SCHEDULE && mof != MOF_DECOUPLE_SECOND_LOAD_SCHEDULE) return CMD_ERROR;
+				if (mof != MOF_FIRST_ORDERS && mof != MOF_SECOND_ORDERS && mof != MOF_DECOUPLE_VALUE && mof != MOF_DECOUPLE_FIRST_SCHEDULE && mof != MOF_DECOUPLE_SECOND_SCHEDULE && mof != MOF_DECOUPLE_FIRST_LOAD_SCHEDULE && mof != MOF_DECOUPLE_SECOND_LOAD_SCHEDULE
+						&& mof != MOF_DECOUPLE_FIRST_SAME_DIR && mof != MOF_DECOUPLE_SECOND_SAME_DIR) return CMD_ERROR;
 				break;
 
 			case OT_SLOT:
@@ -3022,13 +3073,10 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 			break;
 
 		case MOF_RV_SLOT: {
-			/* RoRo selection criterion: trace restrict slot the candidate must hold (slot id + 1, 0 = any). */
+			/* RoRo selection criterion: trace restrict slot the candidate must hold (slot id + 1, 0 = any).
+			 * Any slot type is accepted: the occupant check is vehicle type agnostic. */
 			if (!order->IsType(OT_GOTO_STATION)) return CommandCost(STR_ERROR_RV_TRANSPORT_STATION_ORDER_ONLY);
-			if (data != 0) {
-				/* Only a road vehicle slot can be held by a road vehicle candidate. */
-				const TraceRestrictSlot *slot = TraceRestrictSlot::GetIfValid(TraceRestrictSlotID{static_cast<uint16_t>(data - 1)});
-				if (slot == nullptr || slot->vehicle_type != VehicleType::Road) return CMD_ERROR;
-			}
+			if (data != 0 && TraceRestrictSlot::GetIfValid(TraceRestrictSlotID{static_cast<uint16_t>(data - 1)}) == nullptr) return CMD_ERROR;
 			break;
 		}
 
@@ -3269,6 +3317,13 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 			if (!target->IsVisibleToCompany(target_owner)) return CMD_ERROR;
 			break;
 		}
+
+		case MOF_DECOUPLE_FIRST_SAME_DIR:
+		case MOF_DECOUPLE_SECOND_SAME_DIR:
+			if (!is_list && v->type != VehicleType::Train) return CMD_ERROR;
+			if (order->GetType() != OT_DECOUPLE) return CMD_ERROR;
+			if (data > 1) return CMD_ERROR;
+			break;
 
 		case MOF_DECOUPLE:
 			if (!is_list && v->type != VehicleType::Train) return CMD_ERROR;
@@ -3752,6 +3807,18 @@ CommandCost CmdModifyOrder(DoCommandFlags flags, OrderTargetType target_type, ui
 
 			case MOF_SECOND_ORDERS:
 				order->SetDecoupleSecondOrdersType((OrderDecoupleOrdersFlags)data);
+				break;
+
+			case MOF_DECOUPLE_FIRST_SAME_DIR:
+				order->SetDecoupleFirstSameDirExit(data != 0);
+				/* At most one part may be allowed a same-direction exit, otherwise
+				 * both parts could wait for each other forever. */
+				if (data != 0) order->SetDecoupleSecondSameDirExit(false);
+				break;
+
+			case MOF_DECOUPLE_SECOND_SAME_DIR:
+				order->SetDecoupleSecondSameDirExit(data != 0);
+				if (data != 0) order->SetDecoupleFirstSameDirExit(false);
 				break;
 
 			case MOF_DECOUPLE_FIRST_SCHEDULE:
