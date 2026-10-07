@@ -1752,17 +1752,17 @@ bool AfterLoadGame()
 		for (RoadType rt : EnumRange(ROADTYPE_END)) {
 			const RoadTypeInfo *rti = GetRoadTypeInfo(rt);
 			if (RoadTypeIsRoad(rt)) {
-				if (rti->label == 'ROAD') {
+				if (rti->label == RoadTypeLabel{"ROAD"}) {
 					road_types[0] = rt;
-				} else if (rti->label == 'ELRD') {
+				} else if (rti->label == RoadTypeLabel{"ELRD"}) {
 					road_types[1] = rt;
 				} else if (next_road_type < 31) {
 					road_types[next_road_type++] = rt;
 				}
 			} else {
-				if (rti->label == 'RAIL') {
+				if (rti->label == RoadTypeLabel{"RAIL"}) {
 					tram_types[0] = rt;
-				} else if (rti->label == 'ELRL') {
+				} else if (rti->label == RoadTypeLabel{"ELRL"}) {
 					tram_types[1] = rt;
 				} else if (next_tram_type < 31) {
 					tram_types[next_tram_type++] = rt;

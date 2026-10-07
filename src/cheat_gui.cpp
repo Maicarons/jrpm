@@ -368,7 +368,7 @@ struct CheatWindow : Window {
 						}
 
 						/* Display the selected weather mode */
-						case STR_CHEAT_RAIN:
+						case STR_CHEAT_RAIN.base():
 							str = GetString(ce->str, STR_CHEAT_RAIN_AUTO + Clamp(val, 0, 2));
 							break;
 
@@ -467,7 +467,7 @@ struct CheatWindow : Window {
 							break;
 
 						/* Display weather mode names */
-						case STR_CHEAT_RAIN:
+						case STR_CHEAT_RAIN.base():
 							for (int i = 0; i < 3; i++) {
 								width = std::max(width, GetStringBoundingBox(GetString(ce.str, STR_CHEAT_RAIN_AUTO + i)).width);
 							}

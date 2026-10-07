@@ -73,7 +73,7 @@ static constexpr CargoLabel CT_FIZZY_DRINKS{"FZDR"};
 static constexpr CargoLabel CT_VEHICLES{"VEHC"};
 
 /** Dedicated cargo for train transport: ships refit to it to carry trains (label "RAIL", RAIL VEHicle). */
-static constexpr CargoLabel CT_RAILVEHICLES{'RAIL'};
+static constexpr CargoLabel CT_RAILVEHICLES{"RAIL"};
 
 /** Dummy label for engines that carry no cargo; they actually carry 0 passengers. */
 static constexpr CargoLabel CT_NONE = CT_PASSENGERS;

@@ -66,7 +66,7 @@ static const NWidgetPart _nested_watch_company_widgets[] = {
 	NWidget(NWID_HORIZONTAL),
 		NWidget(WWT_CLOSEBOX, Colours::Grey),
 		NWidget(WWT_CAPTION, Colours::Grey, WID_WC_CAPTION),
-		NWidget(WWT_PUSHIMGBTN, Colours::Grey, WID_WC_LOCATION), SetMinimalSize(12, 14), SetStringTip(SPR_GOTO_LOCATION, STR_JRPM_WATCH_LOCATION_TOOLTIP),
+		NWidget(WWT_PUSHIMGBTN, Colours::Grey, WID_WC_LOCATION), SetMinimalSize(12, 14), SetSpriteTip(SPR_GOTO_LOCATION, STR_JRPM_WATCH_LOCATION_TOOLTIP),
 		NWidget(WWT_SHADEBOX, Colours::Grey),
 		NWidget(WWT_DEFSIZEBOX, Colours::Grey),
 		NWidget(WWT_STICKYBOX, Colours::Grey),
