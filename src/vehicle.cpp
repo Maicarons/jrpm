@@ -72,6 +72,7 @@
 #include "train_cmd.h"
 #include "vehicle_cmd.h"
 #include "tile_cmd.h"
+#include "script/api/script_event_types.hpp"
 #include "3rdparty/cpp-btree/btree_set.h"
 #include "3rdparty/cpp-btree/btree_map.h"
 #include "3rdparty/robin_hood/robin_hood.h"

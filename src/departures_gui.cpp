@@ -160,7 +160,7 @@ protected:
 	int group_width = 0;                     ///< current width of group field
 	int toc_width = 0;                       ///< current width of company field
 	int route_id_width = 0;                  ///< current width of route ID field
-	std::array<uint32_t, 3> title_params{};  ///< title string parameters
+	std::array<IntegerStringParameter, 3> title_params{}; ///< title string parameters
 	CallAtTargetID filter_target{};          ///< Filter target
 	const OrderList *order_list_filter{};    ///< Shared order list filter
 
@@ -347,7 +347,7 @@ public:
 	{
 		this->ConstructWidgetLayout(station);
 
-		this->title_params[1] = station.base();
+		this->title_params[1] = station;
 
 		if (Waypoint::IsValidID(station)) {
 			this->source_type = DST_WAYPOINT;
@@ -406,8 +406,8 @@ public:
 		SetBit(this->source.order_type_mask, OT_GOTO_DEPOT);
 		this->source.destination = (vt == VehicleType::Aircraft) ? DestinationID(GetStationIndex(tile)) : DestinationID(GetDepotIndex(tile));
 		this->title_params[0] = STR_DEPOT_NAME;
-		this->title_params[1] = to_underlying(vt);
-		this->title_params[2] = this->source.destination.base();
+		this->title_params[1] = vt;
+		this->title_params[2] = this->source.destination;
 
 		this->GetWidget<NWidgetCore>(WID_DB_LOCATION)->SetToolTip(STR_DEPOT_TRAIN_LOCATION_TOOLTIP + to_underlying(vt));
 
@@ -1256,7 +1256,6 @@ void DeparturesWindow::DrawDeparturesListItems(const Rect &r) const
 
 		if (_settings_client.gui.departure_show_vehicle_type) {
 			StringID type = STR_DEPARTURES_TYPE_TRAIN;
-			int offset = (_settings_client.gui.departure_show_vehicle_color ? 1 : 0);
 
 			switch (d->vehicle->type) {
 				case VehicleType::Train:
@@ -1275,7 +1274,7 @@ void DeparturesWindow::DrawDeparturesListItems(const Rect &r) const
 					break;
 			}
 
-			type += offset;
+			if (_settings_client.gui.departure_show_vehicle_color) type++;
 
 			DrawString(columns[DepartureColumn::VehTypeIcon].left, columns[DepartureColumn::VehTypeIcon].right, y, type);
 		}

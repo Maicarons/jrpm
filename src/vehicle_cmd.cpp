@@ -41,6 +41,8 @@
 #include "tbtr_template_vehicle_func.h"
 #include "scope.h"
 
+#include "widgets/vehicle_widget.h"
+
 #include "table/strings.h"
 
 #include "safeguards.h"

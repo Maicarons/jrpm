@@ -54,7 +54,10 @@
 #include "train_cmd.h"
 #include "vehicle_cmd.h"
 #include "tbtr_template_vehicle_cmd.h"
+#include "script/api/script_event_types.hpp"
 #include "3rdparty/cpp-btree/btree_map.h"
+
+#include "widgets/vehicle_widget.h"
 
 #include "table/strings.h"
 #include "table/train_cmd.h"
@@ -8316,7 +8319,7 @@ bool TrainController(Train *v, Vehicle *nomove, bool reverse)
 					/* Inside depot */
 					gp.x = v->x_pos;
 					gp.y = v->y_pos;
-					consist->reverse_distance = 0;
+					if (v->IsMovingFront()) consist->reverse_distance = 0;
 				} else {
 					/* Not inside depot */
 

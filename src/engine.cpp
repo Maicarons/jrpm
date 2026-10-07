@@ -33,6 +33,7 @@
 #include "articulated_vehicles.h"
 #include "settings_type.h"
 #include "error.h"
+#include "script/api/script_event_types.hpp"
 
 #include "table/strings.h"
 #include "table/engines.h"

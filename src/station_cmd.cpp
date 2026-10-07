@@ -214,7 +214,7 @@ static bool CMSATree(TileIndex tile)
 /** Station types a station could be named after. */
 /** Information to handle station action 0 property 24 correctly */
 struct StationNameInformation {
-	std::bitset<STR_SV_STNAME_FALLBACK - STR_SV_STNAME> used_names; ///< Used default station suffixes.
+	std::bitset<(STR_SV_STNAME_FALLBACK - STR_SV_STNAME).base()> used_names; ///< Used default station suffixes.
 	std::bitset<NUM_INDUSTRYTYPES> indtypes; ///< Bit set indicating when an industry type has been found.
 
 	/**
@@ -225,7 +225,7 @@ struct StationNameInformation {
 	bool IsAvailable(StringID str) const
 	{
 		assert(IsInsideMM(str, STR_SV_STNAME, STR_SV_STNAME_FALLBACK));
-		return !this->used_names.test(str - STR_SV_STNAME);
+		return !this->used_names.test((str - STR_SV_STNAME).base());
 	}
 
 	/**
@@ -235,7 +235,7 @@ struct StationNameInformation {
 	void SetUsed(StringID str)
 	{
 		assert(IsInsideMM(str, STR_SV_STNAME, STR_SV_STNAME_FALLBACK));
-		this->used_names.set(str - STR_SV_STNAME);
+		this->used_names.set((str - STR_SV_STNAME).base());
 	}
 };
 
@@ -1433,6 +1433,8 @@ void GetStationLayout(uint8_t *layout, uint numtracks, uint plat_len, const Stat
 /**
  * Find a nearby station that joins this station.
  * @tparam T the class to find a station for
+ * @tparam F the filter functor type
+ * @param error_message the error message when building a station on top of others
  * @param existing_station an existing station we build over
  * @param station_to_join the station to join to
  * @param adjacent whether adjacent stations are allowed
@@ -3138,11 +3140,7 @@ static bool DrawCustomStationFoundations(const StationSpec *statspec, BaseStatio
 
 	/* Station has custom foundations.
 	 * Check whether the foundation continues beyond the tile's upper sides. */
-	uint edge_info = 0;
-	auto [slope, z] = GetFoundationPixelSlope(ti->tile);
-	if (!HasFoundationNW(ti->tile, slope, z)) SetBit(edge_info, 0);
-	if (!HasFoundationNE(ti->tile, slope, z)) SetBit(edge_info, 1);
-
+	uint edge_info = GetFoundationSpriteBlock(ti->tile);
 	SpriteID image = GetCustomStationFoundationRelocation(statspec, st, ti->tile, gfx, edge_info);
 	if (image == 0) return false;
 
@@ -4069,7 +4067,7 @@ static VehicleEnterTileStates VehicleEnterTile_Station(Vehicle *v, TileIndex til
 		Train *t = Train::From(v);
 		Train *consist = t->Primary();
 		StationID station_id = GetStationIndex(tile);
-		if (consist->current_order.IsType(OT_GOTO_WAYPOINT) && consist->current_order.GetDestination() == station_id && consist->current_order.GetWaypointFlags().Test(OrderWaypointFlag::Reverse)) {
+		if (t->IsMovingFront() && consist->current_order.IsType(OT_GOTO_WAYPOINT) && consist->current_order.GetDestination() == station_id && consist->current_order.GetWaypointFlags().Test(OrderWaypointFlag::Reverse)) {
 			/* Reverse at waypoint. */
 			if (consist->reverse_distance == 0) {
 				consist->reverse_distance = consist->gcache.cached_total_length;

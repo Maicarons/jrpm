@@ -1676,12 +1676,8 @@ static void DrawBridgePillars(const PalSpriteID &psid, const TileInfo *ti, Axis 
 
 	/* Determine ground height under pillars */
 	DiagDirection south_dir = AxisToDiagDir(axis);
-	int z_front_north = ti->z;
-	int z_back_north = ti->z;
-	int z_front_south = ti->z;
-	int z_back_south = ti->z;
-	GetSlopePixelZOnEdge(ti->tileh, south_dir, z_front_south, z_back_south);
-	GetSlopePixelZOnEdge(ti->tileh, ReverseDiagDir(south_dir), z_front_north, z_back_north);
+	auto [z_front_south, z_back_south] = GetSlopePixelZOnEdge(ti->tileh, south_dir, ti->z);
+	auto [z_front_north, z_back_north] = GetSlopePixelZOnEdge(ti->tileh, ReverseDiagDir(south_dir), ti->z);
 
 	/* Shared height of pillars */
 	int z_front = std::max(z_front_north, z_front_south);
@@ -1826,7 +1822,7 @@ static void DrawBridgeRoadBits(TileIndex head_tile, int x, int y, int z, int off
 
 	/* The sprites under the vehicles are drawn as SpriteCombine. StartSpriteCombine() has already been called
 	 * The bounding boxes here are the same as for bridge front/roof */
-	auto draw_back_sprite = [&](StringID spr, bool transparent) {
+	auto draw_back_sprite = [&](SpriteID spr, bool transparent) {
 		if (spr != 0) {
 			AddSortableSpriteToDraw(spr, PAL_NONE, x, y, z, back_bounds[offset], transparent);
 		}

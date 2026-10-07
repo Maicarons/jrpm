@@ -54,6 +54,7 @@
 #include "order_cmd.h"
 #include "vehicle_cmd.h"
 #include "sound_func.h"
+#include "fios.h"
 #include "core/string_consumer.hpp"
 
 #include <vector>
@@ -612,9 +613,10 @@ DropDownList BaseVehicleListWindow::BuildActionDropdownList(bool show_autoreplac
 	if (_settings_client.gui.show_depot_sell_gui) list.push_back(MakeDropDownListStringItem(this->vehicle_depot_sell_name[this->vli.vtype], ADI_DEPOT_SELL, mass_action_disable));
 	list.push_back(MakeDropDownListStringItem(STR_VEHICLE_LIST_CANCEL_DEPOT_SERVICE, ADI_CANCEL_DEPOT, mass_action_disable));
 
-	list.push_back(MakeDropDownListDividerItem());
-
-	list.push_back(MakeDropDownListStringItem(STR_ORDER_EXPORT_ORDER_LISTS, ADI_EXPORT_ORDERS));
+	if (this->vli.type == VehicleListType::Company || this->vli.type == VehicleListType::Group) {
+		list.push_back(MakeDropDownListDividerItem());
+		list.push_back(MakeDropDownListStringItem(STR_ORDER_EXPORT_ORDER_LISTS, ADI_EXPORT_ORDERS));
+	}
 
 	return list;
 }
@@ -2571,7 +2573,7 @@ private:
 		} else if (VehicleListIdentifier::UnPack(this->window_number).type == VehicleListType::Depot) {
 			return STR_VEHICLE_LIST_CHANGE_ORDER_TRAIN_DEPOT + to_underlying(this->vli.vtype);
 		} else {
-			return 0;
+			return STR_NULL;
 		}
 	}
 
@@ -2842,9 +2844,8 @@ public:
 				break;
 
 			case WID_VL_MANAGE_VEHICLES_DROPDOWN: {
-				VehicleListIdentifier vli = VehicleListIdentifier::UnPack(this->window_number);
-				DropDownList list = this->BuildActionDropdownList(vli.type == VehicleListType::Company, false,
-						this->vli.vtype == VehicleType::Train, this->GetChangeOrderStringID(), true, vli.type == VehicleListType::Company);
+				DropDownList list = this->BuildActionDropdownList(this->vli.type == VehicleListType::Company, false,
+						this->vli.vtype == VehicleType::Train, this->GetChangeOrderStringID(), true, this->vli.type == VehicleListType::Company);
 				ShowDropDownList(this, std::move(list), -1, WID_VL_MANAGE_VEHICLES_DROPDOWN);
 				break;
 			}
@@ -2914,6 +2915,10 @@ public:
 						ShowTraceRestrictCounterWindow(this->owner);
 						break;
 					}
+
+					case ADI_EXPORT_ORDERS:
+						ShowSaveLoadDialog(AbstractFileType::Orderlist, SaveLoadOperation::Save, this->vli);
+						break;
 
 					default: NOT_REACHED();
 				}

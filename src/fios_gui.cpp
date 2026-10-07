@@ -352,7 +352,7 @@ static constexpr NWidgetPart _nested_save_orderlist_dialog_widgets[] = {
 			NWidget(NWID_HORIZONTAL),
 				NWidget(WWT_PANEL, Colours::Grey, WID_SL_FILE_BACKGROUND),
 					NWidget(WWT_INSET, Colours::Grey, WID_SL_DRIVES_DIRECTORIES_LIST), SetPadding(2, 2, 2, 2),
-							SetStringTip(0x0, STR_SAVELOAD_LIST_TOOLTIP), SetResize(1, 10), SetScrollbar(WID_SL_SCROLLBAR), EndContainer(),
+							SetToolTip(STR_SAVELOAD_LIST_TOOLTIP), SetResize(1, 10), SetScrollbar(WID_SL_SCROLLBAR), EndContainer(),
 				EndContainer(),
 				NWidget(NWID_VSCROLLBAR, Colours::Grey, WID_SL_SCROLLBAR),
 			EndContainer(),
@@ -406,7 +406,7 @@ static constexpr NWidgetPart _nested_load_orderlist_dialog_widgets[] = {
 			NWidget(NWID_HORIZONTAL),
 				NWidget(WWT_PANEL, Colours::Grey, WID_SL_FILE_BACKGROUND),
 					NWidget(WWT_INSET, Colours::Grey, WID_SL_DRIVES_DIRECTORIES_LIST), SetFill(1, 1), SetPadding(2, 2, 2, 2),
-							SetStringTip(0x0, STR_SAVELOAD_LIST_TOOLTIP), SetResize(1, 10), SetScrollbar(WID_SL_SCROLLBAR), EndContainer(),
+							SetToolTip(STR_SAVELOAD_LIST_TOOLTIP), SetResize(1, 10), SetScrollbar(WID_SL_SCROLLBAR), EndContainer(),
 				EndContainer(),
 				NWidget(NWID_VSCROLLBAR, Colours::Grey, WID_SL_SCROLLBAR),
 			EndContainer(),
@@ -599,7 +599,8 @@ public:
 		if (std::holds_alternative<FiosOrderListInfo>(this->extra_info)) {
 			group = Group::GetIfValid(std::get<FiosOrderListInfo>(this->extra_info).veh->group_id);
 		} else if (std::holds_alternative<VehicleListIdentifier>(this->extra_info)) {
-			group = Group::GetIfValid(std::get<VehicleListIdentifier>(this->extra_info).ToGroupID());
+			const VehicleListIdentifier &vli = std::get<VehicleListIdentifier>(this->extra_info);
+			if (vli.type == VehicleListType::Group) group = Group::GetIfValid(vli.ToGroupID());
 		}
 
 		if (group != nullptr) {
