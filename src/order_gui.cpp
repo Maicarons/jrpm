@@ -994,7 +994,7 @@ static constexpr NWidgetPart _nested_rv_transport_widgets[] = {
 
 /** Window description of the road vehicle transport window. */
 static WindowDesc _rv_transport_desc(__FILE__, __LINE__,
-	WindowPosition::Automatic, nullptr, 260, 130,
+	WindowPosition::Automatic, "vehicle_rv_transport_criteria", 260, 130,
 	WindowClass::VehicleRVTransportCriteria, WindowClass::VehicleOrders,
 	WindowDefaultFlag::Construction,
 	_nested_rv_transport_widgets

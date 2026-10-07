@@ -108,8 +108,8 @@ TEST_CASE_METHOD(TrainDecoupleFixture, "Couple - callback trial restores both co
 	SetBit(engine->cb36_properties_used, PROP_TRAIN_USER_DATA);
 	CallbackResultSpriteGroup result(0x400);
 	DeterministicSpriteGroup group(SpriteGroupID::Invalid());
-	group.size = DSG_SIZE_DWORD;
-	group.var_scope = VSG_SCOPE_SELF;
+	group.size = DeterministicSpriteGroupSize::DWord;
+	group.var_scope = VarSpriteGroupScope::Self;
 	DeterministicSpriteGroupAdjust adjust{};
 	adjust.variable = 0x40;
 	adjust.and_mask = UINT32_MAX;
