@@ -101,3 +101,43 @@ cmake --build build -j
 
 - 编译：MinGW ninja 通过，产物 `build/openttd-jrpm.exe`；
 - 运行：开档验证通过（详见构建验证）。
+
+---
+
+## 合并记录：2026-10-07（jgrpp 0.73.3+89 + px-patch 2610.3）
+
+> 合并提交：jgrpp 23 提交（`jgrpp-0.73.3` 之后，至 `6318727b02`）+ px-patch 55 提交（至 `pxp-2610.3`，`4a4d0724b5`）。
+
+### 上游新增内容
+
+| 来源 | 内容 | 说明 |
+|---|---|---|
+| pulsexlb | **火车轮渡** | 船只可改装为运输整列火车（专属 `RAIL` 货物，`CT_RAILVEHICLES`）；装船按车厢分仓，不再要求整车位于同一船舱 |
+| pulsexlb | **雨天系统** | 新增 `weather.cpp` 天气模拟：随机雨期、世界亮度渐变、雨滴蒙版（随视野缩放 + 随机振动）；难度选项 `difficulty.rain`；沙盒作弊可强制「自动/下雨/晴天」；天气状态随存档保存（`WTHR` 数据块 / `XSLFI_WEATHER`） |
+| pulsexlb | **解挂同向离开** | 解挂时可选「单侧部分等待另一部分离开后同向离开」；配套修复搭档未完全出站时的挡路判定 |
+| pulsexlb | **载重显示** | 船只信息显示每个船舱可装载重量，列车信息显示每个车厢重量 |
+| pulsexlb | **RoRo 选项增强** | 运输选项的路签选择允许选火车/汽车路签；列车装载道路载具按车厢装载；状态栏不再显示已装载载具信息 |
+| pulsexlb | **对接寻路性能** | 消除对接寻路卡顿：载货校验改预检 + 失败退避，节流替代全场遍历 |
+| pulsexlb | **Android 构建** | 新增 Android 构建脚本与 CI，发布 release 时一并发布 APK |
+| jgrpp | **StringID 强类型化** | `StringID` 改为强类型（不再作模板参数），Label 只接受字符串/字节数组构造 |
+| jgrpp | **公司名查重** | 正确拒绝重复公司名（President 姓名生成去 goto 重构） |
+| jgrpp | **控件首选尺寸** | Widgets 可基于给定尺寸计算 preferred size |
+| jgrpp | 常规重构与修复 | 订单列表达成、NewGRF GEF ID 校验、坡面像素高度返回元组、出站调度计划导出崩溃修复等 |
+
+### 关键冲突处理
+
+- **存档层**：pulsexlb 新增的 `WTHR` 天气数据块沿用旧式 `SLEG_VAR`/SLE_ 宏，已在 `sl/saveload_common.h` 别名体系下直接可用；仅需把过时的块类型枚举 `CH_TABLE` 改为重构后的 `ChunkType::Table`；
+- **Label/StringID 强类型化**（本轮主要编译障碍）：jrpm 自有代码中的 4 字符字面量标签全部改为字符串构造（`CT_RAILVEHICLES{"RAIL"}`）；`afterload.cpp` 的道路/有轨电车类型标签比较改为 `RoadTypeLabel{"ROAD"}` 形式；`airport.cpp` 空 AirTypeInfo 的字符串字段改用 `STR_NULL`；`cheat_gui.cpp` 的 `STR_CHEAT_RAIN` switch 分支改用 `.base()`（对齐既有 `STR_CHEAT_CHANGE_COMPANY.base()` 写法）；
+- **cheat_gui.cpp 作弊表**：保留 jrpm 的 `VarMemType` 字段类型与 `InflationCheat` 哨兵，同时并入 pulsexlb 新增的雨天作弊行（`SLE_VAR_U8` + `ClickRainCheat`）；
+- **jrpm_watch_gui.cpp**：`SetStringTip(SPR_GOTO_LOCATION, …)` 改为 `SetSpriteTip`（上游已拆分 sprite/string 提示接口）；
+- **存档版本钉子**：`SL_UPSTREAM_VERSION` 仍钉在 368（上游 `DoubleEndedShips`），`src/saveload/engine_sl.cpp` 的 static_assert 守卫通过；jrpm 占位 367/368 不变，上游新版本顺延为 369/370；
+- **train_cmd.cpp**：解挂判定保留 jrpm 的 `enable_decouple` 门控与 desync 调试输出，同时并入上游「仅车头经过道岔才触发调头」的车场修复（`if (v->IsMovingFront())`）；`want_decouple` 后的同向离开标志位取上游实现；
+- **aircraft_cmd.cpp / window.cpp**：include 冲突两侧并存（jrpm 的 pathfinder/pbs/roadveh_transport 与上游的 checksum/script_event/widgets）；
+- **order_cmd.cpp**：`DrivingBackwards` 采用上游按 `TCF_NO_DRIVING_CAB` 判定的新语义，jrpm 的 `DecouplePart` 变量保留；语言字符串随之改为「以限速倒车行驶」；
+- **deploy-docs.yml**：保留 jrpm 的 VitePress 构建与 GitHub Pages 部署（pulsexlb 的 Typst 版仅用于其 `pxp-docs` 目录）；
+- **README / .gitignore / .ottdrev-vc**：保留 jrpm 品牌与本地条目，并入 pulsexlb 的 Android 构建忽略项与 `pxp-2610.3` 版本记录。
+
+### 合并后状态
+
+- 编译：MinGW ninja 通过（`-j3`），产物 `build/openttd-jrpm.exe`；
+- 运行：`-D` 专用服务器冒烟测试通过——新图生成 → 保存 → 载入 → 再保存 → 退出全链路无断言、无 `SetupEngines` 崩溃，上游数据块版本门控正常。

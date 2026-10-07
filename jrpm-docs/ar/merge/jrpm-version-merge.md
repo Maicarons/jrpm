@@ -81,3 +81,15 @@ cmake --build build -j
 **معالجة التعارضات الرئيسية:** طبقة الحفظ لدى pulsexlb تعتمد نظام ماكرو SLE_ القديم بينما jrpm/jgrpp 0.73.3 يستخدم VarFileType/VarMemType + VarTypes؛ أُعيدت كتابة كل تعارضات saveload/ وsl/ بالنظام الحديث مع إضافة دعم U128 (VarFileType::U128=13، VarMemType::U128، SLE_UINT128)؛ الإصداران 367/368 المحجوزان لjrpm بقيا والجديدان من المنبع انتقلا إلى 369/370؛ توافق حفظ المنبع يمر عبر الكتلة الفرعية XSLFI_UPSTREAM_VERSION؛ CT_VEHICLES كسلسلة، مقارنة grfid عبر GrfID، وكتلتا autogroup + RORO_DEBUG_COMMANDS محفوظتان.
 
 **الحالة:** بناء MinGW ninja ناجح، المخرج `build/openttd-jrpm.exe`؛ اختبار سريع للعبة جديدة ناجح.
+
+---
+
+## سجل الدمج: 2026-10-07 (jgrpp 0.73.3+89 + px-patch 2610.3)
+
+> تكريتات الدمج: jgrpp ‏23 تكريداً (بعد `jgrpp-0.73.3`، حتى `6318727b02`) + px-patch ‏55 تكريداً (حتى `pxp-2610.3`، `4a4d0724b5`).
+
+**الجديد:** من pulsexlb — عبّارة القطارات (السفن تُعدّل لنقل قاطارات كاملة، شحنة RAIL/CT_RAILVEHICLES مخصّصة، التحميل لكل عربة)، ونظام المطر (weather.cpp بفترات مطر عشوائية، وتعتيم تدريجي للعالم، وقطرات تتكيّف مع التقريب؛ خيار difficulty.rain؛ ورمز غش صحراوي يفرض الطقس؛ وتُحفظ حالة الطقس في كتلة WTHR/XSLFI_WEATHER)، والخروج بعد الفصل في الاتجاه نفسه مع انتظار الجزء الآخر، وعرض حمولة كل صندوق سفينة وكل عربة، واختيار لافتة القطار/المركبة في خيارات RoRo، وإزالة توقّف البحث عن المسار عند التوصيل (فحص الشحن مسبقاً مع تراجع عند الفشل)، وبناء Android مع نشر APK؛ ومن jgrpp — النوع القوي StringID، ورفض أسماء الشركات المكررة، وحساب الحجم المفضّل للعناصر، وإعادة هيكلة وإصلاحات عامة متعددة.
+
+**معالجة التعارضات الرئيسية:** أكبر عقبة في البناء كانت الأنواع القوية لـ Label/StringID — حُوِّلت كل التسميات الحرفية ذات الأربعة محارف في كود jrpm إلى إنشاء سلسلة (CT_RAILVEHICLES{"RAIL"})، وصارت مقارنات تسميات أنواع الطرق في afterload.cpp بالشكل RoadTypeLabel{"ROAD"}، وحقول السلاسل الفارغة في AirTypeInfo في airport.cpp تستخدم STR_NULL، وفروع switch الخاصة بـ STR_CHEAT_RAIN في cheat_gui.cpp تستخدم .base()؛ ووُضع النوع القديم CH_TABLE في كتلة الطقس الجديدة WTHR على ChunkType::Table؛ وأُبقي في جدول الغش نوع VarMemType وحارس InflationCheat الخاص بـ jrpm مع إضافة سطر المطر الجديد؛ واستُبدل SetStringTip(SPR_GOTO_LOCATION, …) في jrpm_watch_gui.cpp بـ SetSpriteTip؛ وفي train_cmd.cpp أُبقي شرط enable_decouple واعتُمد إصلاح المنبع الذي لا يعكس إلا عند مرور مقدمة القطار (if (v->IsMovingFront())) مع رايات الخروج في الاتجاه نفسه؛ وفي order_cmd.cpp اعتُمدت دلالة DrivingBackwards الجديدة عبر TCF_NO_DRIVING_CAB مع الإبقاء على متغير DecouplePart؛ وبُني deploy-docs.yml الخاص بـ VitePress ونشر GitHub Pages، كما أُبقيت علامة jrpm التجارية في README/.gitignore/.ottdrev-vc؛ ويظل SL_UPSTREAM_VERSION مثبّتاً على 368 (DoubleEndedShips) وينجح static_assert في src/saveload/engine_sl.cpp، مع بقاء الإصدارين 367/368 المحجوزين.
+
+**الحالة:** بناء MinGW ninja (-j3) ناجح، المخرج `build/openttd-jrpm.exe`؛ اختبار خادم مخصص `-D` ناجح — توليد خريطة → حفظ → تحميل → حفظ مجدد → خروج دون أي تأكيد أو انهيار في SetupEngines، وتعمل بوابات الإصدارات لكتل المنبع بشكل صحيح.

@@ -123,6 +123,7 @@ const zhCN = makeLocaleConfig(
         { text: '机车换挂（decouple）', link: '/features/decouple' },
         { text: '模块化机场（multitile-airport）', link: '/features/multitile-airport' },
         { text: '载具运输（RoRo）', link: '/features/06-roro-transport' },
+        { text: '火车轮渡与雨天系统', link: '/features/07-train-ferry-and-rain' },
       ],
     },
     {
@@ -197,6 +198,7 @@ const en = makeLocaleConfig(
         { text: 'Decouple (Locomotive Detachment)', link: '/en/features/decouple' },
         { text: 'Multitile Airport', link: '/en/features/multitile-airport' },
         { text: 'Road Vehicle Transport (RoRo)', link: '/en/features/06-roro-transport' },
+        { text: 'Train Ferry and Rain', link: '/en/features/07-train-ferry-and-rain' },
       ],
     },
     {
@@ -271,6 +273,7 @@ const hi = makeLocaleConfig(
         { text: 'डिकपल (लोकोमोटिव डिटैचमेंट)', link: '/hi/features/decouple' },
         { text: 'मल्टीटाइल एयरपोर्ट', link: '/hi/features/multitile-airport' },
         { text: 'सड़क वाहन परिवहन (RoRo)', link: '/hi/features/06-roro-transport' },
+        { text: 'ट्रेन फ़ेरी और बारिश', link: '/hi/features/07-train-ferry-and-rain' },
       ],
     },
     {
@@ -345,6 +348,7 @@ const es = makeLocaleConfig(
         { text: 'Desacople (Locomotoras)', link: '/es/features/decouple' },
         { text: 'Aeropuerto Multitile', link: '/es/features/multitile-airport' },
         { text: 'Transporte de vehículos de carretera (RoRo)', link: '/es/features/06-roro-transport' },
+        { text: 'Ferry de trenes y lluvia', link: '/es/features/07-train-ferry-and-rain' },
       ],
     },
     {
@@ -419,6 +423,7 @@ const fr = makeLocaleConfig(
         { text: 'Découplage (Locomotives)', link: '/fr/features/decouple' },
         { text: 'Aéroport Multitile', link: '/fr/features/multitile-airport' },
         { text: 'Transport de véhicules routiers (RoRo)', link: '/fr/features/06-roro-transport' },
+        { text: 'Ferry de trains et pluie', link: '/fr/features/07-train-ferry-and-rain' },
       ],
     },
     {
@@ -493,6 +498,7 @@ const pt = makeLocaleConfig(
         { text: 'Desacoplamento (Locomotivas)', link: '/pt/features/decouple' },
         { text: 'Aeroporto Multitile', link: '/pt/features/multitile-airport' },
         { text: 'Transporte de veículos rodoviários (RoRo)', link: '/pt/features/06-roro-transport' },
+        { text: 'Ferry de trens e chuva', link: '/pt/features/07-train-ferry-and-rain' },
       ],
     },
     {
@@ -567,6 +573,7 @@ const ar = makeLocaleConfig(
         { text: 'فصل القاطرات', link: '/ar/features/decouple' },
         { text: 'مطار متعدد الخانات', link: '/ar/features/multitile-airport' },
         { text: 'نقل المركبات البرية (RoRo)', link: '/ar/features/06-roro-transport' },
+        { text: 'عبّارة القطارات والمطر', link: '/ar/features/07-train-ferry-and-rain' },
       ],
     },
     {
@@ -641,6 +648,7 @@ const bn = makeLocaleConfig(
         { text: 'ডিকপল (লোকোমোটিভ বিচ্ছিন্নকরণ)', link: '/bn/features/decouple' },
         { text: 'মাল্টিটাইল এয়ারপোর্ট', link: '/bn/features/multitile-airport' },
         { text: 'সড়ক যান পরিবহন (RoRo)', link: '/bn/features/06-roro-transport' },
+        { text: 'ট্রেন ফেরি ও বৃষ্টি', link: '/bn/features/07-train-ferry-and-rain' },
       ],
     },
     {
@@ -715,6 +723,7 @@ const ru = makeLocaleConfig(
         { text: 'Расцепка (локомотивы)', link: '/ru/features/decouple' },
         { text: 'Мультитайловый аэропорт', link: '/ru/features/multitile-airport' },
         { text: 'Перевозка автомобилей (RoRo)', link: '/ru/features/06-roro-transport' },
+        { text: 'Паром для поездов и дождь', link: '/ru/features/07-train-ferry-and-rain' },
       ],
     },
     {
@@ -789,6 +798,7 @@ const id = makeLocaleConfig(
         { text: 'Decouple (Lepas Lokomotif)', link: '/id/features/decouple' },
         { text: 'Bandara Multitile', link: '/id/features/multitile-airport' },
         { text: 'Transportasi Kendaraan Jalan (RoRo)', link: '/id/features/06-roro-transport' },
+        { text: 'Feri Kereta dan Hujan', link: '/id/features/07-train-ferry-and-rain' },
       ],
     },
     {
@@ -863,6 +873,7 @@ const ko = makeLocaleConfig(
         { text: '디커플 (기관차 분리)', link: '/ko/features/decouple' },
         { text: '멀티타일 공항', link: '/ko/features/multitile-airport' },
         { text: '차량 운송 (RoRo)', link: '/ko/features/06-roro-transport' },
+        { text: '기차 페리와 비', link: '/ko/features/07-train-ferry-and-rain' },
       ],
     },
     {

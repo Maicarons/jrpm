@@ -81,3 +81,15 @@ cmake --build build -j
 **주요 충돌 처리:** pulsexlb의 세이브 계층은 구형 SLE_ 매크로 시스템 기반이고 jrpm/jgrpp 0.73.3은 현대적 VarFileType/VarMemType + VarTypes를 사용 — saveload/ 및 sl/의 모든 충돌을 현대 시스템으로 재작성하고 U128 지원을 추가했습니다 (VarFileType::U128=13, VarMemType::U128, SLE_UINT128); jrpm이 예약한 367/368은 유지되고 업스트림의 신규 버전은 369/370으로 이동; 업스트림 세이브 호환은 XSLFI_UPSTREAM_VERSION 서브 청크로 처리; CT_VEHICLES 문자열 생성, grfid Label 비교, autogroup + RORO_DEBUG_COMMANDS 콘솔 블록 모두 보존.
 
 **상태:** MinGW ninja 빌드 통과, 산출물 `build/openttd-jrpm.exe`; 신규 게임 스모크 테스트 통과.
+
+---
+
+## 병합 기록: 2026-10-07 (jgrpp 0.73.3+89 + px-patch 2610.3)
+
+> 병합 커밋: jgrpp 23개 커밋 (`jgrpp-0.73.3` 이후, `6318727b02`까지) + px-patch 55개 커밋 (`pxp-2610.3`, `4a4d0724b5`까지).
+
+**신규:** pulsexlb에서 — 기차 페리(선박을 열차 전체 수송용으로 개조, 전용 RAIL 화물 CT_RAILVEHICLES, 객차별 적재), 비 시스템(weather.cpp: 무작위 강우 기간, 점진적 세계 어두워짐, 줌에 맞춰 확장되는 빗방울 오버레이; difficulty.rain 옵션; 샌드박스 치트로 강제 날씨; 날씨 상태는 WTHR/XSLFI_WEATHER로 저장), 분리 후 동일 방향으로 대기하며 출발, 선창별/객차별 적재량 표시, RoRo 옵션에서 열차·자동차 표지판 선택 가능, 결합 경로 탐색 지연 제거(화물 검증을 사전 검사로 바꾸고 실패 시 백오프), Android 빌드 및 APK 배포; jgrpp에서 — StringID 강한 타입화, 중복 회사명 거부, 위젯 기본 크기 계산과 그 밖의 리팩터링·수정.
+
+**주요 충돌 처리:** 빌드의 최대 장애물은 Label/StringID 강한 타입화였습니다 — jrpm 자체 코드의 4문자 리터럴 라벨을 모두 문자열 생성으로 전환했습니다(CT_RAILVEHICLES{"RAIL"}). afterload.cpp의 도로·전차 종류 라벨 비교는 RoadTypeLabel{"ROAD"} 형식이 되었고, airport.cpp의 빈 AirTypeInfo 문자열 필드는 STR_NULL을 사용하며, cheat_gui.cpp의 STR_CHEAT_RAIN switch 분기는 .base()를 씁니다. 새 날씨 청크 WTHR의 구식 청크 타입 CH_TABLE은 ChunkType::Table로 교체했습니다. 치트 표에는 jrpm의 VarMemType와 InflationCheat 센티널을 유지한 채 비 치트 행을 추가했고, jrpm_watch_gui.cpp의 SetStringTip(SPR_GOTO_LOCATION, …)은 SetSpriteTip으로 바꿨습니다. train_cmd.cpp는 enable_decouple 게이트와 desync 디버그 출력을 유지하면서 업스트림의 "열차 앞부분이 분기점을 지날 때만 후진" 수정(if (v->IsMovingFront()))과 동일 방향 출발 플래그를 채택했습니다. order_cmd.cpp는 DecouplePart 변수를 유지한 채 DrivingBackwards를 TCF_NO_DRIVING_CAB 기반 새 의미로 바꿨습니다. deploy-docs.yml은 VitePress 빌드와 GitHub Pages 배포를 유지했고, README/.gitignore/.ottdrev-vc는 jrpm 브랜딩을 보존했습니다. SL_UPSTREAM_VERSION은 여전히 368(업스트림 DoubleEndedShips)에 고정되어 있고 src/saveload/engine_sl.cpp의 static_assert가 통과하며, jrpm 예약 367/368은 그대로입니다.
+
+**상태:** MinGW ninja 빌드 통과(-j3), 산출물 `build/openttd-jrpm.exe`; `-D` 전용 서버 스모크 테스트 통과 — 새 지도 생성 → 저장 → 불러오기 → 다시 저장 → 종료까지 어서션이나 SetupEngines 크래시 없이 완료되었고 업스트림 청크 버전 게이트가 정상 동작합니다.

@@ -100,3 +100,43 @@ Verification priority:
 
 - Build: MinGW ninja passes, artifact `build/openttd-jrpm.exe`;
 - Run: new-game smoke test passed (see build verification).
+
+---
+
+## Merge log: 2026-10-07 (jgrpp 0.73.3+89 + px-patch 2610.3)
+
+> Merge commits: jgrpp 23 commits (after `jgrpp-0.73.3`, up to `6318727b02`) + px-patch 55 commits (up to `pxp-2610.3`, `4a4d0724b5`).
+
+### What's new upstream
+
+| Source | Content | Notes |
+|---|---|---|
+| pulsexlb | **Train ferry** | Ships can be refitted to carry whole trains (dedicated `RAIL` cargo, `CT_RAILVEHICLES`); loading is per-wagons, so the whole train no longer has to sit in one cargo hold |
+| pulsexlb | **Rain system** | New `weather.cpp` simulation: random rainy periods, gradual world darkening, rain-drop overlay (scales with zoom, randomised jitter); difficulty option `difficulty.rain`; a sandbox cheat forces auto/rain/sun; weather state is saved with the game (`WTHR` chunk / `XSLFI_WEATHER`) |
+| pulsexlb | **Same-direction decouple exit** | When decoupling you can let one part wait for the other to leave and then exit in the same direction; includes a fix so a partner that has not fully left the station is no longer treated as blocking |
+| pulsexlb | **Capacity display** | The ship info window shows the capacity of each cargo hold; the train info window shows the capacity of each wagon |
+| pulsexlb | **RoRo option improvements** | The road-sign picker in transport options now offers train and road-vehicle signs; trains load road vehicles per wagon; the status bar no longer lists carried vehicles |
+| pulsexlb | **Coupling pathfinding performance** | Removed the coupling pathfinding stutter: cargo validation is now a pre-check with failure back-off instead of a full scan every throttle tick |
+| pulsexlb | **Android build** | New Android build script and CI; APKs are published alongside releases |
+| jgrpp | **StringID strong typing** | `StringID` is now a strong type (and no longer used as a template parameter); `Label` only accepts string / byte-array construction |
+| jgrpp | **Duplicate company names** | Duplicate company names are now properly rejected; president name generation refactored to avoid gotos |
+| jgrpp | **Widget preferred size** | Widgets can compute a preferred size from a given size |
+| jgrpp | Assorted refactors and fixes | Order list expressions, NewGRF GEF ID checks, `GetSlopePixelZOnEdge` returning a tuple, a crash when exporting all order lists from non-group vehicle list windows |
+
+### Key conflict handling
+
+- **Save layer**: pulsexlb's new `WTHR` weather chunk still uses the old `SLEG_VAR`/`SLE_` macros, which remain available through the alias set in `sl/saveload_common.h`; only the outdated chunk-type enum `CH_TABLE` had to become the refactored `ChunkType::Table`;
+- **Label / StringID strong typing** (the main compile obstacle this round): every 4-character literal label in jrpm's own code was switched to string construction (`CT_RAILVEHICLES{"RAIL"}`); the road and tram type label comparisons in `afterload.cpp` became `RoadTypeLabel{"ROAD"}` form; the empty `AirTypeInfo` string fields in `airport.cpp` now use `STR_NULL`; the `STR_CHEAT_RAIN` switch branches in `cheat_gui.cpp` use `.base()` (matching the existing `STR_CHEAT_CHANGE_COMPANY.base()` style);
+- **cheat_gui.cpp cheat table**: jrpm's `VarMemType` field type and the `InflationCheat` sentinel are preserved, and pulsexlb's new rain cheat row is merged in (`SLE_VAR_U8` + `ClickRainCheat`);
+- **jrpm_watch_gui.cpp**: `SetStringTip(SPR_GOTO_LOCATION, …)` became `SetSpriteTip` (upstream split the sprite/string tooltip interfaces);
+- **Savegame version pin**: `SL_UPSTREAM_VERSION` is still pinned to 368 (upstream `DoubleEndedShips`) and the static_assert guard in `src/saveload/engine_sl.cpp` passes; jrpm's reserved 367/368 are unchanged and the newer upstream versions shift to 369/370;
+- **train_cmd.cpp**: the decouple check keeps jrpm's `enable_decouple` gate and desync debug output, while adopting upstream's depot fix that only triggers a reverse when the front of the train passes the waypoint (`if (v->IsMovingFront())`); the same-direction exit flags after `want_decouple` come from upstream;
+- **aircraft_cmd.cpp / window.cpp**: includes from both sides are kept (jrpm's pathfinder/pbs/roadveh_transport alongside upstream's checksum/script_event/widgets);
+- **order_cmd.cpp**: `DrivingBackwards` adopts upstream's new `TCF_NO_DRIVING_CAB` semantics and jrpm's `DecouplePart` variable is retained; the language string becomes "Driving backwards at reduced speed" accordingly;
+- **deploy-docs.yml**: jrpm's VitePress build and GitHub Pages deployment are kept (pulsexlb's Typst variant only serves its own `pxp-docs` directory);
+- **README / .gitignore / .ottdrev-vc**: jrpm branding and local entries are preserved, with pulsexlb's Android build ignore entries and the `pxp-2610.3` version record merged in.
+
+### State after the merge
+
+- Build: passes with MinGW ninja (`-j3`), artifact `build/openttd-jrpm.exe`;
+- Run: `-D` dedicated server smoke test passes — new map generation → save → load → save again → exit completes with no assertion failure and no `SetupEngines` crash; upstream chunk version gating behaves correctly.

@@ -41,6 +41,8 @@ title: Road Vehicle Transport (RoRo)
 - **"Carried too long" warning**: a one-time warning when a road vehicle has been carried for too long;
 - **Player-created order lists**: shared/standalone order lists support road vehicle transport flags as well.
 
+> Ships can additionally carry **whole trains** (dedicated `RAIL` cargo), added in the 2026-10 batch. See "Train Ferry and Rain".
+
 ## Savegame compatibility
 
 - Waiting/carried state and order flags are persisted;
