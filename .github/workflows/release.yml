@@ -96,17 +96,17 @@ jobs:
 
     uses: ./.github/workflows/android.yml
     secrets: inherit
-    # The APK comes from pelya's commandergenius packaging template, which
-    # currently fails to link ICU (undefined icu_62 symbols) from a cold build.
-    # It is an upstream packaging issue, not a jrpm build failure, and it must
-    # not hold back the desktop releases; the APK can be attached separately
-    # once the template builds again.
-    continue-on-error: true
 
   publish:
     name: Publish to GitHub Release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    needs: [source, docs, linux, linux_distros, linux-dedicated, macos, windows, android]
+    # Deliberately does not wait for `android`: the APK is produced by pelya's
+    # commandergenius packaging template, which currently fails to link ICU
+    # (undefined icu_62 symbols) on a cold build. That is an upstream packaging
+    # problem rather than a jrpm build failure, and it must not hold back the
+    # desktop releases. Android still runs and uploads its artifact; the APK can
+    # be attached to the release manually once the template builds again.
+    needs: [source, docs, linux, linux_distros, linux-dedicated, macos, windows]
 
     runs-on: ubuntu-latest
     permissions:
